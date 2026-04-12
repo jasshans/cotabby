@@ -73,15 +73,18 @@ final class SuggestionCoordinator: ObservableObject {
     ) {
         // Restore persisted user preferences before wiring the coordinator to the rest of the app.
         // This ensures first-render UI matches the settings the user last chose.
-        let storedWordCountPreset = userDefaults
+        let storedWordCountPreset =
+            userDefaults
             .string(forKey: Self.selectedWordCountPresetDefaultsKey)
             .flatMap(SuggestionWordCountPreset.init(rawValue:))
         let resolvedWordCountPreset = storedWordCountPreset ?? configuration.defaultWordCountPreset
-        let storedPromptMode = userDefaults
+        let storedPromptMode =
+            userDefaults
             .string(forKey: Self.selectedPromptModeDefaultsKey)
             .flatMap(SuggestionPromptMode.init(rawValue:))
         let resolvedPromptMode = storedPromptMode ?? configuration.defaultPromptMode
-        let storedTotalTabAcceptedWordCount = userDefaults.integer(forKey: Self.totalTabAcceptedWordCountDefaultsKey)
+        let storedTotalTabAcceptedWordCount = userDefaults.integer(
+            forKey: Self.totalTabAcceptedWordCountDefaultsKey)
 
         self.permissionManager = permissionManager
         self.focusModel = focusModel
@@ -105,11 +108,13 @@ final class SuggestionCoordinator: ObservableObject {
         latestVisualContextText = visualContextCoordinator.latestExcerpt
 
         if storedWordCountPreset == nil {
-            userDefaults.set(resolvedWordCountPreset.rawValue, forKey: Self.selectedWordCountPresetDefaultsKey)
+            userDefaults.set(
+                resolvedWordCountPreset.rawValue, forKey: Self.selectedWordCountPresetDefaultsKey)
         }
 
         if storedPromptMode == nil {
-            userDefaults.set(resolvedPromptMode.rawValue, forKey: Self.selectedPromptModeDefaultsKey)
+            userDefaults.set(
+                resolvedPromptMode.rawValue, forKey: Self.selectedPromptModeDefaultsKey)
         }
 
         overlayState = overlayController.state

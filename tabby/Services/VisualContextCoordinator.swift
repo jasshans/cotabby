@@ -36,11 +36,11 @@ final class VisualContextCoordinator {
     /// the screenshot context should survive normal typing inside the same input.
     func startSessionIfNeeded(for snapshotContext: FocusedInputSnapshot) {
         if let activeAugmentationSession,
-           activeAugmentationSession.elementIdentifier == snapshotContext.elementIdentifier
+            activeAugmentationSession.elementIdentifier == snapshotContext.elementIdentifier
         {
             if case .unavailable(let reason) = activeAugmentationSession.status,
-               reason.localizedCaseInsensitiveContains("Screen Recording"),
-               screenRecordingPermissionProvider()
+                reason.localizedCaseInsensitiveContains("Screen Recording"),
+                screenRecordingPermissionProvider()
             {
                 cancel(resetState: true)
             } else {
@@ -50,7 +50,8 @@ final class VisualContextCoordinator {
 
         cancel(resetState: false)
 
-        let initialStatus: VisualContextStatus = screenRecordingPermissionProvider()
+        let initialStatus: VisualContextStatus =
+            screenRecordingPermissionProvider()
             ? .capturing
             : .unavailable(Self.permissionMissingReason)
         let session = FocusedInputAugmentationSession(
@@ -120,8 +121,8 @@ final class VisualContextCoordinator {
     /// visual-context session still belongs to that same field.
     func excerpt(for context: FocusedInputContext) -> String? {
         guard let activeAugmentationSession,
-              activeAugmentationSession.elementIdentifier == context.elementIdentifier,
-              activeAugmentationSession.status == .ready
+            activeAugmentationSession.elementIdentifier == context.elementIdentifier,
+            activeAugmentationSession.status == .ready
         else {
             return nil
         }
@@ -148,7 +149,7 @@ final class VisualContextCoordinator {
         elementIdentifier: String
     ) {
         guard activeAugmentationSession?.sessionID == sessionID,
-              activeAugmentationSession?.elementIdentifier == elementIdentifier
+            activeAugmentationSession?.elementIdentifier == elementIdentifier
         else {
             return
         }
@@ -163,9 +164,9 @@ final class VisualContextCoordinator {
 
     private func errorStatus(for error: ScreenshotContextGenerationError) -> VisualContextStatus {
         switch error {
-        case let .unavailable(message):
+        case .unavailable(let message):
             return .unavailable(message)
-        case let .failed(message):
+        case .failed(let message):
             return .failed(message)
         }
     }

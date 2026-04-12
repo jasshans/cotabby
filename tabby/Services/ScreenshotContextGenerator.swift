@@ -15,7 +15,7 @@ enum ScreenshotContextGenerationError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case let .unavailable(message), let .failed(message):
+        case .unavailable(let message), .failed(let message):
             return message
         }
     }
@@ -34,10 +34,12 @@ final class ScreenshotContextGenerator {
     ) {
         let actualConfig = configuration ?? .default
         self.screenshotService = screenshotService ?? WindowScreenshotService()
-        self.textExtractor = textExtractor ?? ScreenTextExtractor(
-            maxImageDimension: actualConfig.maxImageDimension,
-            maxRecognizedCharacters: actualConfig.maxRecognizedCharacters
-        )
+        self.textExtractor =
+            textExtractor
+            ?? ScreenTextExtractor(
+                maxImageDimension: actualConfig.maxImageDimension,
+                maxRecognizedCharacters: actualConfig.maxRecognizedCharacters
+            )
         self.configuration = actualConfig
     }
 
@@ -67,8 +69,8 @@ final class ScreenshotContextGenerator {
         }
 
         log(
-            "context-captured title=\(screenshot.windowTitle ?? "<untitled>") " +
-                "image=\(screenshot.image.width)x\(screenshot.image.height)"
+            "context-captured title=\(screenshot.windowTitle ?? "<untitled>") "
+                + "image=\(screenshot.image.width)x\(screenshot.image.height)"
         )
 
         await onStatusChange?(.extractingText)
@@ -78,7 +80,7 @@ final class ScreenshotContextGenerator {
             extractedText = try await textExtractor.extractText(from: screenshot.image).text
         } catch ScreenTextExtractionError.noRecognizedText {
             guard let windowTitle = screenshot.windowTitle,
-                  hasMeaningfulSignal(windowTitle)
+                hasMeaningfulSignal(windowTitle)
             else {
                 log("context-ocr-unavailable no-recognized-text-and-weak-window-title")
                 throw ScreenshotContextGenerationError.unavailable(
@@ -117,7 +119,8 @@ final class ScreenshotContextGenerator {
     /// OCR is noisy by nature. We normalize line whitespace and keep only a bounded excerpt so the
     /// completion prompt receives nearby visible text, not an unbounded UI dump.
     private func normalizeRecognizedText(_ rawText: String) -> String {
-        let lines = rawText
+        let lines =
+            rawText
             .replacingOccurrences(of: "\r", with: "")
             .components(separatedBy: .newlines)
             .map {
