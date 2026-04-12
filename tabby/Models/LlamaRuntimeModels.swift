@@ -25,8 +25,9 @@ enum RuntimeBootstrapState: Equatable, Sendable {
     }
 }
 
-/// One bundled GGUF model option that can be displayed in the menu and loaded at runtime.
-/// Filenames remain user-visible for now so the picker maps directly to the actual disk asset.
+/// One discovered GGUF model option that can be displayed in the menu and loaded at runtime.
+/// Known built-in filenames are mapped to product-facing aliases, while unknown custom uploads
+/// intentionally fall back to their raw filename so user-provided models stay selectable.
 struct RuntimeModelOption: Equatable, Hashable, Sendable, Identifiable {
     let filename: String
     let url: URL
@@ -65,22 +66,12 @@ struct DownloadableRuntimeModel: Equatable, Hashable, Sendable, Identifiable {
 enum RuntimeModelCatalog {
     static func displayName(for filename: String) -> String {
         switch filename {
-        case "Qwen3.5-0.8B-Q3_K_M.gguf":
-            return "Qwen 0.8B (fast)"
-        case "Qwen3.5-2B-Q4_K_M.gguf":
-            return "Qwen 2B (balanced)"
-        case "Qwen3.5-9B-Q4_K_M.gguf":
-            return "Qwen 9B (quality)"
-        case "ministral-3-8b-base-2512-q4_k_m.gguf":
-            return "Ministral 8B (quality)"
-        case "Phi-3-mini-128k-instruct.Q4_K_M.gguf":
-            return "Phi-3 Mini (balanced)"
-        case "nb-llama-3.2-3b_1200-q4_k_m.gguf", "Llama-3.2-3B.Q4_K_M.gguf":
-            return "Llama 3.2 3B (balanced)"
-        case "google_gemma-4-E2B-it-Q4_K_M.gguf":
-            return "Gemma 4 2B (fast)"
+        case "Qwen3-0.6B-Q4_K_M.gguf":
+            return "tabby-fast-1"
+        case "gemma-3-1b-it-Q4_K_M.gguf":
+            return "tabby-balanced-1"
         case "gemma-3n-E4B-it-Q4_K_M.gguf":
-            return "Gemma 3n 4B (balanced, recommended)"
+            return "tabby-depth-1"
         default:
             return filename
         }
@@ -89,40 +80,14 @@ enum RuntimeModelCatalog {
     /// Canonical downloadable model list shown in Welcome and menu UI.
     static let downloadableModels: [DownloadableRuntimeModel] = [
         DownloadableRuntimeModel(
-            filename: "nb-llama-3.2-3b_1200-q4_k_m.gguf",
-            displayName: displayName(for: "nb-llama-3.2-3b_1200-q4_k_m.gguf"),
-            downloadURL: URL(string: "https://huggingface.co/NbAiLab/nb-llama-3.2-3B-Q4_K_M-GGUF/resolve/main/nb-llama-3.2-3b_1200-q4_k_m.gguf?download=true")!,
-            alternateFilenames: ["Llama-3.2-3B.Q4_K_M.gguf"]
+            filename: "Qwen3-0.6B-Q4_K_M.gguf",
+            displayName: displayName(for: "Qwen3-0.6B-Q4_K_M.gguf"),
+            downloadURL: URL(string: "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q4_K_M.gguf?download=true")!
         ),
         DownloadableRuntimeModel(
-            filename: "ministral-3-8b-base-2512-q4_k_m.gguf",
-            displayName: displayName(for: "ministral-3-8b-base-2512-q4_k_m.gguf"),
-            downloadURL: URL(string: "https://huggingface.co/srhm-ca/Ministral-3-8B-Base-2512-Q4_K_M-GGUF/resolve/main/ministral-3-8b-base-2512-q4_k_m.gguf?download=true")!
-        ),
-        DownloadableRuntimeModel(
-            filename: "Phi-3-mini-128k-instruct.Q4_K_M.gguf",
-            displayName: displayName(for: "Phi-3-mini-128k-instruct.Q4_K_M.gguf"),
-            downloadURL: URL(string: "https://huggingface.co/QuantFactory/Phi-3-mini-128k-instruct-GGUF/resolve/main/Phi-3-mini-128k-instruct.Q4_K_M.gguf?download=true")!
-        ),
-        DownloadableRuntimeModel(
-            filename: "Qwen3.5-0.8B-Q3_K_M.gguf",
-            displayName: displayName(for: "Qwen3.5-0.8B-Q3_K_M.gguf"),
-            downloadURL: URL(string: "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q3_K_M.gguf?download=true")!
-        ),
-        DownloadableRuntimeModel(
-            filename: "Qwen3.5-2B-Q4_K_M.gguf",
-            displayName: displayName(for: "Qwen3.5-2B-Q4_K_M.gguf"),
-            downloadURL: URL(string: "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/main/Qwen3.5-2B-Q4_K_M.gguf?download=true")!
-        ),
-        DownloadableRuntimeModel(
-            filename: "Qwen3.5-9B-Q4_K_M.gguf",
-            displayName: displayName(for: "Qwen3.5-9B-Q4_K_M.gguf"),
-            downloadURL: URL(string: "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q4_K_M.gguf?download=true")!
-        ),
-        DownloadableRuntimeModel(
-            filename: "google_gemma-4-E2B-it-Q4_K_M.gguf",
-            displayName: displayName(for: "google_gemma-4-E2B-it-Q4_K_M.gguf"),
-            downloadURL: URL(string: "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf?download=true")!
+            filename: "gemma-3-1b-it-Q4_K_M.gguf",
+            displayName: displayName(for: "gemma-3-1b-it-Q4_K_M.gguf"),
+            downloadURL: URL(string: "https://huggingface.co/unsloth/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q4_K_M.gguf?download=true")!
         ),
         DownloadableRuntimeModel(
             filename: "gemma-3n-E4B-it-Q4_K_M.gguf",
@@ -145,15 +110,9 @@ struct LlamaRuntimeConfiguration: Equatable, Sendable {
     static let `default` = LlamaRuntimeConfiguration(
         runtimeDirectoryPath: nil,
         preferredModelNames: [
+            "gemma-3-1b-it-Q4_K_M.gguf",
+            "Qwen3-0.6B-Q4_K_M.gguf",
             "gemma-3n-E4B-it-Q4_K_M.gguf",
-            "Qwen3.5-9B-Q4_K_M.gguf",
-            "ministral-3-8b-base-2512-q4_k_m.gguf",
-            "Qwen3.5-2B-Q4_K_M.gguf",
-            "google_gemma-4-E2B-it-Q4_K_M.gguf",
-            "Qwen3.5-0.8B-Q3_K_M.gguf",
-            "Phi-3-mini-128k-instruct.Q4_K_M.gguf",
-            "nb-llama-3.2-3b_1200-q4_k_m.gguf",
-            "Llama-3.2-3B.Q4_K_M.gguf",
         ],
         contextWindowTokens: 2048,
         batchSize: 512,

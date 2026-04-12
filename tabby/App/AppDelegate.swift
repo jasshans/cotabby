@@ -3,8 +3,9 @@ import Combine
 
 /// File overview:
 /// Starts the long-lived services that power permissions, focus tracking, suggestion generation,
-/// overlay rendering, and acceptance. Dependency construction now lives in `TabbyAppEnvironment`,
-/// while `AppDelegate` focuses on lifecycle wiring and cross-subsystem subscriptions.
+/// overlay rendering, acceptance, and app updates. Dependency construction now lives in
+/// `TabbyAppEnvironment`, while `AppDelegate` focuses on lifecycle wiring and cross-subsystem
+/// subscriptions.
 ///
 /// In React terms, this is the top-level container that owns the long-lived stores/services.
 /// SwiftUI renders views from these objects, but the view layer does not create or own them.
@@ -17,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let modelDownloadManager: ModelDownloadManager
     let focusModel: FocusTrackingModel
     let inputMonitor: InputMonitor
+    let appUpdateManager: AppUpdateManager
     let suggestionCoordinator: SuggestionCoordinator
     let welcomeCoordinator: WelcomeCoordinator
 
@@ -33,6 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         modelDownloadManager = environment.modelDownloadManager
         focusModel = environment.focusModel
         inputMonitor = environment.inputMonitor
+        appUpdateManager = environment.appUpdateManager
         suggestionCoordinator = environment.suggestionCoordinator
         welcomeCoordinator = environment.welcomeCoordinator
         activationIndicatorController = environment.activationIndicatorController
@@ -74,6 +77,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         runtimeModel.startIfNeeded()
         focusModel.start()
         inputMonitor.start()
+        appUpdateManager.start()
         suggestionCoordinator.start()
         welcomeCoordinator.presentIfNeeded()
     }

@@ -14,6 +14,7 @@ final class TabbyAppEnvironment {
     let modelDownloadManager: ModelDownloadManager
     let focusModel: FocusTrackingModel
     let inputMonitor: InputMonitor
+    let appUpdateManager: AppUpdateManager
     let suggestionCoordinator: SuggestionCoordinator
     let welcomeCoordinator: WelcomeCoordinator
     let activationIndicatorController: ActivationIndicatorController
@@ -33,6 +34,7 @@ final class TabbyAppEnvironment {
             permissionProvider: { permissionManager.accessibilityGranted },
             ignoredBundleIdentifier: Bundle.main.bundleIdentifier
         )
+        let appUpdateManager = AppUpdateManager()
         let welcomeCoordinator = WelcomeCoordinator(
             permissionManager: permissionManager,
             runtimeModel: runtimeModel,
@@ -66,6 +68,7 @@ final class TabbyAppEnvironment {
         self.modelDownloadManager = modelDownloadManager
         self.focusModel = focusModel
         self.inputMonitor = inputMonitor
+        self.appUpdateManager = appUpdateManager
         self.suggestionCoordinator = suggestionCoordinator
         self.welcomeCoordinator = welcomeCoordinator
         self.activationIndicatorController = activationIndicatorController

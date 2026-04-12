@@ -232,7 +232,7 @@ xcodebuild -project tabby.xcodeproj -scheme tabby -configuration Debug -sdk maco
 
 ### 5) Recommended Defaults (Current)
 
-1. Model: Gemma 3n (recommended) when available.
+1. Model: `tabby-balanced-1` (recommended) when available.
 2. Prompt mode: Prefix Only (recommended).
 3. Suggestion length: 3-7 words (recommended).
 

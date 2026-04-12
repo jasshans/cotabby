@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		A1C3E0012F90000100AAA001 /* LlamaSwift in Frameworks */ = {isa = PBXBuildFile; productRef = A1C3E0002F90000100AAA001 /* LlamaSwift */; };
+		A1C3E0112F90000100AAA001 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = A1C3E0102F90000100AAA001 /* Sparkle */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -28,6 +29,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A1C3E0012F90000100AAA001 /* LlamaSwift in Frameworks */,
+				A1C3E0112F90000100AAA001 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -71,6 +73,7 @@
 			name = tabby;
 			packageProductDependencies = (
 				A1C3E0002F90000100AAA001 /* LlamaSwift */,
+				A1C3E0102F90000100AAA001 /* Sparkle */,
 			);
 			productName = tabby;
 			productReference = 193741492F81DE7000BEC04F /* tabby.app */;
@@ -102,6 +105,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				A1C3E0022F90000100AAA001 /* XCRemoteSwiftPackageReference "llama" */,
+				A1C3E0122F90000100AAA001 /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1937414A2F81DE7000BEC04F /* Products */;
@@ -267,10 +271,8 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSAccessibilityUsageDescription = "Tabby needs Accessibility access to read and insert text in other apps.";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TabbyInfo.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -279,6 +281,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.jacobfu.tabby;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
+				SPARKLE_PUBLIC_ED_KEY = "efJeZNfUISOs6npbxI2MLLe7sBB5tT/sVnTk9t/qBSY=";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -301,10 +304,8 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSAccessibilityUsageDescription = "Tabby needs Accessibility access to read and insert text in other apps.";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TabbyInfo.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -313,6 +314,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.jacobfu.tabby;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
+				SPARKLE_PUBLIC_ED_KEY = REPLACE_WITH_GENERATED_SPARKLE_PUBLIC_ED_KEY;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -354,6 +356,14 @@
 				minimumVersion = 2.8665.0;
 			};
 		};
+		A1C3E0122F90000100AAA001 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.9.1;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -361,6 +371,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A1C3E0022F90000100AAA001 /* XCRemoteSwiftPackageReference "llama" */;
 			productName = LlamaSwift;
+		};
+		A1C3E0102F90000100AAA001 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1C3E0122F90000100AAA001 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
