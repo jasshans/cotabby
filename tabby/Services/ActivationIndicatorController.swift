@@ -125,7 +125,6 @@ private enum ActivationIndicatorMode: Equatable {
     case idle
     case capturing
     case extractingText
-    case summarizing
     case ready
     case unavailable
     case failed
@@ -138,8 +137,6 @@ private enum ActivationIndicatorMode: Equatable {
             self = .capturing
         case .extractingText:
             self = .extractingText
-        case .generatingSummary:
-            self = .summarizing
         case .ready:
             self = .ready
         case .unavailable:
@@ -155,8 +152,6 @@ private enum ActivationIndicatorMode: Equatable {
             return "camera.fill"
         case .extractingText:
             return "magnifyingglass"
-        case .summarizing:
-            return "wand.and.stars"
         case .unavailable:
             return "camera"
         case .failed:
@@ -172,8 +167,6 @@ private enum ActivationIndicatorMode: Equatable {
             return Color.orange.opacity(0.86)
         case .extractingText:
             return Color.blue.opacity(0.86)
-        case .summarizing:
-            return Color.teal.opacity(0.86)
         case .unavailable:
             return Color.orange.opacity(0.86)
         case .failed:

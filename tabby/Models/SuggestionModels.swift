@@ -191,7 +191,7 @@ struct FocusedInputContext: Equatable, Sendable {
 struct SuggestionRequest: Equatable, Sendable {
     let context: FocusedInputContext
     let prompt: String
-    let injectedContextSummary: String?
+    let visualContextText: String?
     let generation: UInt64
     let maxPredictionTokens: Int
     let temperature: Double

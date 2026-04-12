@@ -106,6 +106,31 @@ final class ModelDownloadManager: ObservableObject {
         NSWorkspace.shared.open(runtimeDirectoryURL)
     }
 
+    /// Returns `true` only when the concrete GGUF file lives in Tabby's user-writable model
+    /// directory. This is the boundary we use for destructive actions so settings never offers
+    /// "delete" for bundled or development fallback assets the app does not own.
+    func canDeleteModel(filename: String) -> Bool {
+        FileManager.default.fileExists(atPath: modelFileURL(filename: filename).path)
+    }
+
+    /// Removes one concrete GGUF file from the user-managed runtime directory.
+    /// The caller decides whether deletion should be offered; this method only enforces the storage
+    /// boundary and refreshes observers after a successful removal.
+    func deleteModel(filename: String) {
+        let fileURL = modelFileURL(filename: filename)
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            return
+        }
+
+        do {
+            try FileManager.default.removeItem(at: fileURL)
+            refreshModelStates()
+            onModelDirectoryChanged?()
+        } catch {
+            print("Failed to delete model \(filename): \(error.localizedDescription)")
+        }
+    }
+
     private func performDownload(_ model: DownloadableRuntimeModel) async {
         defer {
             downloadTasks[model.filename] = nil

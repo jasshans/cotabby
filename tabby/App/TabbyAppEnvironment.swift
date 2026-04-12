@@ -17,6 +17,7 @@ final class TabbyAppEnvironment {
     let appUpdateManager: AppUpdateManager
     let suggestionCoordinator: SuggestionCoordinator
     let welcomeCoordinator: WelcomeCoordinator
+    let settingsCoordinator: SettingsCoordinator
     let activationIndicatorController: ActivationIndicatorController
 
     init() {
@@ -40,10 +41,15 @@ final class TabbyAppEnvironment {
             runtimeModel: runtimeModel,
             modelDownloadManager: modelDownloadManager
         )
+        let settingsCoordinator = SettingsCoordinator(
+            appUpdateManager: appUpdateManager,
+            runtimeModel: runtimeModel,
+            modelDownloadManager: modelDownloadManager
+        )
         let suggestionInserter = SuggestionInserter(suppressionController: suppressionController)
         let overlayController = OverlayController()
         let activationIndicatorController = ActivationIndicatorController()
-        let screenshotContextGenerator = ScreenshotContextGenerator(runtimeManager: runtimeManager)
+        let screenshotContextGenerator = ScreenshotContextGenerator()
         let visualContextCoordinator = VisualContextCoordinator(
             screenshotContextGenerator: screenshotContextGenerator,
             screenRecordingPermissionProvider: { permissionManager.screenRecordingGranted }
@@ -71,6 +77,7 @@ final class TabbyAppEnvironment {
         self.appUpdateManager = appUpdateManager
         self.suggestionCoordinator = suggestionCoordinator
         self.welcomeCoordinator = welcomeCoordinator
+        self.settingsCoordinator = settingsCoordinator
         self.activationIndicatorController = activationIndicatorController
     }
 }

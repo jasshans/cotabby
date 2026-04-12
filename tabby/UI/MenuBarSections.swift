@@ -171,9 +171,11 @@ struct MenuBarSuggestionControlsSection: View {
 }
 
 struct MenuBarFooterRow: View {
+    let onOpenSettings: () -> Void
+
     var body: some View {
         HStack(spacing: 8) {
-            Button(action: {}) {
+            Button(action: onOpenSettings) {
                 Label("Settings", systemImage: "gearshape")
             }
             .controlSize(.small)

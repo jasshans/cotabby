@@ -37,22 +37,22 @@ enum SuggestionRequestFactory {
         promptMode: SuggestionPromptMode,
         wordCountPreset: SuggestionWordCountPreset,
         configuration: SuggestionConfiguration,
-        injectedContextSummary: String?
+        visualContextText: String?
     ) -> SuggestionRequestBuildResult {
         let prompt = buildPrompt(
             from: context,
             promptMode: promptMode,
             wordCountPreset: wordCountPreset,
             configuration: configuration,
-            injectedContextSummary: injectedContextSummary
+            visualContextText: visualContextText
         )
 
         let request = SuggestionRequest(
             context: context,
             prompt: prompt,
-            // Preserve the raw summary on the engine request so logs and downstream consumers can
-            // inspect the exact injected value; prompt rendering applies its own normalization.
-            injectedContextSummary: injectedContextSummary,
+            // Preserve the raw OCR excerpt on the engine request so logs and downstream consumers
+            // can inspect the exact injected value; prompt rendering applies its own normalization.
+            visualContextText: visualContextText,
             generation: context.generation,
             maxPredictionTokens: activeMaxPredictionTokens(
                 configuration: configuration,
@@ -82,7 +82,7 @@ enum SuggestionRequestFactory {
         promptMode: SuggestionPromptMode,
         wordCountPreset: SuggestionWordCountPreset,
         configuration: SuggestionConfiguration,
-        injectedContextSummary: String?
+        visualContextText: String?
     ) -> String {
         let prefix = truncatedPromptPrefix(
             from: context.precedingText,
@@ -103,13 +103,14 @@ enum SuggestionRequestFactory {
             wordCountPreset.promptInstruction,
             "Continue only from Prefix.",
             "Do not repeat Prefix text.",
-            "ScreenContextHints are background hints only; never restate or continue them.",
+            "VisibleContext is nearby OCR text from around the focused input.",
+            "Use VisibleContext only as background context; never dump UI labels or menus.",
             "No numbering, no bullets, no labels, no quotes, no markdown, no newline.",
             "Output plain text only."
         ]
 
-        if let screenContextHints = normalizedScreenContextHints(from: injectedContextSummary) {
-            sections.append("ScreenContextHints: \(screenContextHints)")
+        if let normalizedVisualContext = normalizedVisualContextText(from: visualContextText) {
+            sections.append("VisibleContext: \(normalizedVisualContext)")
         }
 
         sections.append("Prefix: \(prefix)")
@@ -117,26 +118,21 @@ enum SuggestionRequestFactory {
         return sections.joined(separator: "\n")
     }
 
-    /// Screen context should be metadata, not prose continuation, so we normalize it into one line.
-    private static func normalizedScreenContextHints(from summary: String?) -> String? {
-        guard let summary else {
+    /// OCR text should stay compact and prompt-safe without paying for an extra model pass.
+    private static func normalizedVisualContextText(from text: String?) -> String? {
+        guard let text else {
             return nil
         }
 
-        var normalized = summary
+        var normalized = text
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "\\r", with: "")
-            .replacingOccurrences(of: "\\n+", with: ", ", options: .regularExpression)
-            .replacingOccurrences(
-                of: "^\\s*ScreenContextHints?\\s*:\\s*",
-                with: "",
-                options: .regularExpression
-            )
+            .replacingOccurrences(of: "\\n{2,}", with: "\n", options: .regularExpression)
             .replacingOccurrences(of: "\\s+,", with: ",", options: .regularExpression)
-            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: ",.;:")))
+            .replacingOccurrences(of: "[ \\t]+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        if normalized.count > 160 {
+        if normalized.count > 220 {
             normalized = String(normalized.prefix(160)).trimmingCharacters(in: .whitespacesAndNewlines)
         }
 

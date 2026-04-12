@@ -29,7 +29,7 @@ final class SuggestionCoordinator: ObservableObject {
     @Published var latestRawModelOutput: String?
     @Published var latestGenerationNumber: UInt64?
     @Published var visualContextStatus: VisualContextStatus = .idle
-    @Published var latestInjectedContextSummary: String?
+    @Published var latestVisualContextText: String?
     @Published var totalTabAcceptedWordCount: Int = 0
     @Published var selectedWordCountPreset: SuggestionWordCountPreset = .threeToSeven
     @Published var selectedPromptMode: SuggestionPromptMode = .guided
@@ -102,7 +102,7 @@ final class SuggestionCoordinator: ObservableObject {
         selectedPromptMode = resolvedPromptMode
         totalTabAcceptedWordCount = max(storedTotalTabAcceptedWordCount, 0)
         visualContextStatus = visualContextCoordinator.status
-        latestInjectedContextSummary = visualContextCoordinator.latestSummary
+        latestVisualContextText = visualContextCoordinator.latestExcerpt
 
         if storedWordCountPreset == nil {
             userDefaults.set(resolvedWordCountPreset.rawValue, forKey: Self.selectedWordCountPresetDefaultsKey)
@@ -147,9 +147,9 @@ final class SuggestionCoordinator: ObservableObject {
             self?.overlayState = state
         }
 
-        visualContextCoordinator.onStateChange = { [weak self] status, summary in
+        visualContextCoordinator.onStateChange = { [weak self] status, excerpt in
             self?.visualContextStatus = status
-            self?.latestInjectedContextSummary = summary
+            self?.latestVisualContextText = excerpt
         }
 
         visualContextCoordinator.onInjectedContextReady = { [weak self] elementIdentifier in

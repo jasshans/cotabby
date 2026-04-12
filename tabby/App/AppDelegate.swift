@@ -21,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let appUpdateManager: AppUpdateManager
     let suggestionCoordinator: SuggestionCoordinator
     let welcomeCoordinator: WelcomeCoordinator
+    let settingsCoordinator: SettingsCoordinator
 
     private let activationIndicatorController: ActivationIndicatorController
     private var cancellables = Set<AnyCancellable>()
@@ -38,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appUpdateManager = environment.appUpdateManager
         suggestionCoordinator = environment.suggestionCoordinator
         welcomeCoordinator = environment.welcomeCoordinator
+        settingsCoordinator = environment.settingsCoordinator
         activationIndicatorController = environment.activationIndicatorController
         super.init()
 

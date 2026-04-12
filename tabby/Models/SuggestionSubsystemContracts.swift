@@ -50,11 +50,11 @@ protocol SuggestionInserting: AnyObject {
 @MainActor
 protocol VisualContextCoordinating: AnyObject {
     var status: VisualContextStatus { get }
-    var latestSummary: String? { get }
+    var latestExcerpt: String? { get }
     var onStateChange: ((VisualContextStatus, String?) -> Void)? { get set }
     var onInjectedContextReady: ((String) -> Void)? { get set }
 
     func startSessionIfNeeded(for snapshotContext: FocusedInputSnapshot)
     func cancel(resetState: Bool)
-    func summary(for context: FocusedInputContext) -> String?
+    func excerpt(for context: FocusedInputContext) -> String?
 }

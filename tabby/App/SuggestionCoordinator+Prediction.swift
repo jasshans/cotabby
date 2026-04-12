@@ -59,15 +59,15 @@ extension SuggestionCoordinator {
         }
 
         let context = interactionState.materializeContext(from: rawContext)
-        let injectedContextSummary = selectedPromptMode.usesVisualContext
-            ? visualContextCoordinator.summary(for: context)
+        let visualContextText = selectedPromptMode.usesVisualContext
+            ? visualContextCoordinator.excerpt(for: context)
             : nil
         let requestBuildResult = SuggestionRequestFactory.buildRequest(
             context: context,
             promptMode: selectedPromptMode,
             wordCountPreset: selectedWordCountPreset,
             configuration: configuration,
-            injectedContextSummary: injectedContextSummary
+            visualContextText: visualContextText
         )
         latestGenerationNumber = context.generation
         latestPromptPreview = requestBuildResult.promptPreview

@@ -89,6 +89,8 @@ A few seconds saved per message adds up quickly over a full day.
 
 If you are maintaining Tabby, start with this mental model:
 
+- New to Swift or macOS app development? Read [`SWIFT_FOR_JS_DEVELOPERS.md`](SWIFT_FOR_JS_DEVELOPERS.md) first. It translates the core Swift/AppKit/Accessibility concepts in this repo into JavaScript terms.
+
 - `tabby/App/`: lifecycle ownership and composition root
   - `TabbyApp.swift` is the SwiftUI entry point
   - `TabbyAppEnvironment.swift` builds the long-lived dependency graph

@@ -15,7 +15,7 @@ final class VisualContextCoordinator {
     private let screenRecordingPermissionProvider: @MainActor () -> Bool
 
     private(set) var status: VisualContextStatus = .idle
-    private(set) var latestSummary: String?
+    private(set) var latestExcerpt: String?
 
     private var activeAugmentationSession: FocusedInputAugmentationSession?
     private var visualContextTask: Task<Void, Never>?
@@ -57,11 +57,11 @@ final class VisualContextCoordinator {
             sessionID: UUID(),
             elementIdentifier: snapshotContext.elementIdentifier,
             status: initialStatus,
-            injectedContext: nil
+            excerpt: nil
         )
 
         activeAugmentationSession = session
-        latestSummary = nil
+        latestExcerpt = nil
         status = initialStatus
         publishState()
 
@@ -75,7 +75,7 @@ final class VisualContextCoordinator {
             }
 
             do {
-                let injectedContext = try await screenshotContextGenerator.generateContext(
+                let excerpt = try await screenshotContextGenerator.generateContext(
                     for: snapshotContext,
                     onStatusChange: { [weak self] status in
                         await self?.setStatus(status, for: session.sessionID)
@@ -85,8 +85,8 @@ final class VisualContextCoordinator {
                     return
                 }
 
-                applyInjectedContext(
-                    injectedContext,
+                applyExcerpt(
+                    excerpt,
                     for: session.sessionID,
                     elementIdentifier: snapshotContext.elementIdentifier
                 )
@@ -100,7 +100,7 @@ final class VisualContextCoordinator {
         }
     }
 
-    /// Clears screenshot-derived context state and cancels any in-flight capture/OCR/summary work.
+    /// Clears screenshot-derived context state and cancels any in-flight capture/OCR work.
     /// `resetState` lets callers choose between:
     /// 1. Fully returning the service to `.idle`
     /// 2. Silently tearing down a prior session because a replacement session is about to start
@@ -108,7 +108,7 @@ final class VisualContextCoordinator {
         visualContextTask?.cancel()
         visualContextTask = nil
         activeAugmentationSession = nil
-        latestSummary = nil
+        latestExcerpt = nil
 
         if resetState {
             status = .idle
@@ -116,9 +116,9 @@ final class VisualContextCoordinator {
         }
     }
 
-    /// Returns the ready visual-context summary for the provided focused input, if the current
+    /// Returns the ready visual-context excerpt for the provided focused input, if the current
     /// visual-context session still belongs to that same field.
-    func summary(for context: FocusedInputContext) -> String? {
+    func excerpt(for context: FocusedInputContext) -> String? {
         guard let activeAugmentationSession,
               activeAugmentationSession.elementIdentifier == context.elementIdentifier,
               activeAugmentationSession.status == .ready
@@ -126,7 +126,7 @@ final class VisualContextCoordinator {
             return nil
         }
 
-        return activeAugmentationSession.injectedContext?.summary
+        return activeAugmentationSession.excerpt?.text
     }
 
     /// Updates only the current augmentation session so stale async screenshot work cannot mutate
@@ -141,9 +141,9 @@ final class VisualContextCoordinator {
         publishState()
     }
 
-    /// Commits the generated screenshot summary and reports readiness for the still-focused field.
-    private func applyInjectedContext(
-        _ injectedContext: InjectedVisualContext,
+    /// Commits the generated screenshot excerpt and reports readiness for the still-focused field.
+    private func applyExcerpt(
+        _ excerpt: VisualContextExcerpt,
         for sessionID: UUID,
         elementIdentifier: String
     ) {
@@ -154,9 +154,9 @@ final class VisualContextCoordinator {
         }
 
         activeAugmentationSession?.status = .ready
-        activeAugmentationSession?.injectedContext = injectedContext
+        activeAugmentationSession?.excerpt = excerpt
         status = .ready
-        latestSummary = injectedContext.summary
+        latestExcerpt = excerpt.text
         publishState()
         onInjectedContextReady?(elementIdentifier)
     }
@@ -171,7 +171,7 @@ final class VisualContextCoordinator {
     }
 
     private func publishState() {
-        onStateChange?(status, latestSummary)
+        onStateChange?(status, latestExcerpt)
     }
 }
 

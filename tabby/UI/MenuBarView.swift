@@ -11,6 +11,7 @@ struct MenuBarView: View {
     @ObservedObject var modelDownloadManager: ModelDownloadManager
     @ObservedObject var focusModel: FocusTrackingModel
     @ObservedObject var suggestionCoordinator: SuggestionCoordinator
+    let onOpenSettings: () -> Void
 
     /// The panel should answer a product question, not dump internals:
     /// "what is the single most important reason Tabby is or is not ready right now?"
@@ -56,7 +57,7 @@ struct MenuBarView: View {
 
             Divider()
 
-            MenuBarFooterRow()
+            MenuBarFooterRow(onOpenSettings: onOpenSettings)
         }
         .padding(18)
         .frame(width: 396)

@@ -2,6 +2,8 @@
 
 This document is the maintainer map for Tabby. Read this before making changes to the suggestion pipeline, Accessibility integration, or runtime lifecycle.
 
+If you are fluent in JavaScript but new to Swift or macOS APIs, read [`SWIFT_FOR_JS_DEVELOPERS.md`](SWIFT_FOR_JS_DEVELOPERS.md) first, then come back here.
+
 ## System Shape
 
 Tabby is a macOS menu bar app with one long-lived dependency graph and one main product loop:

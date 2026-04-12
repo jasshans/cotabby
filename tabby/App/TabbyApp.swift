@@ -18,7 +18,10 @@ struct TabbyApp: App {
                 runtimeModel: appDelegate.runtimeModel,
                 modelDownloadManager: appDelegate.modelDownloadManager,
                 focusModel: appDelegate.focusModel,
-                suggestionCoordinator: appDelegate.suggestionCoordinator
+                suggestionCoordinator: appDelegate.suggestionCoordinator,
+                onOpenSettings: {
+                    appDelegate.settingsCoordinator.showSettings()
+                }
             )
         } label: {
             MenuBarStatusLabelView(
