@@ -91,8 +91,9 @@ If you are maintaining Tabby, start with this mental model:
 
 - `tabby/App/`: lifecycle ownership and composition root
   - `TabbyApp.swift` is the SwiftUI entry point
-  - `AppDelegate.swift` builds the long-lived services and wires them together
-  - `SuggestionCoordinator.swift` orchestrates the inline-completion state machine
+  - `TabbyAppEnvironment.swift` builds the long-lived dependency graph
+  - `AppDelegate.swift` owns launch/shutdown wiring and cross-subsystem subscriptions
+  - `SuggestionCoordinator.swift` plus `SuggestionCoordinator+*.swift` orchestrate the inline-completion state machine
 - `tabby/UI/`: presentation only
   - menu bar content, welcome flow, and static guide views live here
 - `tabby/Services/`: side effects and OS boundaries
@@ -110,10 +111,12 @@ The main runtime flow is:
 4. `LlamaSuggestionEngine` asks `LlamaRuntimeManager` for a continuation and normalizes the result.
 5. `OverlayController` renders ghost text near the caret, and `SuggestionInserter` commits accepted text back into the host app.
 
+For a fuller maintainer walkthrough, read [`ARCHITECTURE.md`](ARCHITECTURE.md).
+
 When debugging:
 
-- Start with `AppDelegate.swift` to understand ownership.
-- Read `SuggestionCoordinator.swift` next to understand the user-visible state machine.
+- Start with `TabbyAppEnvironment.swift` and `AppDelegate.swift` to understand ownership.
+- Read `SuggestionCoordinator.swift` and the `SuggestionCoordinator+*.swift` files next to understand the user-visible state machine.
 - Use `FocusTracker.swift` and `AXHelper.swift` when the bug is app compatibility or caret placement.
 - Use `LlamaRuntimeManager.swift` and `ScreenshotContextGenerator.swift` when the bug is generation latency or visual context.
 

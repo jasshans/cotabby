@@ -7,7 +7,7 @@ import ScreenCaptureKit
 /// Developer-only smoke test for the screenshot + OCR path.
 /// This file is not part of the app's runtime architecture; it exists so maintainers can quickly
 /// verify screen-capture permissions and OCR output outside the main app flow.
-enum SmokeError: LocalizedError {
+private enum SmokeError: LocalizedError {
     case noFrontmostApp
     case noWindow(pid_t)
     case noImage
@@ -24,7 +24,9 @@ enum SmokeError: LocalizedError {
     }
 }
 
-func currentShareableContent() async throws -> SCShareableContent {
+/// `ScreenCaptureKit` still uses callback-style APIs here, so the smoke utility bridges them into
+/// async/await with checked continuations to keep the control flow readable.
+private func currentShareableContent() async throws -> SCShareableContent {
     try await withCheckedThrowingContinuation { continuation in
         SCShareableContent.getExcludingDesktopWindows(true, onScreenWindowsOnly: true) { content, error in
             if let error {
@@ -40,7 +42,7 @@ func currentShareableContent() async throws -> SCShareableContent {
     }
 }
 
-func captureImage(filter: SCContentFilter, configuration: SCStreamConfiguration) async throws -> CGImage {
+private func captureImage(filter: SCContentFilter, configuration: SCStreamConfiguration) async throws -> CGImage {
     try await withCheckedThrowingContinuation { continuation in
         SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration) { image, error in
             if let error {
@@ -56,9 +58,11 @@ func captureImage(filter: SCContentFilter, configuration: SCStreamConfiguration)
     }
 }
 
-func ocrText(from image: CGImage) async throws -> String {
+private func ocrText(from image: CGImage) async throws -> String {
     try await withCheckedThrowingContinuation { continuation in
         DispatchQueue.global(qos: .userInitiated).async {
+            // Vision returns observations in image space rather than reading order, so we sort by
+            // top-to-bottom then left-to-right to make the preview output intelligible to humans.
             let request = VNRecognizeTextRequest { request, error in
                 if let error {
                     continuation.resume(throwing: error)

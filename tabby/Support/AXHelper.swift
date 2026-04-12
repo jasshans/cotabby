@@ -25,6 +25,8 @@ enum AXHelper {
         kAXMenuItemRole as String,
     ]
 
+    // MARK: - Attribute Reading
+
     /// Returns the AX attribute names exposed by an element.
     /// These lists let higher-level code feature-detect capabilities instead of assuming that
     /// every app exposes the same Accessibility surface.
@@ -204,6 +206,8 @@ enum AXHelper {
         return value as AnyObject?
     }
 
+    // MARK: - Tree Traversal
+
     /// Returns the currently focused UI element from the system-wide AX object.
     static func focusedElement() -> AXUIElement? {
         let systemWideElement = AXUIElementCreateSystemWide()
@@ -265,6 +269,8 @@ enum AXHelper {
         "\(bundleIdentifier)-\(elementIdentity(for: element))"
     }
 
+    // MARK: - Editability Heuristics
+
     static func editabilityHintScore(role: String, explicitEditableFlag: Bool?) -> Int {
         var score = 0
 
@@ -291,6 +297,8 @@ enum AXHelper {
     static func isKnownReadOnlyRole(_ role: String) -> Bool {
         knownReadOnlyRoles.contains(role)
     }
+
+    // MARK: - Coordinate Conversion
 
     /// Converts raw Accessibility coordinates into global AppKit points via a simple Y-flip.
     /// Use this for element-level rects (AXFrame) that are reliably in Cocoa points.
