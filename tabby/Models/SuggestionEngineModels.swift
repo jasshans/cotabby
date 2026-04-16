@@ -59,6 +59,7 @@ enum SuggestionEngineKind: String, CaseIterable, Equatable, Hashable, Sendable, 
 /// A compact snapshot of the autocomplete settings the coordinator actually needs at generation
 /// time. Keeping this as a value type makes change detection simple and deterministic.
 struct SuggestionSettingsSnapshot: Equatable, Sendable {
+    let isGloballyEnabled: Bool
     let selectedEngine: SuggestionEngineKind
     let selectedWordCountPreset: SuggestionWordCountPreset
     let effectivePromptMode: SuggestionPromptMode

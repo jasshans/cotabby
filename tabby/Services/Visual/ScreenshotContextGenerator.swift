@@ -8,6 +8,10 @@ import Foundation
 ///
 /// This keeps the visual-context subsystem fast and conceptually honest. If Tabby later gains
 /// true multimodal support, this file remains the seam where OCR can be replaced.
+///
+/// DEPRECATED:
+/// Suggestion requests no longer consume screenshot/OCR text. This generator is retained only as
+/// legacy scaffolding until the rebuilt context pipeline is implemented.
 
 enum ScreenshotContextGenerationError: LocalizedError {
     case unavailable(String)

@@ -126,7 +126,7 @@ private extension WelcomeView {
 
                 WelcomePermissionRow(
                     title: "Screen Recording",
-                    subtitle: "Optional. Enables visual context for better suggestions.",
+                    subtitle: "Optional. Reserved for deprecated screenshot/OCR experiments.",
                     granted: permissionManager.screenRecordingGranted,
                     action: { permissionManager.openScreenRecordingSettings() },
                     isOptional: true

@@ -30,27 +30,26 @@ enum SuggestionRequestFactory {
         context: FocusedInputContext,
         promptMode: SuggestionPromptMode,
         wordCountPreset: SuggestionWordCountPreset,
-        configuration: SuggestionConfiguration,
-        visualContextText: String?
+        configuration: SuggestionConfiguration
     ) -> SuggestionRequestBuildResult {
         let prefixText = truncatedPromptPrefix(
             from: context.precedingText,
             configuration: configuration
         )
+        let completionLengthInstruction = wordCountPreset.promptInstruction
+        let customAIInstructions = activeCustomAIInstructions(configuration: configuration)
         let prompt = buildPrompt(
+            context: context,
             prefixText: prefixText,
             promptMode: promptMode,
-            wordCountPreset: wordCountPreset,
-            visualContextText: visualContextText
+            completionLengthInstruction: completionLengthInstruction,
+            customAIInstructions: customAIInstructions
         )
 
         let request = SuggestionRequest(
             context: context,
             prefixText: prefixText,
             prompt: prompt,
-            // Preserve the raw OCR excerpt on the engine request so logs and downstream consumers
-            // can inspect the exact injected value; prompt rendering applies its own normalization.
-            visualContextText: visualContextText,
             generation: context.generation,
             maxPredictionTokens: activeMaxPredictionTokens(
                 configuration: configuration,
@@ -62,10 +61,8 @@ enum SuggestionRequestFactory {
             minP: configuration.minP,
             repetitionPenalty: configuration.repetitionPenalty,
             maxSuffixCharacters: configuration.maxSuffixCharacters,
-            customAIInstructions: activeCompletionInstruction(
-                configuration: configuration,
-                wordCountPreset: wordCountPreset
-            )
+            completionLengthInstruction: completionLengthInstruction,
+            customAIInstructions: customAIInstructions
         )
 
         return SuggestionRequestBuildResult(
@@ -76,59 +73,19 @@ enum SuggestionRequestFactory {
 
     /// Builds the prompt contract that the local model sees for the current focused field.
     private static func buildPrompt(
+        context: FocusedInputContext,
         prefixText: String,
         promptMode: SuggestionPromptMode,
-        wordCountPreset: SuggestionWordCountPreset,
-        visualContextText: String?
+        completionLengthInstruction: String,
+        customAIInstructions: String?
     ) -> String {
-        if promptMode == .prefixOnly {
-            // Prefix-only mode intentionally sends just the user's trailing text context.
-            // It is the lowest-latency path and avoids instruction-tuned prompt overhead.
-            return prefixText
-        }
-
-        var sections = [
-            "You are an inline autocomplete engine for one text field.",
-            "",
-            "Rules (highest priority):",
-            "Return exactly one continuation fragment.",
-            wordCountPreset.promptInstruction,
-            "Continue only from Prefix.",
-            "Do not repeat Prefix text.",
-            "VisibleContext is nearby OCR text from around the focused input.",
-            "Use VisibleContext only as background context; never dump UI labels or menus.",
-            "No numbering, no bullets, no labels, no quotes, no markdown, no newline.",
-            "Output plain text only."
-        ]
-
-        if let normalizedVisualContext = normalizedVisualContextText(from: visualContextText) {
-            sections.append("VisibleContext: \(normalizedVisualContext)")
-        }
-
-        sections.append("Prefix: \(prefixText)")
-        sections.append("Continuation:")
-        return sections.joined(separator: "\n")
-    }
-
-    /// OCR text should stay compact and prompt-safe without paying for an extra model pass.
-    private static func normalizedVisualContextText(from text: String?) -> String? {
-        guard let text else {
-            return nil
-        }
-
-        var normalized = text
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: "\\r", with: "")
-            .replacingOccurrences(of: "\\n{2,}", with: "\n", options: .regularExpression)
-            .replacingOccurrences(of: "\\s+,", with: ",", options: .regularExpression)
-            .replacingOccurrences(of: "[ \\t]+", with: " ", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        if normalized.count > 220 {
-            normalized = String(normalized.prefix(160)).trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-
-        return normalized.isEmpty ? nil : normalized
+        LlamaPromptRenderer.prompt(
+            prefixText: prefixText,
+            applicationName: context.applicationName,
+            promptMode: promptMode,
+            completionLengthInstruction: completionLengthInstruction,
+            customAIInstructions: customAIInstructions
+        )
     }
 
     /// Keep only the latest short word tail to prevent long stale context from steering output.
@@ -146,12 +103,10 @@ enum SuggestionRequestFactory {
         return trailingWords.isEmpty ? characterWindow : trailingWords
     }
 
-    private static func activeCompletionInstruction(
-        configuration: SuggestionConfiguration,
-        wordCountPreset: SuggestionWordCountPreset
-    ) -> String {
-        [configuration.customAIInstructions, wordCountPreset.promptInstruction]
-            .joined(separator: " ")
+    private static func activeCustomAIInstructions(
+        configuration: SuggestionConfiguration
+    ) -> String? {
+        CustomAIInstructionFormatter.normalized(configuration.defaultCustomAIInstructions)
     }
 
     private static func activeMaxPredictionTokens(

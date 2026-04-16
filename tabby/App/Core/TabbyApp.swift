@@ -26,9 +26,7 @@ struct TabbyApp: App {
                 }
             )
         } label: {
-            MenuBarStatusLabelView(
-                suggestionCoordinator: appDelegate.suggestionCoordinator
-            )
+            MenuBarStatusLabelView()
         }
         .menuBarExtraStyle(.window)
     }

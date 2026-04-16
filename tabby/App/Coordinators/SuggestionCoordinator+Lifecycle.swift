@@ -61,13 +61,8 @@ extension SuggestionCoordinator {
             latestStageMessage = "Updated autocomplete settings."
         }
 
-        if snapshot.effectivePromptMode.usesVisualContext {
-            if case .supported = focusModel.snapshot.capability,
-               let focusedContext = focusModel.snapshot.context
-            {
-                visualContextCoordinator.startSessionIfNeeded(for: focusedContext)
-            }
-        } else {
+        // Legacy screenshot/OCR context capture is disabled for both prompt modes while we rebuild.
+        if visualContextStatus != .idle {
             visualContextCoordinator.cancel(resetState: true)
         }
 

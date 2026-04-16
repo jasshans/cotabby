@@ -8,18 +8,9 @@ import SwiftUI
 /// plain properties hanging off `AppDelegate`. By observing the models directly here,
 /// SwiftUI knows when to redraw the menu bar item.
 struct MenuBarStatusLabelView: View {
-    @ObservedObject var suggestionCoordinator: SuggestionCoordinator
-
-    /// The label intentionally stays tiny: app icon plus a running accepted-word counter.
     var body: some View {
-        HStack(alignment: .center, spacing: 4) {
-            Image(systemName: "pawprint.fill")
-                .symbolRenderingMode(.monochrome)
-                .font(.system(size: 13, weight: .semibold))
-
-            Text("\(suggestionCoordinator.totalTabAcceptedWordCount)")
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-        }
+        Image(systemName: "pawprint.fill")
+            .symbolRenderingMode(.monochrome)
+            .font(.system(size: 13, weight: .semibold))
     }
 }

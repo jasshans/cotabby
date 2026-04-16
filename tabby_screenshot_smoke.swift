@@ -7,6 +7,10 @@ import ScreenCaptureKit
 /// Developer-only smoke test for the screenshot + OCR path.
 /// This file is not part of the app's runtime architecture; it exists so maintainers can quickly
 /// verify screen-capture permissions and OCR output outside the main app flow.
+///
+/// DEPRECATED:
+/// The screenshot/OCR context path is currently disabled for live autocomplete requests and is
+/// being rebuilt. Keep this utility only for legacy diagnostics.
 private enum SmokeError: LocalizedError {
     case noFrontmostApp
     case noWindow(pid_t)

@@ -4,6 +4,10 @@ import Foundation
 /// Owns the screenshot-derived prompt-augmentation lifecycle for the currently focused input.
 /// This service manages one field-scoped visual-context session at a time and reports state back
 /// to `SuggestionCoordinator`, which remains responsible for deciding when to schedule prediction.
+///
+/// DEPRECATED:
+/// The active suggestion request path no longer uses screenshot/OCR prompt injection in either
+/// prompt mode. This coordinator remains in place temporarily for the planned context-system rebuild.
 @MainActor
 final class VisualContextCoordinator {
     /// The coordinator consumes these callbacks to mirror service state into published UI state

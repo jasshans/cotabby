@@ -50,7 +50,9 @@ struct MenuBarView: View {
 
             Spacer(minLength: 0)
 
-            StatusPill(text: statusText, color: statusColor)
+            Text("\(suggestionCoordinator.totalTabAcceptedWordCount) words accepted")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
         }
         .padding(.bottom, 12)
     }
@@ -62,6 +64,14 @@ struct MenuBarView: View {
     @ViewBuilder
     private var controlsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
+            Toggle("Enabled", isOn: globallyEnabledBinding)
+                .toggleStyle(.switch)
+                .controlSize(.small)
+
+            Toggle("Caret Indicator", isOn: showCaretIndicatorBinding)
+                .toggleStyle(.switch)
+                .controlSize(.small)
+
             MenuBarPickerRow(title: "Engine") {
                 Picker("Engine", selection: selectedEngineBinding) {
                     ForEach(SuggestionEngineKind.allCases) { engine in
@@ -185,6 +195,20 @@ struct MenuBarView: View {
 
     // MARK: - Bindings
 
+    private var globallyEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { suggestionSettings.isGloballyEnabled },
+            set: { suggestionSettings.setGloballyEnabled($0) }
+        )
+    }
+
+    private var showCaretIndicatorBinding: Binding<Bool> {
+        Binding(
+            get: { suggestionSettings.showCaretIndicator },
+            set: { suggestionSettings.setShowCaretIndicator($0) }
+        )
+    }
+
     private var selectedEngineBinding: Binding<SuggestionEngineKind> {
         Binding(
             get: { suggestionSettings.selectedEngine },
@@ -232,59 +256,6 @@ struct MenuBarView: View {
     private var allPermissionsGranted: Bool {
         permissionManager.accessibilityGranted
             && permissionManager.inputMonitoringGranted
-            && permissionManager.screenRecordingGranted
-    }
-
-    private var statusText: String {
-        if !allPermissionsGranted {
-            return "Setup Needed"
-        }
-
-        switch suggestionSettings.selectedEngine {
-        case .appleIntelligence:
-            guard foundationModelAvailabilityService.isAvailable else {
-                return "Unavailable"
-            }
-
-            if case .supported = focusModel.snapshot.capability {
-                return "Ready"
-            }
-
-            return focusModel.menuBarStatusText
-
-        case .llamaOpenSource:
-            if runtimeModel.availableModels.isEmpty {
-                return "Model Missing"
-            }
-
-            switch runtimeModel.state {
-            case .starting, .loading:
-                return "Loading…"
-            case .failed:
-                return "Error"
-            case .ready:
-                if case .supported = focusModel.snapshot.capability {
-                    return "Ready"
-                }
-
-                return focusModel.menuBarStatusText
-            case .idle:
-                return focusModel.menuBarStatusText
-            }
-        }
-    }
-
-    private var statusColor: Color {
-        switch statusText {
-        case "Ready":
-            return .green
-        case "Setup Needed", "Model Missing", "Unavailable":
-            return .orange
-        case "Error":
-            return .red
-        default:
-            return .secondary
-        }
     }
 
     private func refreshAppleIntelligenceAvailabilityIfNeeded() {

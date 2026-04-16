@@ -8,7 +8,7 @@ import Foundation
 /// These protocols are intentionally narrow. The goal is not "abstract everything"; the goal is
 /// to describe the coordinator's collaborators by the capabilities it actually needs:
 /// permission reads, focus snapshots, input events, suggestion generation, text insertion, and
-/// visual-context lifecycle callbacks.
+/// legacy visual-context lifecycle callbacks.
 ///
 /// This is a high-leverage maintainability move because `SuggestionCoordinator` is the app's
 /// largest orchestration type. Depending on contracts instead of concrete classes makes the data

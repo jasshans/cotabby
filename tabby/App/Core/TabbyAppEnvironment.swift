@@ -59,6 +59,8 @@ final class TabbyAppEnvironment {
         let suggestionInserter = SuggestionInserter(suppressionController: suppressionController)
         let overlayController = OverlayController()
         let activationIndicatorController = ActivationIndicatorController()
+        // DEPRECATED: This visual pipeline is intentionally left wired as legacy scaffolding while
+        // guided-mode context collection is rebuilt; live requests no longer consume OCR context.
         let screenshotContextGenerator = ScreenshotContextGenerator()
         let visualContextCoordinator = VisualContextCoordinator(
             screenshotContextGenerator: screenshotContextGenerator,

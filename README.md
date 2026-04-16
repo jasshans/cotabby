@@ -74,12 +74,12 @@ A few seconds saved per message adds up quickly over a full day.
 - Caret anchoring uses AX range bounds and fallback heuristics so ghost text can be placed near the live insertion point across different apps.
 - Input monitoring uses a global key tap to detect typing/navigation and Tab acceptance, then debounces generation to avoid noisy triggers.
 - Prompting supports two modes:
-  - Guided mode: structured inline instructions plus optional screen-context hints.
+  - Guided mode: structured inline instructions.
   - Prefix Only mode: raw prefix continuation with no extra instruction framing.
 - Models are local GGUF files running in-process via llama.cpp through LlamaSwift (no remote API endpoint dependency).
 - Models are downloaded on demand after install and loaded from the local runtime folder, so app updates and model updates stay independent.
 - Suggestion flow is continuous: generate a tail, render ghost text at the caret, accept with Tab in chunks, and reject stale outputs when context changes.
-- Optional visual context pipeline: frontmost window screenshot -> OCR -> compact hint -> injected only as background context when enabled.
+- Screenshot/OCR visual-context pipeline is currently deprecated and not injected into live suggestion requests while context collection is being rebuilt.
 
 <p align="center">
 	<img src="https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/rainbow.png" alt="rainbow line" />
@@ -99,9 +99,9 @@ If you are maintaining Tabby, start with this mental model:
 - `tabby/UI/`: presentation only
   - menu bar content, welcome flow, and static guide views live here
 - `tabby/Services/`: side effects and OS boundaries
-  - Accessibility polling, input monitoring, overlay windows, model runtime, downloads, OCR, screenshots
+  - Accessibility polling, input monitoring, overlay windows, model runtime, downloads, and legacy visual-context scaffolding
 - `tabby/Models/`: shared value types and state contracts
-  - suggestion sessions, focus snapshots, runtime diagnostics, visual-context state
+  - suggestion sessions, focus snapshots, runtime diagnostics, and legacy visual-context state
 - `tabby/Support/`: pure helper logic and low-level bridging
   - Accessibility helpers, capability scoring, model-file resolution
 
@@ -120,7 +120,7 @@ When debugging:
 - Start with `TabbyAppEnvironment.swift` and `AppDelegate.swift` to understand ownership.
 - Read `SuggestionCoordinator.swift` and the `SuggestionCoordinator+*.swift` files next to understand the user-visible state machine.
 - Use `FocusTracker.swift` and `AXHelper.swift` when the bug is app compatibility or caret placement.
-- Use `LlamaRuntimeManager.swift` and `ScreenshotContextGenerator.swift` when the bug is generation latency or visual context.
+- Use `LlamaRuntimeManager.swift` for generation latency; `ScreenshotContextGenerator.swift` is legacy/deprecated scaffolding during the context rebuild.
 
 <p align="center">
 	<img src="https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/rainbow.png" alt="rainbow line" />
@@ -176,7 +176,7 @@ xcodebuild -project tabby.xcodeproj -scheme tabby -configuration Debug -sdk maco
 5. Grant permissions when prompted:
    - Accessibility (required)
    - Input Monitoring (required)
-   - Screen Recording (optional, only for visual context features)
+   - Screen Recording (optional, only for deprecated screenshot/OCR tooling)
 6. Download a model from the Welcome screen, or add your own `.gguf` into the model folder.
 7. If you manually add a model file, press **Refresh Model List** in Tabby.
 
@@ -218,7 +218,7 @@ xcodebuild -project tabby.xcodeproj -scheme tabby -configuration Debug -sdk maco
 
 1. Enable **Accessibility** so Tabby can read focused field/caret context.
 2. Enable **Input Monitoring** so Tabby can detect typing and Tab acceptance.
-3. Optionally enable **Screen Recording** for visual-context enhancement in guided flows.
+3. Optionally enable **Screen Recording** only for deprecated screenshot/OCR diagnostics.
 
 ### 4) Model Setup
 

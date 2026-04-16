@@ -15,18 +15,20 @@ enum FoundationModelPromptRenderer {
     /// Apple documents that instructions have higher priority than the prompt itself, which makes
     /// them the right place to say "this is autocomplete, not chat."
     static func sessionInstructions(for request: SuggestionRequest) -> String {
-        [
-            "You are an inline autocomplete engine for one text field.",
+        var lines = [
+            "You are Tabby's inline autocomplete engine for a macOS text field.",
             "Complete the user's existing text at the current caret position.",
+            "This is not a chatbot.",
             "Do not answer the user as an assistant or begin a conversation.",
-            "Do not greet the user, ask follow-up questions, or turn the text into chat unless that is the direct continuation of the existing text.",
             "Return exactly one continuation fragment.",
-            request.customAIInstructions,
+            request.completionLengthInstruction,
             "Do not repeat or quote the existing text.",
-            "Match the existing tone, casing, and punctuation.",
+            "Match the existing tone, language, casing, and punctuation.",
             "Use plain text only with no labels, bullets, markdown, or explanation."
         ]
-        .joined(separator: "\n")
+
+        lines.append(contentsOf: CustomAIInstructionFormatter.promptSectionLines(from: request.customAIInstructions))
+        return lines.joined(separator: "\n")
     }
 
     /// The request prompt stays short and concrete.
@@ -42,6 +44,8 @@ enum FoundationModelPromptRenderer {
         }
 
         return [
+            "App: \(request.context.applicationName)",
+            "",
             "Text before the caret:",
             prefixText,
             "",

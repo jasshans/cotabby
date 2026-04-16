@@ -10,6 +10,10 @@ import ScreenCaptureKit
 ///
 /// We use ScreenCaptureKit instead of deprecated Core Graphics screenshot APIs because the app
 /// targets a modern macOS SDK where `CGWindowListCreateImage` is no longer available.
+///
+/// DEPRECATED:
+/// Active autocomplete generation no longer consumes screenshot/OCR context.
+/// This service remains temporarily while the next-generation context system is rebuilt.
 
 struct CapturedWindowScreenshot {
     let image: CGImage

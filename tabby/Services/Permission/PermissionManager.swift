@@ -5,8 +5,8 @@ import CoreGraphics
 
 /// File overview:
 /// Polls and exposes the three system permissions Tabby depends on: Accessibility for reading
-/// focus state, Input Monitoring for global key capture, and Screen Recording for screenshot-
-/// derived prompt context.
+/// focus state, Input Monitoring for global key capture, and Screen Recording for legacy screenshot
+/// experiments that are currently deprecated in the autocomplete request path.
 ///
 /// `@MainActor` guarantees permission state is mutated on the UI thread.
 @MainActor
@@ -50,7 +50,7 @@ final class PermissionManager: ObservableObject {
         )
     }
 
-    /// Opens System Settings directly to the Screen Recording pane for screenshot context capture.
+    /// Opens System Settings directly to the Screen Recording pane for legacy screenshot tooling.
     func openScreenRecordingSettings() {
         NSWorkspace.shared.open(
             URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!

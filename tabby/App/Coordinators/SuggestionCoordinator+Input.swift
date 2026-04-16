@@ -7,13 +7,10 @@ extension SuggestionCoordinator {
     // MARK: - Environment and Input Handling
 
     func handlePermissionChange() {
-        if !permissionManager.screenRecordingGranted {
-            visualContextCoordinator.cancel(resetState: true)
-        }
-
         reconcileWithCurrentEnvironment()
 
         if SuggestionAvailabilityEvaluator.shouldSchedulePrediction(
+            globallyEnabled: settingsSnapshot.isGloballyEnabled,
             inputMonitoringGranted: permissionManager.inputMonitoringGranted,
             focusSnapshot: focusModel.snapshot
         ) {
@@ -23,6 +20,7 @@ extension SuggestionCoordinator {
 
     func handleFocusSnapshotChange(_ snapshot: FocusSnapshot) {
         if let disabledReason = SuggestionAvailabilityEvaluator.disabledReason(
+            globallyEnabled: settingsSnapshot.isGloballyEnabled,
             inputMonitoringGranted: permissionManager.inputMonitoringGranted,
             focusSnapshot: snapshot
         ) {
@@ -38,9 +36,8 @@ extension SuggestionCoordinator {
             return
         }
 
-        if settingsSnapshot.effectivePromptMode.usesVisualContext {
-            visualContextCoordinator.startSessionIfNeeded(for: focusedContext)
-        } else if visualContextStatus != .idle {
+        // Legacy screenshot/OCR context capture is disabled for both prompt modes while we rebuild.
+        if visualContextStatus != .idle {
             visualContextCoordinator.cancel(resetState: true)
         }
 
@@ -67,6 +64,7 @@ extension SuggestionCoordinator {
 
     func handleInputEvent(_ event: CapturedInputEvent) -> Bool {
         if let disabledReason = SuggestionAvailabilityEvaluator.disabledReason(
+            globallyEnabled: settingsSnapshot.isGloballyEnabled,
             inputMonitoringGranted: permissionManager.inputMonitoringGranted,
             focusSnapshot: focusModel.snapshot
         ) {

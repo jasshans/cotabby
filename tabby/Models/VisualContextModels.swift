@@ -6,6 +6,10 @@ import Foundation
 ///
 /// The design goal is to model screenshot context as session state, just like suggestion state.
 /// That makes stale-result handling and UI diagnostics much easier to reason about.
+///
+/// DEPRECATED:
+/// As of the guided-mode rebuild, prompt construction no longer consumes screenshot/OCR context.
+/// Keep these types as legacy scaffolding while the replacement context pipeline is designed.
 
 /// Tunables for converting a focused-input screenshot into OCR text for prompt injection.
 /// These values are intentionally separate from `SuggestionConfiguration` because they govern

@@ -8,9 +8,14 @@ import Foundation
 /// paths, and moving them here prevents small wording or branching differences from creeping in.
 enum SuggestionAvailabilityEvaluator {
     static func disabledReason(
+        globallyEnabled: Bool = true,
         inputMonitoringGranted: Bool,
         focusSnapshot: FocusSnapshot
     ) -> String? {
+        guard globallyEnabled else {
+            return "Tabby is turned off."
+        }
+
         guard inputMonitoringGranted else {
             return "Input Monitoring permission is required before Tabby can react to typing."
         }
@@ -24,10 +29,11 @@ enum SuggestionAvailabilityEvaluator {
     }
 
     static func shouldSchedulePrediction(
+        globallyEnabled: Bool = true,
         inputMonitoringGranted: Bool,
         focusSnapshot: FocusSnapshot
     ) -> Bool {
-        disabledReason(inputMonitoringGranted: inputMonitoringGranted, focusSnapshot: focusSnapshot) == nil
+        disabledReason(globallyEnabled: globallyEnabled, inputMonitoringGranted: inputMonitoringGranted, focusSnapshot: focusSnapshot) == nil
     }
 
     static func shouldSchedulePredictionWhenVisualContextBecomesReady(

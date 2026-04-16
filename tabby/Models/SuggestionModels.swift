@@ -64,7 +64,8 @@ enum SuggestionWordCountPreset: String, CaseIterable, Equatable, Hashable, Senda
 }
 
 /// Prompt construction strategy for inline completion.
-/// `guided` uses explicit rules and optional screenshot context; `prefixOnly` sends only prefix text.
+/// `guided` and `prefixOnly` now share the same non-visual data path; the only intended difference
+/// is prompt wording strategy.
 enum SuggestionPromptMode: String, CaseIterable, Equatable, Hashable, Sendable, Identifiable {
     case guided
     case prefixOnly
@@ -88,15 +89,6 @@ enum SuggestionPromptMode: String, CaseIterable, Equatable, Hashable, Sendable, 
             return "Prefix Only"
         }
     }
-
-    var usesVisualContext: Bool {
-        switch self {
-        case .guided:
-            return true
-        case .prefixOnly:
-            return false
-        }
-    }
 }
 
 /// Runtime knobs for the inline-completion pipeline.
@@ -113,7 +105,10 @@ struct SuggestionConfiguration: Equatable, Sendable {
     let maxPrefixWords: Int
     let maxPrefixCharacters: Int
     let maxSuffixCharacters: Int
-    let customAIInstructions: String
+    /// Temporary owner for the user-facing "custom AI instructions" concept until the Settings UI
+    /// can edit and persist it. This is intentionally separate from base prompt policy and length
+    /// constraints, which are product rules rather than user preferences.
+    let defaultCustomAIInstructions: String?
     let defaultWordCountPreset: SuggestionWordCountPreset
     let defaultPromptMode: SuggestionPromptMode
 
@@ -136,7 +131,11 @@ struct SuggestionConfiguration: Equatable, Sendable {
         // little quality gain because Tabby is only completing the immediate local continuation.
         maxPrefixCharacters: 400,
         maxSuffixCharacters: 192,
-        customAIInstructions: "Continue the text naturally in the same tone and context.",
+        // Hardcoded for now while we build the prompt foundations before wiring the Settings UI.
+        defaultCustomAIInstructions: """
+            My name is Jacob Fu (jacobfu). I usually write in English.
+            Write in a friendly, professional and empathetic voice. Keep your sentences short, concise and readable.
+            """,
         defaultWordCountPreset: .threeToSeven,
         defaultPromptMode: .prefixOnly
     )
@@ -199,7 +198,6 @@ struct SuggestionRequest: Equatable, Sendable {
     /// Engines that prefer a separate instructions channel can derive their own request text from
     /// `prefixText` and the other shared fields instead of consuming this string directly.
     let prompt: String
-    let visualContextText: String?
     let generation: UInt64
     let maxPredictionTokens: Int
     let temperature: Double
@@ -208,7 +206,12 @@ struct SuggestionRequest: Equatable, Sendable {
     let minP: Double
     let repetitionPenalty: Double
     let maxSuffixCharacters: Int
-    let customAIInstructions: String
+    /// Explicit length guidance stays separate from user style preferences so prompt builders can
+    /// order and phrase them differently per backend.
+    let completionLengthInstruction: String
+    /// Optional user-provided style guidance. We keep this separate from base product behavior so
+    /// future settings/personalization work can evolve independently from prompt safety rules.
+    let customAIInstructions: String?
 }
 
 /// The engine's normalized response, including raw model text for debugging.

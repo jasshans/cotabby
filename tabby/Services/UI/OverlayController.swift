@@ -104,8 +104,6 @@ private struct GhostSuggestionView: View {
 }
 
 /// Visual hint that teaches the user which key accepts the suggestion.
-/// We intentionally render only the tab glyph now; the explicit "Tab" label took too much visual
-/// weight for an inline hint that should stay secondary to the suggestion itself.
 private struct GhostTabKeycap: View {
     @Environment(\.colorScheme) var colorScheme
 
@@ -122,7 +120,7 @@ private struct GhostTabKeycap: View {
     }
 
     var body: some View {
-        Text("⇥")
+        Text("tab")
             .font(.system(size: 10, weight: .medium, design: .rounded))
             .foregroundStyle(textColor)
             .padding(.horizontal, 5)
@@ -134,12 +132,6 @@ private struct GhostTabKeycap: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .stroke(borderColor, lineWidth: 1)
-            )
-            .shadow(
-                color: Color.black.opacity(colorScheme == .dark ? 0.4 : 0.08),
-                radius: 1,
-                x: 0,
-                y: 1
             )
             .fixedSize(horizontal: true, vertical: true)
     }

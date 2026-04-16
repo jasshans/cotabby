@@ -10,12 +10,16 @@ import Foundation
 /// persist them itself.
 @MainActor
 final class SuggestionSettingsModel: ObservableObject {
+    @Published private(set) var isGloballyEnabled: Bool
+    @Published private(set) var showCaretIndicator: Bool
     @Published private(set) var selectedEngine: SuggestionEngineKind
     @Published private(set) var selectedWordCountPreset: SuggestionWordCountPreset
     @Published private(set) var selectedLocalPromptMode: SuggestionPromptMode
 
     private let userDefaults: UserDefaults
 
+    private static let isGloballyEnabledDefaultsKey = "tabbyGloballyEnabled"
+    private static let showCaretIndicatorDefaultsKey = "tabbyShowCaretIndicator"
     private static let selectedEngineDefaultsKey = "selectedSuggestionEngine"
     private static let selectedWordCountPresetDefaultsKey = "selectedSuggestionWordCountPreset"
     private static let selectedLocalPromptModeDefaultsKey = "selectedLocalSuggestionPromptMode"
@@ -25,6 +29,10 @@ final class SuggestionSettingsModel: ObservableObject {
         userDefaults: UserDefaults = .standard
     ) {
         self.userDefaults = userDefaults
+
+        // Default to enabled and showing the caret indicator on first launch.
+        let resolvedGloballyEnabled = userDefaults.object(forKey: Self.isGloballyEnabledDefaultsKey) as? Bool ?? true
+        let resolvedShowCaretIndicator = userDefaults.object(forKey: Self.showCaretIndicatorDefaultsKey) as? Bool ?? true
 
         let resolvedEngine =
             userDefaults
@@ -42,10 +50,14 @@ final class SuggestionSettingsModel: ObservableObject {
             .flatMap(SuggestionPromptMode.init(rawValue:))
             ?? configuration.defaultPromptMode
 
+        isGloballyEnabled = resolvedGloballyEnabled
+        showCaretIndicator = resolvedShowCaretIndicator
         selectedEngine = resolvedEngine
         selectedWordCountPreset = resolvedWordCountPreset
         selectedLocalPromptMode = resolvedLocalPromptMode
 
+        userDefaults.set(resolvedGloballyEnabled, forKey: Self.isGloballyEnabledDefaultsKey)
+        userDefaults.set(resolvedShowCaretIndicator, forKey: Self.showCaretIndicatorDefaultsKey)
         persistSelectedEngine(resolvedEngine)
         persistSelectedWordCountPreset(resolvedWordCountPreset)
         persistSelectedLocalPromptMode(resolvedLocalPromptMode)
@@ -64,6 +76,7 @@ final class SuggestionSettingsModel: ObservableObject {
 
     var snapshot: SuggestionSettingsSnapshot {
         SuggestionSettingsSnapshot(
+            isGloballyEnabled: isGloballyEnabled,
             selectedEngine: selectedEngine,
             selectedWordCountPreset: selectedWordCountPreset,
             effectivePromptMode: effectivePromptMode
@@ -97,6 +110,18 @@ final class SuggestionSettingsModel: ObservableObject {
         persistSelectedLocalPromptMode(mode)
     }
 
+    func setGloballyEnabled(_ enabled: Bool) {
+        guard isGloballyEnabled != enabled else { return }
+        isGloballyEnabled = enabled
+        userDefaults.set(enabled, forKey: Self.isGloballyEnabledDefaultsKey)
+    }
+
+    func setShowCaretIndicator(_ show: Bool) {
+        guard showCaretIndicator != show else { return }
+        showCaretIndicator = show
+        userDefaults.set(show, forKey: Self.showCaretIndicatorDefaultsKey)
+    }
+
     private static func effectivePromptMode(
         engine: SuggestionEngineKind,
         localPromptMode: SuggestionPromptMode
@@ -123,13 +148,15 @@ final class SuggestionSettingsModel: ObservableObject {
 
 extension SuggestionSettingsModel: SuggestionSettingsProviding {
     var snapshotPublisher: AnyPublisher<SuggestionSettingsSnapshot, Never> {
-        Publishers.CombineLatest3(
+        Publishers.CombineLatest4(
+            $isGloballyEnabled,
             $selectedEngine,
             $selectedWordCountPreset,
             $selectedLocalPromptMode
         )
-        .map { engine, wordCountPreset, localPromptMode in
+        .map { globallyEnabled, engine, wordCountPreset, localPromptMode in
             SuggestionSettingsSnapshot(
+                isGloballyEnabled: globallyEnabled,
                 selectedEngine: engine,
                 selectedWordCountPreset: wordCountPreset,
                 effectivePromptMode: Self.effectivePromptMode(

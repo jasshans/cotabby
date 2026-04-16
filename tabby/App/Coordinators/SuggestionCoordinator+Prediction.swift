@@ -8,6 +8,7 @@ extension SuggestionCoordinator {
 
     func schedulePrediction() {
         if let disabledReason = SuggestionAvailabilityEvaluator.disabledReason(
+            globallyEnabled: settingsSnapshot.isGloballyEnabled,
             inputMonitoringGranted: permissionManager.inputMonitoringGranted,
             focusSnapshot: focusModel.snapshot
         ) {
@@ -39,6 +40,7 @@ extension SuggestionCoordinator {
         let snapshot = focusModel.snapshot
 
         if let disabledReason = SuggestionAvailabilityEvaluator.disabledReason(
+            globallyEnabled: settingsSnapshot.isGloballyEnabled,
             inputMonitoringGranted: permissionManager.inputMonitoringGranted,
             focusSnapshot: snapshot
         ) {
@@ -59,15 +61,11 @@ extension SuggestionCoordinator {
         }
 
         let context = interactionState.materializeContext(from: rawContext)
-        let visualContextText = settingsSnapshot.effectivePromptMode.usesVisualContext
-            ? visualContextCoordinator.excerpt(for: context)
-            : nil
         let requestBuildResult = SuggestionRequestFactory.buildRequest(
             context: context,
             promptMode: settingsSnapshot.effectivePromptMode,
             wordCountPreset: settingsSnapshot.selectedWordCountPreset,
-            configuration: configuration,
-            visualContextText: visualContextText
+            configuration: configuration
         )
         latestGenerationNumber = context.generation
         latestPromptPreview = requestBuildResult.promptPreview
@@ -119,6 +117,7 @@ extension SuggestionCoordinator {
         let snapshot = focusModel.snapshot
 
         if let disabledReason = SuggestionAvailabilityEvaluator.disabledReason(
+            globallyEnabled: settingsSnapshot.isGloballyEnabled,
             inputMonitoringGranted: permissionManager.inputMonitoringGranted,
             focusSnapshot: snapshot
         ) {
@@ -222,6 +221,7 @@ extension SuggestionCoordinator {
     /// Recomputes whether prediction should be enabled based on current permissions and focus support.
     func reconcileWithCurrentEnvironment() {
         let disabledReason = SuggestionAvailabilityEvaluator.disabledReason(
+            globallyEnabled: settingsSnapshot.isGloballyEnabled,
             inputMonitoringGranted: permissionManager.inputMonitoringGranted,
             focusSnapshot: focusModel.snapshot
         )

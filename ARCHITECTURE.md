@@ -61,7 +61,7 @@ The coordinator should not own pure decision rules or low-level OS logic. Those 
 - `tabby/Support/SuggestionRequestFactory.swift`: pure request building
 - `tabby/Support/SuggestionSessionReconciler.swift`: pure session and acceptance rules
 - `tabby/Support/SuggestionAvailabilityEvaluator.swift`: pure gating logic
-- `tabby/Services/Visual/VisualContextCoordinator.swift`: screenshot/OCR lifecycle
+- `tabby/Services/Visual/VisualContextCoordinator.swift`: legacy screenshot/OCR lifecycle (deprecated during context rebuild)
 - `tabby/Services/Runtime/LlamaSuggestionEngine.swift`: prompt/result normalization over the runtime
 
 ## Focus And Accessibility
@@ -87,7 +87,7 @@ That split matters because runtime lifecycle concerns change at a different rate
 
 ## Developer Utilities
 
-`tabby_screenshot_smoke.swift` is a developer-only utility for checking screenshot capture and OCR outside the main app flow. It is not part of the runtime architecture, so keep it isolated and simple.
+`tabby_screenshot_smoke.swift` is a developer-only utility for legacy screenshot/OCR diagnostics outside the main app flow. The visual pipeline is currently deprecated in live requests, so keep this utility isolated and simple.
 
 ## Safe Change Order
 

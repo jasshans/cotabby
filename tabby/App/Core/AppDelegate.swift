@@ -96,12 +96,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         runtimeModel.stop()
     }
 
-    /// Mirrors supported-focus state into the caret-anchored activation indicator.
+    /// Mirrors supported-focus state into the caret-anchored activation indicator,
+    /// gated by the user's showCaretIndicator preference.
     private func updateActivationIndicator(for snapshot: FocusSnapshot) {
-        guard case .supported = snapshot.capability,
+        guard suggestionSettings.showCaretIndicator,
+              case .supported = snapshot.capability,
               let caretRect = snapshot.context?.caretRect
         else {
-            activationIndicatorController.hide(reason: "Activation indicator hidden because the current field is not supported.")
+            activationIndicatorController.hide(reason: "Activation indicator hidden.")
             return
         }
 
