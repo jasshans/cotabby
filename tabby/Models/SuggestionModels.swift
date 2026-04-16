@@ -47,19 +47,19 @@ enum SuggestionWordCountPreset: String, CaseIterable, Equatable, Hashable, Senda
         }
     }
 
-    /// Approximate token budget needed to satisfy this word range with punctuation and contractions.
+    /// Token budget sized at ~1.5x the upper word bound. Tight enough to enforce the word cap
+    /// while leaving room for multi-token words (contractions, proper nouns, punctuation).
     var suggestedPredictionTokenBudget: Int {
         switch self {
         case .oneToThree:
-            return 8
+            return 5
         case .threeToSeven:
-            return 12
+            return 11
         case .sevenToTwelve:
-            return 20
-        case.twelveToTwenty:
-            return 40
+            return 18
+        case .twelveToTwenty:
+            return 30
         }
-
     }
 }
 
