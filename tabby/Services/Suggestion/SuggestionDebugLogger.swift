@@ -61,9 +61,23 @@ final class SuggestionDebugLogger {
         }
 
         if stage != "generating" {
-            let generationOutput = normalizedOutput ?? rawOutput
-            if let generationOutput {
-                parts.append("output=\(Self.debugPreview(generationOutput))")
+            switch (rawOutput, normalizedOutput) {
+            case let (raw?, normalized?):
+                // When generation and normalization diverge, surface both previews in the compact
+                // summary so we can immediately see whether the backend returned text that the
+                // cleanup layer later stripped away.
+                if raw == normalized {
+                    parts.append("output=\(Self.debugPreview(raw))")
+                } else {
+                    parts.append("rawOutput=\(Self.debugPreview(raw))")
+                    parts.append("normalizedOutput=\(Self.debugPreview(normalized))")
+                }
+            case let (raw?, nil):
+                parts.append("rawOutput=\(Self.debugPreview(raw))")
+            case let (nil, normalized?):
+                parts.append("normalizedOutput=\(Self.debugPreview(normalized))")
+            case (nil, nil):
+                break
             }
         }
 
@@ -80,14 +94,52 @@ final class SuggestionDebugLogger {
             )
         }
 
-        if stage != "generating", let generationOutput = normalizedOutput ?? rawOutput {
-            logTextBlock(
-                kind: "output",
-                stage: stage,
-                workID: workID,
-                generation: generation,
-                text: generationOutput
-            )
+        if stage != "generating" {
+            switch (rawOutput, normalizedOutput) {
+            case let (raw?, normalized?):
+                if raw == normalized {
+                    logTextBlock(
+                        kind: "output",
+                        stage: stage,
+                        workID: workID,
+                        generation: generation,
+                        text: raw
+                    )
+                } else {
+                    logTextBlock(
+                        kind: "raw-output",
+                        stage: stage,
+                        workID: workID,
+                        generation: generation,
+                        text: raw
+                    )
+                    logTextBlock(
+                        kind: "normalized-output",
+                        stage: stage,
+                        workID: workID,
+                        generation: generation,
+                        text: normalized
+                    )
+                }
+            case let (raw?, nil):
+                logTextBlock(
+                    kind: "raw-output",
+                    stage: stage,
+                    workID: workID,
+                    generation: generation,
+                    text: raw
+                )
+            case let (nil, normalized?):
+                logTextBlock(
+                    kind: "normalized-output",
+                    stage: stage,
+                    workID: workID,
+                    generation: generation,
+                    text: normalized
+                )
+            case (nil, nil):
+                break
+            }
         }
     }
 

@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 import Foundation
 
@@ -85,12 +86,17 @@ extension SuggestionCoordinator {
             latestGenerationNumber = liveContext.generation
             applySessionDiagnostics(advancedSession, acceptanceAction: "Accepted next chunk with Tab.")
             state = .ready(text: advancedSession.remainingText, latency: advancedSession.latency)
-            // Optimistic overlay: show the remaining suggestion text immediately at the last known
-            // caret position instead of hiding and waiting for AX to report the new caret. The overlay
-            // position will be slightly stale (by roughly the inserted chunk width) for one poll cycle,
-            // then snap to the correct position when AX catches up. This eliminates the flash where
-            // ghost text disappears and reappears between Tab presses.
-            presentOverlay(text: advancedSession.remainingText, at: liveContext.caretRect)
+            // Predict where the caret will land after the inserted chunk. This eliminates the
+            // visible jump where the overlay stays at the old position then snaps rightward
+            // when AX catches up 100–250ms later.
+            let predictedCaret = Self.predictedCaretRect(
+                after: acceptedChunk,
+                oldCaretRect: liveContext.caretRect
+            )
+            presentOverlay(text: advancedSession.remainingText, at: predictedCaret)
+            // Force an early AX refresh so the real caret position corrects any prediction
+            // error faster than the normal 250ms poll interval.
+            schedulePostInsertionRefresh()
             logStage(
                 "tab-accepted-chunk",
                 workID: currentWorkID,
@@ -204,6 +210,33 @@ extension SuggestionCoordinator {
 
         totalTabAcceptedWordCount += acceptedWordCount
         userDefaults.set(totalTabAcceptedWordCount, forKey: Self.totalTabAcceptedWordCountDefaultsKey)
+    }
+
+    // MARK: - Caret Prediction
+
+    /// Estimates the caret rect after inserting a chunk by measuring the chunk's pixel width
+    /// with the system font and shifting the old caret rect rightward by that amount.
+    static func predictedCaretRect(after insertedChunk: String, oldCaretRect: CGRect) -> CGRect {
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 14)
+        ]
+        let chunkWidth = (insertedChunk as NSString).size(withAttributes: attrs).width
+        return CGRect(
+            x: oldCaretRect.origin.x + chunkWidth,
+            y: oldCaretRect.origin.y,
+            width: oldCaretRect.width,
+            height: oldCaretRect.height
+        )
+    }
+
+    /// Gives the host app ~30ms to process the synthetic keystroke, then forces an AX snapshot
+    /// so the overlay snaps to the real caret position without waiting for the 250ms poll.
+    func schedulePostInsertionRefresh() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { [weak self] in
+            guard let self else { return }
+            self.focusModel.refreshNow()
+            self.reconcileActiveSession(with: self.focusModel.snapshot)
+        }
     }
 
     // MARK: - Overlay and Logging

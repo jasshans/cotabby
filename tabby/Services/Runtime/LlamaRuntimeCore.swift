@@ -126,6 +126,7 @@ actor LlamaRuntimeCore {
 
         var generatedText = ""
         var position = Int32(promptTokens.count)
+        var hasVisibleContent = false
 
         for _ in 0 ..< maxPredictionTokens {
             let nextToken = llama_sampler_sample(sampler, context, -1)
@@ -137,7 +138,16 @@ actor LlamaRuntimeCore {
             generatedText += piece
             llama_sampler_accept(sampler, nextToken)
 
-            if generatedText.contains("\n") {
+            // Instruction-shaped prompts often make small models emit a leading newline before the
+            // actual continuation text. If we stop on the first newline unconditionally, guided
+            // mode collapses into an empty suggestion even though the model would have produced a
+            // usable fragment on the next token. We therefore allow leading formatting noise, but
+            // still stop once a newline appears after the model has emitted any visible content.
+            if piece.unicodeScalars.contains(where: Self.isVisibleOutputScalar) {
+                hasVisibleContent = true
+            }
+
+            if hasVisibleContent && generatedText.contains("\n") {
                 break
             }
 
@@ -273,6 +283,17 @@ actor LlamaRuntimeCore {
         guard llama_decode(context, batch) == 0 else {
             throw LlamaRuntimeError.generationFailed("llama_decode failed while generating a continuation.")
         }
+    }
+
+    /// Inline autocomplete cares about visible suggestion text, not formatting-only tokens.
+    /// We treat spaces/newlines/control scalars as non-visible so a leading newline does not count
+    /// as "the model already started the answer."
+    nonisolated private static func isVisibleOutputScalar(_ scalar: UnicodeScalar) -> Bool {
+        if CharacterSet.controlCharacters.contains(scalar) {
+            return false
+        }
+
+        return !CharacterSet.whitespacesAndNewlines.contains(scalar)
     }
 
     /// Assembles the sampler chain that controls temperature, nucleus sampling, and repetition behavior.

@@ -26,18 +26,21 @@ enum SuggestionTextNormalizer {
             normalized.removeFirst(request.prefixText.count)
         }
 
+        normalized = normalized.trimmingCharacters(in: .controlCharacters.union(.newlines))
+
+        // Small instruction-tuned models often emit one or more leading newlines before the actual
+        // continuation text. We trim those formatting-only tokens first so a response like
+        // "\ndelicious" does not get misread as "the first line is empty".
+        //
+        // We intentionally do this before collapsing to a single line. Otherwise the old logic
+        // would split on the first newline, keep the empty prefix before it, and drop the real
+        // continuation that followed.
+        normalized = normalized.trimmingCharacters(in: .newlines)
+
         // Inline autocomplete should only surface the immediate continuation, not a paragraph.
-        if
-            let firstLine = normalized.split(
-                separator: "\n",
-                maxSplits: 1,
-                omittingEmptySubsequences: false
-            ).first
-        {
+        if let firstLine = normalized.split(separator: "\n", maxSplits: 1).first {
             normalized = String(firstLine)
         }
-
-        normalized = normalized.trimmingCharacters(in: .controlCharacters.union(.newlines))
 
         // If the model starts by repeating text that already exists after the caret, we treat the
         // suggestion as unusable. Showing only the remainder often produces confusing mid-word
@@ -47,8 +50,6 @@ enum SuggestionTextNormalizer {
         {
             return ""
         }
-
-        normalized = normalized.trimmingCharacters(in: .newlines)
 
         // Deterministic space management: the user owns the word boundary, not the model.
         // If the preceding text already ends with whitespace, strip any leading whitespace

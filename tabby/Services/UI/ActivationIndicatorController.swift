@@ -30,6 +30,9 @@ final class ActivationIndicatorController {
         panel.isOpaque = false
         panel.ignoresMouseEvents = true
         panel.hasShadow = false
+        // Match the ghost-text overlay: this caret affordance should appear instantly, without
+        // AppKit window presentation animation.
+        panel.animationBehavior = .none
         panel.level = .statusBar
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         panel.contentView = contentView

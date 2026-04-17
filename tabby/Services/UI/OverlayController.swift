@@ -18,6 +18,11 @@ final class OverlayController: SuggestionOverlayControlling {
         }
     }
 
+    /// Reused across overlay updates to avoid allocating a new SwiftUI hosting view on every
+    /// tab-per-word cycle. Only the rootView is swapped, which triggers a lightweight diff
+    /// instead of a full view rebuild + layout pass.
+    private var hostingView: NSHostingView<GhostSuggestionView>?
+
     private lazy var panel: OverlayPanel = {
         let panel = OverlayPanel(
             contentRect: CGRect(x: 0, y: 0, width: 10, height: 10),
@@ -32,6 +37,10 @@ final class OverlayController: SuggestionOverlayControlling {
         panel.isOpaque = false
         panel.ignoresMouseEvents = true
         panel.hasShadow = false
+        // We want ghost text to feel like immediate ink at the caret, not like a floating window
+        // being presented by AppKit. Disabling window animation removes the subtle pop/spring
+        // effect that can happen when the panel first appears.
+        panel.animationBehavior = .none
         panel.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 2)
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         return panel
@@ -44,7 +53,16 @@ final class OverlayController: SuggestionOverlayControlling {
             return
         }
 
-        let contentView = NSHostingView(rootView: GhostSuggestionView(text: text))
+        let contentView: NSHostingView<GhostSuggestionView>
+        if let existing = hostingView {
+            existing.rootView = GhostSuggestionView(text: text)
+            contentView = existing
+        } else {
+            let fresh = NSHostingView(rootView: GhostSuggestionView(text: text))
+            hostingView = fresh
+            panel.contentView = fresh
+            contentView = fresh
+        }
         contentView.layoutSubtreeIfNeeded()
         let contentSize = contentView.fittingSize
 
@@ -58,7 +76,6 @@ final class OverlayController: SuggestionOverlayControlling {
         )
         let frame = CGRect(origin: origin, size: contentSize)
 
-        panel.contentView = contentView
         panel.setFrame(frame.integral, display: true)
         panel.orderFrontRegardless()
         state = .visible(text: text, caretRect: caretRect)
