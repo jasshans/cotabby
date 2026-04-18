@@ -63,8 +63,7 @@ extension SuggestionCoordinator {
         let context = interactionState.materializeContext(from: rawContext)
         let requestBuildResult = SuggestionRequestFactory.buildRequest(
             context: context,
-            promptMode: settingsSnapshot.effectivePromptMode,
-            wordCountPreset: settingsSnapshot.selectedWordCountPreset,
+            settings: settingsSnapshot,
             configuration: configuration
         )
         latestGenerationNumber = context.generation
@@ -193,7 +192,11 @@ extension SuggestionCoordinator {
         applySessionDiagnostics(session, acceptanceAction: "Generated new suggestion.")
         state = .ready(text: session.remainingText, latency: session.latency)
 
-        presentOverlay(text: session.remainingText, at: liveContext.caretRect)
+        presentOverlay(
+            text: session.remainingText,
+            at: liveContext.caretRect,
+            caretQuality: liveContext.caretQuality
+        )
         logStage(
             "ready",
             workID: workID,
@@ -279,7 +282,11 @@ extension SuggestionCoordinator {
             }
 
             state = .ready(text: reconciledSession.remainingText, latency: reconciledSession.latency)
-            presentOverlay(text: reconciledSession.remainingText, at: liveContext.caretRect)
+            presentOverlay(
+                text: reconciledSession.remainingText,
+                at: liveContext.caretRect,
+                caretQuality: liveContext.caretQuality
+            )
             if let advancement {
                 logStage(
                     advancement.stage,

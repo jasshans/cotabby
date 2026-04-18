@@ -28,20 +28,19 @@ enum SuggestionRequestFactory {
     /// Builds the generation request plus the exact prompt preview used by Tabby's diagnostics UI.
     static func buildRequest(
         context: FocusedInputContext,
-        promptMode: SuggestionPromptMode,
-        wordCountPreset: SuggestionWordCountPreset,
+        settings: SuggestionSettingsSnapshot,
         configuration: SuggestionConfiguration
     ) -> SuggestionRequestBuildResult {
         let prefixText = truncatedPromptPrefix(
             from: context.precedingText,
             configuration: configuration
         )
-        let completionLengthInstruction = wordCountPreset.promptInstruction
-        let customAIInstructions = activeCustomAIInstructions(configuration: configuration)
+        let completionLengthInstruction = settings.selectedWordCountPreset.promptInstruction
+        let customAIInstructions = activeCustomAIInstructions(settings: settings)
         let prompt = buildPrompt(
             context: context,
             prefixText: prefixText,
-            promptMode: promptMode,
+            promptMode: settings.effectivePromptMode,
             completionLengthInstruction: completionLengthInstruction,
             customAIInstructions: customAIInstructions
         )
@@ -53,7 +52,7 @@ enum SuggestionRequestFactory {
             generation: context.generation,
             maxPredictionTokens: activeMaxPredictionTokens(
                 configuration: configuration,
-                wordCountPreset: wordCountPreset
+                wordCountPreset: settings.selectedWordCountPreset
             ),
             temperature: configuration.temperature,
             topK: configuration.topK,
@@ -104,9 +103,13 @@ enum SuggestionRequestFactory {
     }
 
     private static func activeCustomAIInstructions(
-        configuration: SuggestionConfiguration
+        settings: SuggestionSettingsSnapshot
     ) -> String? {
-        CustomAIInstructionFormatter.normalized(configuration.defaultCustomAIInstructions)
+        guard settings.effectivePromptMode == .guided else {
+            return nil
+        }
+
+        return settings.customAIInstructions
     }
 
     private static func activeMaxPredictionTokens(

@@ -28,12 +28,17 @@ enum CustomAIInstructionFormatter {
             return []
         }
 
-        return [
-            "User writing preferences:",
-            normalizedInstructions,
-            "Treat these as style guidance only.",
-            "Use them when they fit the surrounding text.",
-            "Do not mention or explain these preferences."
-        ]
+        let instructionLines = normalizedInstructions
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .map { "- \($0)" }
+
+        return ["Guided mode style preferences:"] +
+            instructionLines +
+            [
+                "Apply this guidance only when it fits the surrounding text.",
+                "Do not mention or explain these preferences."
+            ]
     }
 }

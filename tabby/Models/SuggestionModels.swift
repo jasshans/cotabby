@@ -105,9 +105,9 @@ struct SuggestionConfiguration: Equatable, Sendable {
     let maxPrefixWords: Int
     let maxPrefixCharacters: Int
     let maxSuffixCharacters: Int
-    /// Temporary owner for the user-facing "custom AI instructions" concept until the Settings UI
-    /// can edit and persist it. This is intentionally separate from base prompt policy and length
-    /// constraints, which are product rules rather than user preferences.
+    /// Shipped first-launch default for the user's Guided-mode custom instructions.
+    /// `SuggestionSettingsModel` persists the user's real preference; configuration only provides
+    /// the app's starting value for a fresh install.
     let defaultCustomAIInstructions: String?
     let defaultWordCountPreset: SuggestionWordCountPreset
     let defaultPromptMode: SuggestionPromptMode
@@ -131,7 +131,7 @@ struct SuggestionConfiguration: Equatable, Sendable {
         // little quality gain because Tabby is only completing the immediate local continuation.
         maxPrefixCharacters: 1000,
         maxSuffixCharacters: 192,
-        // Hardcoded for now while we build the prompt foundations before wiring the Settings UI.
+        // Seed Guided mode with the current house writing guidance on first launch.
         defaultCustomAIInstructions: """
             My name is Jacob Fu. I usually write in English.
             Write in a friendly, professional and empathetic voice.
@@ -343,7 +343,7 @@ enum SuggestionDebugState: Equatable {
 /// without poking into AppKit window objects directly.
 enum OverlayState: Equatable {
     case hidden(reason: String)
-    case visible(text: String, caretRect: CGRect)
+    case visible(text: String, caretRect: CGRect, caretQuality: CaretGeometryQuality)
 
     var shortLabel: String {
         switch self {
@@ -358,8 +358,8 @@ enum OverlayState: Equatable {
         switch self {
         case let .hidden(reason):
             return reason
-        case let .visible(text, caretRect):
-            return "Showing \(text.count) characters near (\(Int(caretRect.minX)), \(Int(caretRect.minY)))."
+        case let .visible(text, caretRect, caretQuality):
+            return "Showing \(text.count) characters near (\(Int(caretRect.minX)), \(Int(caretRect.minY))) using \(caretQuality.label) caret geometry."
         }
     }
 
@@ -372,7 +372,7 @@ enum OverlayState: Equatable {
     }
 
     var visibleText: String? {
-        guard case let .visible(text, _) = self else {
+        guard case let .visible(text, _, _) = self else {
             return nil
         }
 

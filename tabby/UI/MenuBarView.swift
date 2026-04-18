@@ -157,12 +157,6 @@ struct MenuBarView: View {
                     granted: permissionManager.inputMonitoringGranted,
                     action: permissionManager.openInputMonitoringSettings
                 )
-
-                PermissionRow(
-                    title: "Screen Recording",
-                    granted: permissionManager.screenRecordingGranted,
-                    action: permissionManager.openScreenRecordingSettings
-                )
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(12)

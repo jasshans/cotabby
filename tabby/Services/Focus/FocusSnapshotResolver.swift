@@ -247,6 +247,7 @@ struct FocusSnapshotResolver {
         let maxNodes = 200
         var visited = 0
         var seen = Set<String>()
+        var bestResult: (result: CaretGeometryResult, depth: Int)?
 
         while !queue.isEmpty, visited < maxNodes {
             let (element, depth) = queue.removeFirst()
@@ -262,6 +263,9 @@ struct FocusSnapshotResolver {
             ), range.length == 0 {
                 let paramAttrs = Set(AXHelper.parameterizedAttributeNames(on: element))
                 let attrs = Set(AXHelper.attributeNames(on: element))
+                let textValue = attrs.contains(kAXValueAttribute as String)
+                    ? AXHelper.stringValue(for: kAXValueAttribute as CFString, on: element)
+                    : nil
                 let result = geometryResolver.resolveCaretRect(
                     for: element,
                     selection: range,
@@ -269,11 +273,18 @@ struct FocusSnapshotResolver {
                         kAXBoundsForRangeParameterizedAttribute as String
                     ),
                     supportsFrame: attrs.contains("AXFrame"),
-                    cocoaAnchorFrame: cocoaAnchorFrame
+                    cocoaAnchorFrame: cocoaAnchorFrame,
+                    textValue: textValue
                 )
 
                 if let result, result.quality == .exact || result.quality == .derived {
-                    return result
+                    if shouldPreferDeepResult(
+                        result,
+                        at: depth,
+                        over: bestResult
+                    ) {
+                        bestResult = (result, depth)
+                    }
                 }
             }
 
@@ -283,7 +294,36 @@ struct FocusSnapshotResolver {
             }
         }
 
-        return nil
+        return bestResult?.result
+    }
+
+    /// Prefers deeper descendants because browser AX wrappers can expose superficially "valid"
+    /// geometry on shallow nodes while the real caret anchor lives lower in the text-run leaves.
+    private func shouldPreferDeepResult(
+        _ candidate: CaretGeometryResult,
+        at depth: Int,
+        over best: (result: CaretGeometryResult, depth: Int)?
+    ) -> Bool {
+        guard let best else {
+            return true
+        }
+
+        if depth != best.depth {
+            return depth > best.depth
+        }
+
+        return deepResultQualityScore(candidate.quality) > deepResultQualityScore(best.result.quality)
+    }
+
+    private func deepResultQualityScore(_ quality: CaretGeometryQuality) -> Int {
+        switch quality {
+        case .exact:
+            return 2
+        case .derived:
+            return 1
+        case .estimated:
+            return 0
+        }
     }
 
     /// Extracts the AX properties Tabby needs from one candidate element near the current focus.

@@ -5,7 +5,7 @@ import Foundation
 /// One model's current install/download lifecycle state in local storage.
 enum ModelDownloadState: Equatable {
     case idle
-    case downloading
+    case downloading(progress: Double?)
     case downloaded
     case failed(String)
 
@@ -13,13 +13,38 @@ enum ModelDownloadState: Equatable {
         switch self {
         case .idle:
             return "Not installed"
-        case .downloading:
+        case let .downloading(progress):
+            if let progress {
+                return "Downloading \(Int((progress * 100).rounded()))%"
+            }
             return "Downloading"
         case .downloaded:
             return "Installed"
         case let .failed(message):
             return message
         }
+    }
+
+    /// Determinate progress is only available when the server reports content length.
+    /// We surface it separately so views can choose between a linear bar and an indeterminate one.
+    var progressFraction: Double? {
+        guard case let .downloading(progress) = self else {
+            return nil
+        }
+
+        guard let progress else {
+            return nil
+        }
+
+        return min(max(progress, 0), 1)
+    }
+
+    var isDownloading: Bool {
+        if case .downloading = self {
+            return true
+        }
+
+        return false
     }
 }
 
@@ -66,7 +91,11 @@ final class ModelDownloadManager: ObservableObject {
     func refreshModelStates() {
         for model in models {
             if downloadTasks[model.filename] != nil {
-                modelStates[model.filename] = .downloading
+                if case let .downloading(progress) = modelStates[model.filename] {
+                    modelStates[model.filename] = .downloading(progress: progress)
+                } else {
+                    modelStates[model.filename] = .downloading(progress: nil)
+                }
             } else if isInstalled(model: model) {
                 modelStates[model.filename] = .downloaded
             } else {
@@ -85,7 +114,7 @@ final class ModelDownloadManager: ObservableObject {
             return
         }
 
-        modelStates[model.filename] = .downloading
+        modelStates[model.filename] = .downloading(progress: 0)
         let task = Task { [weak self] in
             guard let self else {
                 return
@@ -139,17 +168,25 @@ final class ModelDownloadManager: ObservableObject {
         do {
             try ensureRuntimeDirectoryExists()
             let destinationURL = modelFileURL(filename: model.filename)
+            let delegate = ModelDownloadSessionDelegate { [weak self] progress in
+                Task { @MainActor [weak self] in
+                    guard let self, self.downloadTasks[model.filename] != nil else {
+                        return
+                    }
 
-            let (temporaryURL, response) = try await URLSession.shared.download(from: model.downloadURL)
+                    self.modelStates[model.filename] = .downloading(progress: progress)
+                }
+            }
+            let downloadResult = try await delegate.download(from: model.downloadURL)
             try Task.checkCancellation()
-            try validate(response: response)
+            try validate(response: downloadResult.response)
 
             let fileManager = FileManager.default
             if fileManager.fileExists(atPath: destinationURL.path) {
                 try fileManager.removeItem(at: destinationURL)
             }
 
-            try fileManager.moveItem(at: temporaryURL, to: destinationURL)
+            try fileManager.moveItem(at: downloadResult.temporaryURL, to: destinationURL)
 
             modelStates[model.filename] = .downloaded
             onModelDirectoryChanged?()
@@ -194,5 +231,87 @@ final class ModelDownloadManager: ObservableObject {
             let fileURL = directoryURL.appendingPathComponent(filename, isDirectory: false)
             return FileManager.default.fileExists(atPath: fileURL.path)
         }
+    }
+}
+
+/// Bridges `URLSessionDownloadDelegate` callbacks into one async result plus incremental progress
+/// updates. This exists as its own type because `URLSession.download(from:)` gives us the file move
+/// convenience but not observable progress suitable for SwiftUI.
+private final class ModelDownloadSessionDelegate: NSObject, URLSessionDownloadDelegate {
+    struct DownloadResult {
+        let temporaryURL: URL
+        let response: URLResponse
+    }
+
+    private let progressHandler: @Sendable (Double?) -> Void
+    private var continuation: CheckedContinuation<DownloadResult, Error>?
+    private var downloadedFileURL: URL?
+    private var response: URLResponse?
+    private var hasCompleted = false
+
+    init(progressHandler: @escaping @Sendable (Double?) -> Void) {
+        self.progressHandler = progressHandler
+    }
+
+    func download(from url: URL) async throws -> DownloadResult {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        let session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
+
+        return try await withCheckedThrowingContinuation { continuation in
+            self.continuation = continuation
+            let task = session.downloadTask(with: url)
+            task.resume()
+        }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didWriteData bytesWritten: Int64,
+        totalBytesWritten: Int64,
+        totalBytesExpectedToWrite: Int64
+    ) {
+        let progress: Double?
+        if totalBytesExpectedToWrite > 0 {
+            progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
+        } else {
+            progress = nil
+        }
+
+        progressHandler(progress)
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didFinishDownloadingTo location: URL
+    ) {
+        downloadedFileURL = location
+        response = downloadTask.response
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        guard !hasCompleted else {
+            return
+        }
+        hasCompleted = true
+
+        defer {
+            continuation = nil
+            session.finishTasksAndInvalidate()
+        }
+
+        if let error {
+            continuation?.resume(throwing: error)
+            return
+        }
+
+        guard let downloadedFileURL, let response else {
+            continuation?.resume(throwing: URLError(.badServerResponse))
+            return
+        }
+
+        continuation?.resume(returning: DownloadResult(temporaryURL: downloadedFileURL, response: response))
     }
 }

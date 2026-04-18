@@ -9,7 +9,7 @@ import SwiftUI
 /// update in real time as the user grants access through System Settings.
 ///
 /// Only the two required permissions (Accessibility, Input Monitoring) are shown during
-/// onboarding. Screen Recording is deprecated and relegated to settings.
+/// onboarding. Screen Recording is deprecated and intentionally omitted from the visible MVP flow.
 struct WelcomePermissionStepView: View {
     @ObservedObject var permissionManager: PermissionManager
 
@@ -18,7 +18,7 @@ struct WelcomePermissionStepView: View {
     let onContinue: () -> Void
 
     /// Only show the permissions that matter for core autocomplete during onboarding.
-    /// Screen Recording is deprecated and just adds noise to the first-run experience.
+    /// Deprecated permissions stay out of the first-run UI so users see only what blocks setup.
     private var onboardingPermissions: [TabbyPermissionKind] {
         TabbyPermissionKind.allCases.filter(\.isRequiredForAutocomplete)
     }
@@ -46,7 +46,7 @@ struct WelcomePermissionStepView: View {
             }
 
             WelcomeNavigation(
-                canGoBack: false,
+                canGoBack: true,
                 canContinue: permissionManager.requiredPermissionsGranted,
                 disabledHint: "Grant both permissions to continue.",
                 onBack: onBack,

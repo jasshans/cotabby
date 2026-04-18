@@ -15,6 +15,7 @@ final class TabbyAppEnvironment {
     let focusModel: FocusTrackingModel
     let inputMonitor: InputMonitor
     let appUpdateManager: AppUpdateManager
+    let launchAtLoginService: LaunchAtLoginService
     let suggestionSettings: SuggestionSettingsModel
     let foundationModelAvailabilityService: FoundationModelAvailabilityService
     let suggestionCoordinator: SuggestionCoordinator
@@ -45,6 +46,7 @@ final class TabbyAppEnvironment {
             ignoredBundleIdentifier: Bundle.main.bundleIdentifier
         )
         let appUpdateManager = AppUpdateManager()
+        let launchAtLoginService = LaunchAtLoginService()
         let welcomeCoordinator = WelcomeCoordinator(
             permissionManager: permissionManager,
             permissionGuidanceController: permissionGuidanceController,
@@ -55,10 +57,15 @@ final class TabbyAppEnvironment {
         )
         let settingsCoordinator = SettingsCoordinator(
             appUpdateManager: appUpdateManager,
+            launchAtLoginService: launchAtLoginService,
+            permissionManager: permissionManager,
             suggestionSettings: suggestionSettings,
             foundationModelAvailabilityService: foundationModelAvailabilityService,
             runtimeModel: runtimeModel,
-            modelDownloadManager: modelDownloadManager
+            modelDownloadManager: modelDownloadManager,
+            onShowWelcome: { [weak welcomeCoordinator] in
+                welcomeCoordinator?.showWelcome()
+            }
         )
         let suggestionInserter = SuggestionInserter(suppressionController: suppressionController)
         let overlayController = OverlayController()
@@ -100,6 +107,7 @@ final class TabbyAppEnvironment {
         self.focusModel = focusModel
         self.inputMonitor = inputMonitor
         self.appUpdateManager = appUpdateManager
+        self.launchAtLoginService = launchAtLoginService
         self.suggestionSettings = suggestionSettings
         self.foundationModelAvailabilityService = foundationModelAvailabilityService
         self.suggestionCoordinator = suggestionCoordinator

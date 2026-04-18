@@ -10,6 +10,13 @@ import SwiftUI
 /// By keeping the panel lifecycle here, `SuggestionCoordinator` can stay focused on suggestion logic.
 @MainActor
 final class OverlayController: SuggestionOverlayControlling {
+    private enum Layout {
+        static let minimumGhostFontSize: CGFloat = 14
+        static let maximumGhostFontSize: CGFloat = 24
+        static let maximumEstimatedGhostFontSize: CGFloat = 16
+        static let fontToLineHeightRatio: CGFloat = 0.78
+    }
+
     var onStateChange: ((OverlayState) -> Void)?
 
     private(set) var state: OverlayState = .hidden(reason: "Overlay idle.") {
@@ -47,18 +54,19 @@ final class OverlayController: SuggestionOverlayControlling {
     }()
 
     /// Sizes and positions the overlay next to the reported caret bounds for the current field.
-    func showSuggestion(_ text: String, at caretRect: CGRect) {
+    func showSuggestion(_ text: String, at caretRect: CGRect, caretQuality: CaretGeometryQuality) {
         guard !text.isEmpty else {
             hide(reason: "Overlay not shown because the suggestion was empty.")
             return
         }
 
+        let fontSize = resolvedGhostFontSize(for: caretRect, caretQuality: caretQuality)
         let contentView: NSHostingView<GhostSuggestionView>
         if let existing = hostingView {
-            existing.rootView = GhostSuggestionView(text: text)
+            existing.rootView = GhostSuggestionView(text: text, fontSize: fontSize)
             contentView = existing
         } else {
-            let fresh = NSHostingView(rootView: GhostSuggestionView(text: text))
+            let fresh = NSHostingView(rootView: GhostSuggestionView(text: text, fontSize: fontSize))
             hostingView = fresh
             panel.contentView = fresh
             contentView = fresh
@@ -78,13 +86,32 @@ final class OverlayController: SuggestionOverlayControlling {
 
         panel.setFrame(frame.integral, display: true)
         panel.orderFrontRegardless()
-        state = .visible(text: text, caretRect: caretRect)
+        state = .visible(text: text, caretRect: caretRect, caretQuality: caretQuality)
     }
 
     /// Hides the floating panel and records why the overlay is no longer visible.
     func hide(reason: String) {
         panel.orderOut(nil)
         state = .hidden(reason: reason)
+    }
+
+    /// Exact and derived caret rects usually reflect the real text line height, so they may scale
+    /// up in larger editors. Estimated rects are much less trustworthy because some apps only
+    /// expose the full field frame; the extra ceiling prevents one bad estimate from rendering
+    /// comically oversized ghost text.
+    private func resolvedGhostFontSize(
+        for caretRect: CGRect,
+        caretQuality: CaretGeometryQuality
+    ) -> CGFloat {
+        let proposedSize = max(
+            Layout.minimumGhostFontSize,
+            caretRect.height * Layout.fontToLineHeightRatio
+        )
+        let qualityCap = caretQuality == .estimated
+            ? Layout.maximumEstimatedGhostFontSize
+            : Layout.maximumGhostFontSize
+
+        return min(proposedSize, qualityCap)
     }
 }
 
@@ -99,6 +126,7 @@ private final class OverlayPanel: NSPanel {
 private struct GhostSuggestionView: View {
     @Environment(\.colorScheme) var colorScheme
     let text: String
+    let fontSize: CGFloat
 
     var ghostColor: Color {
         colorScheme == .dark
@@ -109,7 +137,7 @@ private struct GhostSuggestionView: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(text)
-                .font(.system(size: 14))
+                .font(.system(size: fontSize))
                 .foregroundStyle(ghostColor)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: true)

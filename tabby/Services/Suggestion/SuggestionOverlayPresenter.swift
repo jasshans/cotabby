@@ -18,20 +18,35 @@ struct SuggestionOverlayPresenter {
     }
 
     /// Shows or repositions ghost text while preserving the previous overlay message when nothing changed.
-    func present(text: String, at caretRect: CGRect, previousState: OverlayState) -> String? {
+    func present(
+        text: String,
+        at caretRect: CGRect,
+        caretQuality: CaretGeometryQuality,
+        previousState: OverlayState
+    ) -> String? {
         let displayText = text.trimmingCharacters(in: .whitespaces).isEmpty ? "" : text
         guard !displayText.isEmpty else {
             return hide(reason: "Overlay hidden because the suggestion text was empty.")
         }
 
-        guard previousState != .visible(text: displayText, caretRect: caretRect) else {
+        guard previousState != .visible(
+            text: displayText,
+            caretRect: caretRect,
+            caretQuality: caretQuality
+        ) else {
             return nil
         }
 
-        overlayController.showSuggestion(displayText, at: caretRect)
+        overlayController.showSuggestion(displayText, at: caretRect, caretQuality: caretQuality)
 
         switch previousState {
-        case .visible(let previousText, let previousCaretRect)
+        case .visible(let previousText, let previousCaretRect, let previousCaretQuality)
+        where previousText == displayText
+            && previousCaretRect == caretRect
+            && previousCaretQuality != caretQuality:
+            return "Updated ghost text styling for the latest caret quality."
+
+        case .visible(let previousText, let previousCaretRect, _)
         where previousText == displayText && previousCaretRect != caretRect:
             return "Moved ghost text to the latest caret position."
 

@@ -63,4 +63,7 @@ struct SuggestionSettingsSnapshot: Equatable, Sendable {
     let selectedEngine: SuggestionEngineKind
     let selectedWordCountPreset: SuggestionWordCountPreset
     let effectivePromptMode: SuggestionPromptMode
+    /// Normalized user-authored guidance for Guided prompt mode.
+    /// This travels in the snapshot so generation uses the same value the Settings UI shows.
+    let customAIInstructions: String?
 }

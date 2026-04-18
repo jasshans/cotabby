@@ -70,7 +70,7 @@ final class RuntimeBootstrapModel: ObservableObject {
     /// Starts runtime preparation exactly once and keeps duplicate launch attempts idempotent.
     /// Idempotent bootstrap ensures only one launch flow is active.
     func startIfNeeded() {
-        guard runtimeTask == nil else {
+        guard runtimeTask == nil, !availableModels.isEmpty else {
             return
         }
 

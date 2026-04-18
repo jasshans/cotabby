@@ -9,6 +9,12 @@ import SwiftUI
 /// rendering. In React terms, this is a tiny controller/store plus a window host.
 @MainActor
 final class WelcomeCoordinator: NSObject, NSWindowDelegate {
+    private enum Layout {
+        /// Match the first welcome step so the window does not flash at an oversized default before
+        /// SwiftUI has a chance to report its preferred content size.
+        static let initialContentSize = NSSize(width: 500, height: 320)
+    }
+
     private let permissionManager: PermissionManager
     private let permissionGuidanceController: PermissionGuidanceController
     private let runtimeModel: RuntimeBootstrapModel
@@ -43,9 +49,9 @@ final class WelcomeCoordinator: NSObject, NSWindowDelegate {
     /// The "shown" bit is persisted at presentation time so first-run onboarding stays one-time
     /// even if the user simply closes the window instead of pressing the button.
     func presentIfNeeded() {
-//        guard !userDefaults.bool(forKey: Self.hasShownWelcomeDefaultsKey) else {
-//            return
-//        }
+        guard !userDefaults.bool(forKey: Self.hasShownWelcomeDefaultsKey) else {
+            return
+        }
 
         userDefaults.set(true, forKey: Self.hasShownWelcomeDefaultsKey)
         showWelcome()
@@ -67,6 +73,9 @@ final class WelcomeCoordinator: NSObject, NSWindowDelegate {
                 suggestionSettings: suggestionSettings,
                 foundationModelAvailabilityService: foundationModelAvailabilityService,
                 permissionGuidanceController: permissionGuidanceController,
+                onPreferredWindowSizeChange: { [weak self] size in
+                    self?.resizeWelcomeWindow(to: size)
+                },
                 onDismiss: { [weak self] in
                     self?.dismissWelcome()
                 }
@@ -74,7 +83,7 @@ final class WelcomeCoordinator: NSObject, NSWindowDelegate {
         )
 
         let window = NSWindow(
-            contentRect: CGRect(x: 0, y: 0, width: 540, height: 480),
+            contentRect: CGRect(origin: .zero, size: Layout.initialContentSize),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -112,5 +121,32 @@ final class WelcomeCoordinator: NSObject, NSWindowDelegate {
     private func dismissWelcome() {
         permissionGuidanceController.dismiss()
         welcomeWindowController?.close()
+    }
+
+    /// Window sizing is an AppKit responsibility, so the SwiftUI onboarding view reports its
+    /// preferred content size upward and the coordinator applies it here.
+    ///
+    /// We keep the window centered while resizing because onboarding is a modal-like flow; letting
+    /// the frame grow down and to the right makes it feel jumpy and accidental.
+    private func resizeWelcomeWindow(to contentSize: NSSize) {
+        guard let window = welcomeWindowController?.window else {
+            return
+        }
+
+        let currentContentSize = window.contentLayoutRect.size
+        guard abs(currentContentSize.width - contentSize.width) > 0.5
+            || abs(currentContentSize.height - contentSize.height) > 0.5 else {
+            return
+        }
+
+        let targetWindowFrame = window.frameRect(forContentRect: NSRect(origin: .zero, size: contentSize))
+        let currentFrame = window.frame
+        let centeredOrigin = NSPoint(
+            x: currentFrame.midX - (targetWindowFrame.width / 2),
+            y: currentFrame.midY - (targetWindowFrame.height / 2)
+        )
+        let centeredFrame = NSRect(origin: centeredOrigin, size: targetWindowFrame.size).integral
+
+        window.setFrame(centeredFrame, display: true, animate: true)
     }
 }

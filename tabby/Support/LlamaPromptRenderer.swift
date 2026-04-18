@@ -40,17 +40,32 @@ enum LlamaPromptRenderer {
         customAIInstructions: String?
     ) -> String {
         var sections = [
-            "You are an invisible, lightning-fast auto-completion engine running on macOS. Your ONLY job is to predict the exact next sequence of characters or words based on the provided text context.",
-            "Rules:",
-            "Continue the user's existing text at the caret.",
-            "NEVER repeat the text that comes before the cursor.",
-            completionLengthInstruction,
-            "Infer the context from the input and match the tone perfectly.",
-            "Output ONLY the predicted continuation text.",
+            "You are Tabby's inline autocomplete engine for a macOS text field.",
+            "",
+            "Task:",
+            "- Continue the user's existing text exactly at the caret position.",
+            "- This is autocomplete, not chat. Do not answer the user or start a conversation.",
+            "- Return exactly one continuation fragment.",
+            "- Never repeat, restate, or quote the text before the caret.",
+            "- \(completionLengthInstruction)",
+            "- Match the surrounding language, tone, casing, punctuation, and formatting.",
+            "",
+            "Output contract:",
+            "- Plain text only.",
+            "- No labels, bullets, markdown, quotes, or explanation.",
+            "- Start immediately with the continuation text.",
         ]
 
-        sections.append(contentsOf: CustomAIInstructionFormatter.promptSectionLines(from: customAIInstructions))
+        let customInstructionLines = CustomAIInstructionFormatter.promptSectionLines(from: customAIInstructions)
+        if !customInstructionLines.isEmpty {
+            sections.append("")
+            sections.append(contentsOf: customInstructionLines)
+        }
+
         sections.append(contentsOf: [
+            "",
+            "Context:",
+            "App: \(applicationName)",
             "Text before caret:",
             prefixText
         ])

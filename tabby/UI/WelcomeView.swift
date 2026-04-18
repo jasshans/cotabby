@@ -16,9 +16,17 @@ struct WelcomeView: View {
     @ObservedObject var foundationModelAvailabilityService: FoundationModelAvailabilityService
 
     let permissionGuidanceController: PermissionGuidanceController
+    let onPreferredWindowSizeChange: (NSSize) -> Void
     let onDismiss: () -> Void
 
     @State private var step: WelcomeStep = .welcome
+
+    /// The window should follow the active screen instead of staying pinned to the tallest step.
+    /// This keeps small steps like "You're all set" feeling intentional rather than like empty
+    /// modal shells that inherited the model-picker's height.
+    private var preferredWindowSize: NSSize {
+        step.preferredWindowSize(selectedEngine: suggestionSettings.selectedEngine)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -38,9 +46,15 @@ struct WelcomeView: View {
             Spacer(minLength: 0)
         }
         .padding(36)
-        .frame(width: 540)
+        .frame(width: preferredWindowSize.width)
         .background(.ultraThinMaterial)
-        .animation(.easeInOut(duration: 0.25), value: step)
+        .animation(.easeInOut(duration: 0.25), value: preferredWindowSize)
+        .onAppear {
+            onPreferredWindowSizeChange(preferredWindowSize)
+        }
+        .onChange(of: preferredWindowSize) { _, newValue in
+            onPreferredWindowSizeChange(newValue)
+        }
     }
 }
 
@@ -54,6 +68,26 @@ private enum WelcomeStep: Int, Comparable {
 
     static func < (lhs: WelcomeStep, rhs: WelcomeStep) -> Bool {
         lhs.rawValue < rhs.rawValue
+    }
+
+    /// These sizes are product decisions rather than pure layout math.
+    /// The coordinator uses them to animate the AppKit window, while SwiftUI uses the width so the
+    /// content and the host window stay in sync.
+    func preferredWindowSize(selectedEngine: SuggestionEngineKind) -> NSSize {
+        switch self {
+        case .welcome:
+            return NSSize(width: 500, height: 320)
+        case .permissions:
+            return NSSize(width: 540, height: 400)
+        case .chooseModel:
+            if selectedEngine == .llamaOpenSource {
+                return NSSize(width: 540, height: 520)
+            }
+
+            return NSSize(width: 540, height: 360)
+        case .done:
+            return NSSize(width: 500, height: 340)
+        }
     }
 }
 
@@ -120,7 +154,7 @@ private extension WelcomeView {
             }
 
             WelcomeNavigation(
-                canGoBack: false,
+                canGoBack: true,
                 canContinue: canContinueFromModelStep,
                 disabledHint: modelStepDisabledHint,
                 onBack: { step = .permissions },
@@ -165,42 +199,13 @@ private extension WelcomeView {
                     Divider()
                         .padding(.horizontal, 18)
 
-                    VStack(spacing: 8) {
-                        ForEach(modelDownloadManager.models) { model in
-                            CompactModelRow(
-                                model: model,
-                                state: modelDownloadManager.state(for: model),
-                                onDownload: { modelDownloadManager.download(model) }
-                            )
+                    DownloadableModelCatalogView(
+                        modelDownloadManager: modelDownloadManager,
+                        onRefreshModels: {
+                            modelDownloadManager.refreshModelStates()
+                            runtimeModel.refreshAvailableModels()
                         }
-
-                        HStack(spacing: 12) {
-                            Button {
-                                modelDownloadManager.openModelsDirectory()
-                            } label: {
-                                Label("Add Your Own", systemImage: "folder.badge.plus")
-                                    .font(.system(size: 12))
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(.secondary)
-
-                            Button {
-                                modelDownloadManager.refreshModelStates()
-                                runtimeModel.refreshAvailableModels()
-                            } label: {
-                                Label("Refresh", systemImage: "arrow.clockwise")
-                                    .font(.system(size: 12))
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                        Text("Drop any .gguf model into the folder above.")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.tertiary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+                    )
                     .padding(18)
                 }
                 .background(
@@ -391,78 +396,6 @@ private struct EngineArtworkThumbnail: View {
                 )
         )
         .accessibilityHidden(true)
-    }
-}
-
-// MARK: - Compact Model Row
-
-/// App Store-style model download row shown inside the expanded open-source engine card.
-private struct CompactModelRow: View {
-    let model: DownloadableRuntimeModel
-    let state: ModelDownloadState
-    let onDownload: () -> Void
-
-    var body: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(model.displayName)
-                    .font(.system(size: 13, weight: .medium))
-
-                Text(statusText)
-                    .font(.system(size: 11))
-                    .foregroundStyle(statusColor)
-            }
-
-            Spacer(minLength: 0)
-
-            modelActionButton
-        }
-        .padding(.vertical, 6)
-        .padding(.horizontal, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(.quaternary.opacity(0.3))
-        )
-    }
-
-    @ViewBuilder
-    private var modelActionButton: some View {
-        switch state {
-        case .idle:
-            Button("Get") { onDownload() }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-        case .downloading:
-            ProgressView()
-                .controlSize(.small)
-                .frame(width: 40)
-        case .downloaded:
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(.green)
-                .font(.system(size: 16))
-        case .failed:
-            Button("Retry") { onDownload() }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-        }
-    }
-
-    private var statusText: String {
-        switch state {
-        case .idle: return "Not installed"
-        case .downloading: return "Downloading..."
-        case .downloaded: return "Installed"
-        case .failed: return "Failed"
-        }
-    }
-
-    private var statusColor: Color {
-        switch state {
-        case .downloaded: return .green
-        case .downloading: return .blue
-        case .failed: return .red
-        case .idle: return .secondary
-        }
     }
 }
 

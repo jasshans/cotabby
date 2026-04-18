@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let focusModel: FocusTrackingModel
     let inputMonitor: InputMonitor
     let appUpdateManager: AppUpdateManager
+    let launchAtLoginService: LaunchAtLoginService
     let suggestionSettings: SuggestionSettingsModel
     let foundationModelAvailabilityService: FoundationModelAvailabilityService
     let suggestionCoordinator: SuggestionCoordinator
@@ -40,6 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         focusModel = environment.focusModel
         inputMonitor = environment.inputMonitor
         appUpdateManager = environment.appUpdateManager
+        launchAtLoginService = environment.launchAtLoginService
         suggestionSettings = environment.suggestionSettings
         foundationModelAvailabilityService = environment.foundationModelAvailabilityService
         suggestionCoordinator = environment.suggestionCoordinator
@@ -55,8 +57,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             suggestionCoordinator?.prepareForRuntimeModelSwitch()
         }
 
-        modelDownloadManager.onModelDirectoryChanged = { [weak runtimeModel] in
-            runtimeModel?.refreshAvailableModels()
+        modelDownloadManager.onModelDirectoryChanged = { [weak self] in
+            self?.handleModelDirectoryChange()
         }
 
         // Combine subscriptions keep the app's long-lived services in sync as permission and
@@ -64,6 +66,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         permissionManager.$inputMonitoringGranted
             .sink { [weak self] _ in
                 self?.inputMonitor.refresh()
+            }
+            .store(in: &cancellables)
+
+        suggestionSettings.$selectedEngine
+            .dropFirst()
+            .removeDuplicates()
+            .sink { [weak self] _ in
+                self?.startRuntimeIfPreferredEngineRequiresIt()
             }
             .store(in: &cancellables)
 
@@ -78,7 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Starts runtime and observer services once AppKit reports that app launch finished.
     func applicationDidFinishLaunching(_ notification: Notification) {
-        runtimeModel.startIfNeeded()
+        startRuntimeIfPreferredEngineRequiresIt()
         focusModel.start()
         inputMonitor.start()
         appUpdateManager.start()
@@ -108,5 +118,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         activationIndicatorController.show(at: caretRect)
+    }
+
+    /// Warm the local runtime only when the user is actually on the open-source engine path.
+    /// This avoids noisy startup failures and wasted work for Apple Intelligence users.
+    private func startRuntimeIfPreferredEngineRequiresIt() {
+        guard suggestionSettings.selectedEngine == .llamaOpenSource else {
+            return
+        }
+
+        runtimeModel.startIfNeeded()
+    }
+
+    /// Model availability can change after downloads or manual file drops. Re-scan first, then
+    /// warm the runtime only if the current engine choice needs it.
+    private func handleModelDirectoryChange() {
+        runtimeModel.refreshAvailableModels()
+        startRuntimeIfPreferredEngineRequiresIt()
     }
 }
