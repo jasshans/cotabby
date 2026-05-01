@@ -87,13 +87,7 @@ final class LlamaRuntimeManager: ObservableObject {
     func generate(
         prompt: String,
         cachedPrefixBytes: Int? = nil,
-        maxPredictionTokens: Int,
-        temperature: Double,
-        topK: Int,
-        topP: Double,
-        minP: Double,
-        repetitionPenalty: Double,
-        seed: UInt32? = nil
+        options: LlamaGenerationOptions
     ) async throws -> String {
         _ = try await preparedRuntime()
 
@@ -101,13 +95,7 @@ final class LlamaRuntimeManager: ObservableObject {
             return try await core.generate(
                 prompt: prompt,
                 cachedPrefixBytes: cachedPrefixBytes,
-                maxPredictionTokens: maxPredictionTokens,
-                temperature: temperature,
-                topK: topK,
-                topP: topP,
-                minP: minP,
-                repetitionPenalty: repetitionPenalty,
-                seed: seed
+                options: options
             )
         } catch is CancellationError {
             throw LlamaRuntimeError.cancelled
@@ -124,6 +112,35 @@ final class LlamaRuntimeManager: ObservableObject {
     /// Clears the native prompt KV cache without unloading the model.
     /// The manager exposes this as a lifecycle command because focus/settings resets originate in
     /// the app layer, while the actor still owns the raw llama pointers.
+
+    /// Generates a short summary using an ephemeral context so the autocomplete cache is unaffected.
+    func summarize(
+        prompt: String,
+        maxPredictionTokens: Int,
+        temperature: Double
+    ) async throws -> String {
+        _ = try await preparedRuntime()
+
+        do {
+            return try await core.summarize(
+                prompt: prompt,
+                options: .summary(
+                    maxPredictionTokens: maxPredictionTokens,
+                    temperature: temperature
+                )
+            )
+        } catch is CancellationError {
+            throw LlamaRuntimeError.cancelled
+        } catch let error as LlamaRuntimeError {
+            diagnostics.lastError = error.localizedDescription
+            throw error
+        } catch {
+            let runtimeError = LlamaRuntimeError.generationFailed(error.localizedDescription)
+            diagnostics.lastError = runtimeError.localizedDescription
+            throw runtimeError
+        }
+    }
+
     func resetPromptCache() async {
         await core.resetPromptCache()
     }
@@ -149,8 +166,7 @@ final class LlamaRuntimeManager: ObservableObject {
         let requestedModelFilename = resolvedRuntime.modelFileURL.lastPathComponent
 
         if let cachedRuntime,
-            cachedRuntime.resolvedRuntime.modelFileURL == resolvedRuntime.modelFileURL
-        {
+            cachedRuntime.resolvedRuntime.modelFileURL == resolvedRuntime.modelFileURL {
             return cachedRuntime
         }
 

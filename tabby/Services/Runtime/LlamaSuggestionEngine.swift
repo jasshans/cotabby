@@ -21,16 +21,22 @@ final class LlamaSuggestionEngine {
         do {
             let startTime = Date()
             let cachedPrefixBytes = promptCacheHintTracker.cachedPrefixBytes(for: request)
+            TabbyDebugOptions.log(
+                "[LlamaSuggestionEngine] starting prediction prompt_chars=\(request.prompt.count) "
+                    + "cached_prefix_bytes=\(cachedPrefixBytes ?? 0)"
+            )
             let rawSuggestion = try await runtimeManager.generate(
                 prompt: request.prompt,
                 cachedPrefixBytes: cachedPrefixBytes,
-                maxPredictionTokens: request.maxPredictionTokens,
-                temperature: request.temperature,
-                topK: request.topK,
-                topP: request.topP,
-                minP: request.minP,
-                repetitionPenalty: request.repetitionPenalty,
-                seed: request.randomSeed
+                options: LlamaGenerationOptions(
+                    maxPredictionTokens: request.maxPredictionTokens,
+                    temperature: request.temperature,
+                    topK: request.topK,
+                    topP: request.topP,
+                    minP: request.minP,
+                    repetitionPenalty: request.repetitionPenalty,
+                    seed: request.randomSeed
+                )
             )
             try Task.checkCancellation()
 

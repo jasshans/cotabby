@@ -1,9 +1,10 @@
 import Foundation
 
 /// File overview:
-/// Emits high-signal console logs for the suggestion pipeline. This logger owns the mechanics of
-/// compact summary lines, full prompt/output blocks, and duplicate suppression so the coordinator
-/// can focus on state transitions instead of string rendering.
+/// Emits high-signal console logs for the suggestion pipeline when `-tabby-debug` is enabled.
+/// This logger owns the mechanics of compact summary lines, full prompt/output blocks, and
+/// duplicate suppression so the coordinator can focus on state transitions instead of string
+/// rendering.
 ///
 /// Logging is intentionally stateful because duplicate suppression depends on the previously
 /// emitted line. Keeping that state here avoids scattering "did we already print this?" checks
@@ -40,6 +41,10 @@ final class SuggestionDebugLogger {
         rawOutput: String? = nil,
         normalizedOutput: String? = nil
     ) {
+        guard TabbyDebugOptions.isEnabled else {
+            return
+        }
+
         guard consoleStages.contains(stage) else {
             return
         }
@@ -56,90 +61,148 @@ final class SuggestionDebugLogger {
 
         parts.append("message=\(message)")
 
-        if stage == "generating", let prompt {
-            parts.append("prompt=\(Self.debugPreview(prompt))")
-        }
-
-        if stage != "generating" {
-            switch (rawOutput, normalizedOutput) {
-            case let (raw?, normalized?):
-                // When generation and normalization diverge, surface both previews in the compact
-                // summary so we can immediately see whether the backend returned text that the
-                // cleanup layer later stripped away.
-                if raw == normalized {
-                    parts.append("output=\(Self.debugPreview(raw))")
-                } else {
-                    parts.append("rawOutput=\(Self.debugPreview(raw))")
-                    parts.append("normalizedOutput=\(Self.debugPreview(normalized))")
-                }
-            case let (raw?, nil):
-                parts.append("rawOutput=\(Self.debugPreview(raw))")
-            case let (nil, normalized?):
-                parts.append("normalizedOutput=\(Self.debugPreview(normalized))")
-            case (nil, nil):
-                break
-            }
-        }
+        appendPromptPreviewIfNeeded(stage: stage, prompt: prompt, to: &parts)
+        appendOutputPreviewIfNeeded(
+            stage: stage,
+            rawOutput: rawOutput,
+            normalizedOutput: normalizedOutput,
+            to: &parts
+        )
 
         let summaryLine = parts.joined(separator: " ")
         logLine(summaryLine)
 
-        if stage == "generating", let prompt {
-            logTextBlock(
-                kind: "prompt",
+        logPromptBlockIfNeeded(stage: stage, workID: workID, generation: generation, prompt: prompt)
+        logOutputBlocksIfNeeded(
+            stage: stage,
+            workID: workID,
+            generation: generation,
+            rawOutput: rawOutput,
+            normalizedOutput: normalizedOutput
+        )
+    }
+
+    private func appendPromptPreviewIfNeeded(
+        stage: String,
+        prompt: String?,
+        to parts: inout [String]
+    ) {
+        guard stage == "generating", let prompt else {
+            return
+        }
+
+        parts.append("prompt=\(Self.debugPreview(prompt))")
+    }
+
+    private func appendOutputPreviewIfNeeded(
+        stage: String,
+        rawOutput: String?,
+        normalizedOutput: String?,
+        to parts: inout [String]
+    ) {
+        guard stage != "generating" else {
+            return
+        }
+
+        switch (rawOutput, normalizedOutput) {
+        case let (raw?, normalized?):
+            appendPairedOutputPreview(raw: raw, normalized: normalized, to: &parts)
+        case let (raw?, nil):
+            parts.append("rawOutput=\(Self.debugPreview(raw))")
+        case let (nil, normalized?):
+            parts.append("normalizedOutput=\(Self.debugPreview(normalized))")
+        case (nil, nil):
+            break
+        }
+    }
+
+    private func appendPairedOutputPreview(
+        raw: String,
+        normalized: String,
+        to parts: inout [String]
+    ) {
+        // When generation and normalization diverge, surface both previews in the compact summary
+        // so we can immediately see whether cleanup stripped backend output away.
+        if raw == normalized {
+            parts.append("output=\(Self.debugPreview(raw))")
+        } else {
+            parts.append("rawOutput=\(Self.debugPreview(raw))")
+            parts.append("normalizedOutput=\(Self.debugPreview(normalized))")
+        }
+    }
+
+    private func logPromptBlockIfNeeded(
+        stage: String,
+        workID: UInt64,
+        generation: UInt64?,
+        prompt: String?
+    ) {
+        guard stage == "generating", let prompt else {
+            return
+        }
+
+        logTextBlock(
+            kind: "prompt",
+            stage: stage,
+            workID: workID,
+            generation: generation,
+            text: prompt
+        )
+    }
+
+    private func logOutputBlocksIfNeeded(
+        stage: String,
+        workID: UInt64,
+        generation: UInt64?,
+        rawOutput: String?,
+        normalizedOutput: String?
+    ) {
+        guard stage != "generating" else {
+            return
+        }
+
+        switch (rawOutput, normalizedOutput) {
+        case let (raw?, normalized?):
+            logPairedOutputBlocks(
                 stage: stage,
                 workID: workID,
                 generation: generation,
-                text: prompt
+                raw: raw,
+                normalized: normalized
             )
+        case let (raw?, nil):
+            logTextBlock(kind: "raw-output", stage: stage, workID: workID, generation: generation, text: raw)
+        case let (nil, normalized?):
+            logTextBlock(
+                kind: "normalized-output",
+                stage: stage,
+                workID: workID,
+                generation: generation,
+                text: normalized
+            )
+        case (nil, nil):
+            break
         }
+    }
 
-        if stage != "generating" {
-            switch (rawOutput, normalizedOutput) {
-            case let (raw?, normalized?):
-                if raw == normalized {
-                    logTextBlock(
-                        kind: "output",
-                        stage: stage,
-                        workID: workID,
-                        generation: generation,
-                        text: raw
-                    )
-                } else {
-                    logTextBlock(
-                        kind: "raw-output",
-                        stage: stage,
-                        workID: workID,
-                        generation: generation,
-                        text: raw
-                    )
-                    logTextBlock(
-                        kind: "normalized-output",
-                        stage: stage,
-                        workID: workID,
-                        generation: generation,
-                        text: normalized
-                    )
-                }
-            case let (raw?, nil):
-                logTextBlock(
-                    kind: "raw-output",
-                    stage: stage,
-                    workID: workID,
-                    generation: generation,
-                    text: raw
-                )
-            case let (nil, normalized?):
-                logTextBlock(
-                    kind: "normalized-output",
-                    stage: stage,
-                    workID: workID,
-                    generation: generation,
-                    text: normalized
-                )
-            case (nil, nil):
-                break
-            }
+    private func logPairedOutputBlocks(
+        stage: String,
+        workID: UInt64,
+        generation: UInt64?,
+        raw: String,
+        normalized: String
+    ) {
+        if raw == normalized {
+            logTextBlock(kind: "output", stage: stage, workID: workID, generation: generation, text: raw)
+        } else {
+            logTextBlock(kind: "raw-output", stage: stage, workID: workID, generation: generation, text: raw)
+            logTextBlock(
+                kind: "normalized-output",
+                stage: stage,
+                workID: workID,
+                generation: generation,
+                text: normalized
+            )
         }
     }
 
@@ -164,7 +227,7 @@ final class SuggestionDebugLogger {
         }
 
         lastLoggedMessage = line
-        print(line)
+        TabbyDebugOptions.log(line)
     }
 
     /// Compact one-line logs are good for scanning, but prompt debugging requires the exact payload.
@@ -180,7 +243,7 @@ final class SuggestionDebugLogger {
         let renderedText = text.isEmpty ? "<empty>" : text
         // Multi-line log blocks are easier to inspect than escaped one-line strings when debugging
         // prompt construction or output normalization.
-        print(
+        TabbyDebugOptions.log(
             """
             [Suggestion \(kind)] stage=\(stage) work=\(workID) generation=\(generationSummary)
             ----- BEGIN \(kind.uppercased()) -----
