@@ -29,11 +29,13 @@ from pathlib import Path
 from textwrap import dedent
 
 
-WINDOW_WIDTH = 960
-WINDOW_HEIGHT = 640
+# The committed background art is authored at 2x. Finder window dimensions use point-sized
+# coordinates so the mounted DMG opens compactly without scrollbars while preserving crisp art.
+WINDOW_WIDTH = 540
+WINDOW_HEIGHT = 760
 ICON_SIZE = 128
-APP_ICON_LOCATION = (237, 303)
-APPLICATIONS_ICON_LOCATION = (714, 303)
+APP_ICON_LOCATION = (270, 280)
+APPLICATIONS_ICON_LOCATION = (270, 635)
 
 
 def parse_args() -> argparse.Namespace:
