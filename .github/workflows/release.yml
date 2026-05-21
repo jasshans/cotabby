@@ -14,8 +14,11 @@ name: Release
 
 on:
   push:
+    # Strict glob: matches v1.2.3 and v1.2.3-beta but NOT vv1.2.3, v0.0.0.0, or test.
+    # Defense in depth — the metadata step also enforces a SemVer regex below.
     tags:
-      - "v*"
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
   workflow_dispatch:
     inputs:
       release_version:
@@ -99,9 +102,23 @@ jobs:
             publish="${INPUT_PUBLISH:-false}"
           fi
 
-          if [[ -z "${release_version}" || "${release_version}" == "${release_tag}" ]]; then
-            echo "Release version must not be empty and must not include the leading v." >&2
+          # Reject malformed tags before we spend ~30 minutes signing and notarizing.
+          # The push-trigger glob filters most of this, but workflow_dispatch and
+          # any future trigger broadening should still hit this gate. Accepted forms:
+          #   v1.2.3
+          #   v1.2.3-beta, v1.2.3-beta.1, v1.2.3-rc.2, v1.2.3-alpha.10+build.5
+          semver_re='^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
+          if [[ ! "${release_tag}" =~ ${semver_re} ]]; then
+            echo "Release tag ${release_tag} is not valid SemVer (expected v1.2.3 or v1.2.3-beta)." >&2
+            echo "If you pushed a tag, delete it locally and on origin, then retag." >&2
             exit 1
+          fi
+
+          # Anything after the patch hyphen marks this as a prerelease channel.
+          if [[ "${release_version}" == *-* ]]; then
+            is_prerelease="true"
+          else
+            is_prerelease="false"
           fi
 
           build_number="$(xcodebuild \
@@ -115,6 +132,7 @@ jobs:
           echo "release_version=${release_version}" >> "$GITHUB_OUTPUT"
           echo "build_number=${build_number}" >> "$GITHUB_OUTPUT"
           echo "publish=${publish}" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=${is_prerelease}" >> "$GITHUB_OUTPUT"
 
       - name: Ensure release does not already exist
         if: steps.metadata.outputs.publish == 'true'
@@ -510,12 +528,21 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.metadata.outputs.release_tag }}
           RELEASE_VERSION: ${{ steps.metadata.outputs.release_version }}
+          IS_PRERELEASE: ${{ steps.metadata.outputs.is_prerelease }}
         run: |
           set -euo pipefail
 
+          # Prereleases must not become "Latest" on the GitHub release page —
+          # otherwise beta DMGs get surfaced to users browsing the repo.
+          prerelease_flag=()
+          if [[ "${IS_PRERELEASE}" == "true" ]]; then
+            prerelease_flag=(--prerelease)
+          fi
+
           gh release create "${RELEASE_TAG}" "build/${DMG_NAME}" \
             --title "tabby ${RELEASE_VERSION}" \
-            --generate-notes
+            --generate-notes \
+            "${prerelease_flag[@]}"
 
       - name: Prepare Pages artifact
         if: steps.metadata.outputs.publish == 'true'
