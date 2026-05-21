@@ -137,6 +137,15 @@ final class RuntimeBootstrapModel: ObservableObject {
         runtimeManager.stop()
     }
 
+    /// Cancels pending startup work and waits for the runtime manager to release native resources.
+    /// Normal UI shutdown can be fire-and-forget, but uninstall deletes the model directory and must
+    /// not race llama.cpp cleanup.
+    func stopAndWait() async {
+        runtimeTask?.cancel()
+        runtimeTask = nil
+        await runtimeManager.stopAndWait()
+    }
+
     /// Returns the selected model when present, otherwise falls back to the first discovered option.
     private static func initialSelectedModelFilename(
         _ persistedFilename: String?,

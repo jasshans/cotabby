@@ -147,14 +147,26 @@ final class LlamaRuntimeManager: ObservableObject {
 
     /// Cancels any retained prepared runtime and asks the actor to release backend resources.
     func stop() {
-        startupTask?.cancel()
-        startupTask = nil
-        startupModelFilename = nil
-        cachedRuntime = nil
+        prepareForStop()
 
         Task {
             await core.shutdown()
         }
+    }
+
+    /// Cancels runtime work and waits until native llama resources are released.
+    /// Destructive flows such as uninstall need this stronger guarantee before deleting model files
+    /// that may have been memory-mapped by the runtime.
+    func stopAndWait() async {
+        prepareForStop()
+        await core.shutdown()
+    }
+
+    private func prepareForStop() {
+        startupTask?.cancel()
+        startupTask = nil
+        startupModelFilename = nil
+        cachedRuntime = nil
 
         diagnostics.lastLoadStatus = "Stopped"
         state = .idle

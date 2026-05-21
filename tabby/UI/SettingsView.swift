@@ -13,6 +13,7 @@ struct SettingsView: View {
     let appUpdateManager: AppUpdateManager
 
     @ObservedObject var launchAtLoginService: LaunchAtLoginService
+    @ObservedObject var appUninstallService: AppUninstallService
     @ObservedObject var permissionManager: PermissionManager
     @ObservedObject var suggestionSettings: SuggestionSettingsModel
     @ObservedObject var foundationModelAvailabilityService: FoundationModelAvailabilityService
@@ -24,11 +25,13 @@ struct SettingsView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var pendingDeletionModel: RuntimeModelOption?
+    @State private var isShowingUninstallConfirmation = false
 
     var body: some View {
         Form {
             settingsHeader
             updatesSection
+            uninstallSection
             generalSection
             autocompleteSection
             disabledAppsSection
@@ -59,6 +62,28 @@ struct SettingsView: View {
             Button("Cancel", role: .cancel) {}
         } message: { model in
             Text("Remove \(model.displayName) from Tabby's local models folder?")
+        }
+        .confirmationDialog(
+            "Uninstall Tabby?",
+            isPresented: $isShowingUninstallConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Uninstall Tabby", role: .destructive) {
+                uninstallTabby()
+            }
+
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(
+                "This removes Tabby's local settings, downloaded models, caches, and login item registration, then moves the app to the Trash. macOS privacy permissions must still be removed from System Settings."
+            )
+        }
+        .alert("Uninstall Failed", isPresented: uninstallFailureAlertBinding) {
+            Button("OK") {
+                appUninstallService.clearError()
+            }
+        } message: {
+            Text(appUninstallService.lastErrorMessage ?? "Tabby could not complete uninstall.")
         }
     }
 
@@ -316,6 +341,38 @@ struct SettingsView: View {
             } label: {
                 Text("Check GitHub Releases for updates.")
                     .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var uninstallSection: some View {
+        Section("Uninstall") {
+            Text(
+                "Remove Tabby's settings, downloaded models, caches, and Open at Login registration, then move the app to the Trash."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            Text("macOS privacy permissions can only be removed from System Settings.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            LabeledContent("Remove Tabby") {
+                Button(role: .destructive) {
+                    isShowingUninstallConfirmation = true
+                } label: {
+                    HStack(spacing: 6) {
+                        if appUninstallService.isUninstalling {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+
+                        Text(appUninstallService.isUninstalling ? "Uninstalling" : "Uninstall...")
+                    }
+                }
+                .disabled(appUninstallService.isUninstalling)
+                .tint(.red)
             }
         }
     }
@@ -580,10 +637,27 @@ struct SettingsView: View {
         )
     }
 
+    private var uninstallFailureAlertBinding: Binding<Bool> {
+        Binding(
+            get: { appUninstallService.lastErrorMessage != nil },
+            set: { isPresented in
+                if !isPresented {
+                    appUninstallService.clearError()
+                }
+            }
+        )
+    }
+
     private func deleteModel(_ model: RuntimeModelOption) {
         modelDownloadManager.deleteModel(filename: model.filename)
         runtimeModel.refreshAvailableModels()
         pendingDeletionModel = nil
+    }
+
+    private func uninstallTabby() {
+        Task {
+            await appUninstallService.uninstall()
+        }
     }
 
     private func refreshModels() {
