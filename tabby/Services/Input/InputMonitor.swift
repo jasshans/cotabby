@@ -16,9 +16,12 @@ final class InputMonitor {
     var onEvent: ((CapturedInputEvent) -> Bool)?
     var onSuppressedSyntheticInput: (() -> Void)?
 
-    /// The key code that triggers suggestion acceptance. Updated by the coordinator
-    /// when the user changes the keybind in Settings.
-    var acceptanceKeyCode: CGKeyCode = 48
+    /// Reads the current word-accept key code from the model at event time, avoiding
+    /// Combine delivery lag between settings changes and the event classifier.
+    var acceptanceKeyCodeProvider: @MainActor () -> CGKeyCode = { 48 }
+
+    /// Reads the current full-accept key code from the model at event time.
+    var fullAcceptanceKeyCodeProvider: @MainActor () -> CGKeyCode = { CGKeyCode(UInt16.max) }
 
     private let permissionProvider: @MainActor () -> Bool
     private let suppressionController: InputSuppressionController
@@ -142,9 +145,19 @@ final class InputMonitor {
         let flags = event.flags
         let characters = event.unicodeString
 
-        // Matches the user-configured acceptance key (default: Tab, key code 48).
-        if keyCode == acceptanceKeyCode,
-           flags.isDisjoint(with: [.maskCommand, .maskControl, .maskAlternate, .maskShift]) {
+        let noModifiers = flags.isDisjoint(with: [.maskCommand, .maskControl, .maskAlternate, .maskShift])
+
+        // Read key codes from the model at event time so changes are always current.
+        let fullAcceptKey = fullAcceptanceKeyCodeProvider()
+        let acceptKey = acceptanceKeyCodeProvider()
+
+        // Full-suggestion acceptance takes priority so pressing the full-accept key
+        // doesn't silently fall through to word-accept when both are assigned.
+        if keyCode == fullAcceptKey, noModifiers {
+            return CapturedInputEvent(kind: .fullAcceptance, keyCode: keyCode, characters: characters, flags: flags)
+        }
+
+        if keyCode == acceptKey, noModifiers {
             return CapturedInputEvent(kind: .acceptance, keyCode: keyCode, characters: characters, flags: flags)
         }
 

@@ -45,7 +45,8 @@ final class TabbyAppEnvironment {
             permissionProvider: { permissionManager.inputMonitoringGranted },
             suppressionController: suppressionController
         )
-        inputMonitor.acceptanceKeyCode = suggestionSettings.acceptanceKeyCode
+        inputMonitor.acceptanceKeyCodeProvider = { suggestionSettings.acceptanceKeyCode }
+        inputMonitor.fullAcceptanceKeyCodeProvider = { suggestionSettings.fullAcceptanceKeyCode }
         let focusModel = FocusTrackingModel(
             permissionProvider: { permissionManager.accessibilityGranted },
             ignoredBundleIdentifier: Bundle.main.bundleIdentifier,
@@ -150,14 +151,7 @@ final class TabbyAppEnvironment {
             }
             .store(in: &cancellables)
 
-        // Push acceptance key changes from settings into the event classifier.
-        // Captures `self` weakly — capturing the local `inputMonitor` variable would create a
-        // dangling weak ref once init() returns, silently dropping all subsequent updates.
-        suggestionSettings.$acceptanceKeyCode
-            .removeDuplicates()
-            .sink { [weak self] keyCode in
-                self?.inputMonitor.acceptanceKeyCode = keyCode
-            }
-            .store(in: &cancellables)
+        // Key code changes reach InputMonitor through closures that read from the model
+        // at event time (set above), so no Combine subscription is needed here.
     }
 }
