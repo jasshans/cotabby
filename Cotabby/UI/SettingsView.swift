@@ -415,7 +415,7 @@ struct SettingsView: View {
         Section("Support") {
             LabeledContent {
                 Link(destination: URL(string: "https://ko-fi.com/cotabby")!) {
-                    Text("Support Us")
+                    Text("Buy Us a Coffee")
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.blue)
