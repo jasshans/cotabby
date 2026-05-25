@@ -44,7 +44,8 @@ enum SuggestionRequestFactory {
         let userName = activeUserName(settings: settings)
         let boundedClipboardContext = activeClipboardContext(
             rawContext: clipboardContext,
-            settings: settings
+            settings: settings,
+            prefixText: prefixText
         )
         let boundedVisualContextSummary = activeVisualContextSummary(
             rawSummary: visualContextSummary
@@ -87,7 +88,11 @@ enum SuggestionRequestFactory {
     }
 
     /// Keep only the latest short word tail to prevent long stale context from steering output.
-    private static func truncatedPromptPrefix(
+    ///
+    /// Exposed (non-private) so the coordinator can compute the same bounded window before
+    /// calling the relevance filter, ensuring the filter and the downstream distiller evaluate
+    /// token overlap against an identical prefix.
+    static func truncatedPromptPrefix(
         from precedingText: String,
         configuration: SuggestionConfiguration
     ) -> String {
@@ -109,7 +114,8 @@ enum SuggestionRequestFactory {
 
     private static func activeClipboardContext(
         rawContext: String?,
-        settings: SuggestionSettingsSnapshot
+        settings: SuggestionSettingsSnapshot,
+        prefixText: String
     ) -> String? {
         guard settings.isClipboardContextEnabled,
               let rawContext
@@ -124,7 +130,11 @@ enum SuggestionRequestFactory {
             return nil
         }
 
-        return clippedText(sanitizedContext, maxCharacters: maxClipboardContextCharacters)
+        let distilled = ClipboardContentDistiller.distill(
+            clipboard: sanitizedContext,
+            prefixText: prefixText
+        )
+        return clippedText(distilled, maxCharacters: maxClipboardContextCharacters)
     }
 
     private static func activeVisualContextSummary(rawSummary: String?) -> String? {
