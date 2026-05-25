@@ -414,7 +414,7 @@ struct SettingsView: View {
     private var supportSection: some View {
         Section("Support") {
             LabeledContent {
-                Link(destination: URL(string: "https://buymeacoffee.com/cotabby")!) {
+                Link(destination: URL(string: "https://ko-fi.com/cotabby")!) {
                     Text("Support Us")
                 }
                 .buttonStyle(.borderedProminent)
