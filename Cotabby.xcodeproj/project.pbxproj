@@ -19,6 +19,7 @@
 		0D8241CD31942A25EC4E0EE4 /* CotabbyDebugOptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7B2D34A6F3AC9DFD61350F7 /* CotabbyDebugOptions.swift */; };
 		0DDC0CFF5558A8F4355836B2 /* OverlayController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F308F6E274CC645E27CB651F /* OverlayController.swift */; };
 		1003373E13779882503C0E9D /* DisplayCoordinateConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74BD1D4DB27D5D96D1E06096 /* DisplayCoordinateConverter.swift */; };
+		156E6AB3D24134EEC29FDB93 /* FocusSnapshotResolverSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA705EDFE1C41294F0E381F1 /* FocusSnapshotResolverSelectionTests.swift */; };
 		157A55EB796BEB7819B90D5D /* ClipboardRelevanceFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A2AC525DC664DB540D4F19 /* ClipboardRelevanceFilter.swift */; };
 		15FA56CEF6FB5FF54C2FBA6F /* PermissionAndContextModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7F42112F14026E6253BB865 /* PermissionAndContextModelTests.swift */; };
 		190C571B3CDFE117F4D15484 /* LlamaPromptRendererTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3009812A35A1CDEF16295AB7 /* LlamaPromptRendererTests.swift */; };
@@ -277,6 +278,7 @@
 		B6ACCB12E4DB32D2F2BEA567 /* PermissionHostApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionHostApp.swift; sourceTree = "<group>"; };
 		B6D42CD456B4B3C988B148A6 /* FocusTrackingModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusTrackingModel.swift; sourceTree = "<group>"; };
 		B81DD30EB657368AACE9625A /* InputMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputMonitor.swift; sourceTree = "<group>"; };
+		BA705EDFE1C41294F0E381F1 /* FocusSnapshotResolverSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusSnapshotResolverSelectionTests.swift; sourceTree = "<group>"; };
 		BB5C2AE9A7E55495D26AD074 /* DownloadableModelCatalogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadableModelCatalogView.swift; sourceTree = "<group>"; };
 		BC4F887528AE74AC0DD30314 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		BD42C7E2852F59BEF7972663 /* MenuBarStatusLabelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarStatusLabelView.swift; sourceTree = "<group>"; };
@@ -497,6 +499,7 @@
 				E217A66717D78E1E49350EC8 /* DownloadOutcomeClassifierTests.swift */,
 				D4F6D5F94B238F7B4BE7C247 /* FocusCapabilityResolverTests.swift */,
 				273B4DC844F79B4BE2C8910F /* FocusPollBackoffTests.swift */,
+				BA705EDFE1C41294F0E381F1 /* FocusSnapshotResolverSelectionTests.swift */,
 				D49F3B597374208594861B9B /* FoundationModelDriftEvalTests.swift */,
 				335BF59EE80F3A0143B79740 /* GhostFontSizeStabilizerTests.swift */,
 				5AD3F4F9FBE82007E4E15F58 /* GhostSuggestionLayoutTests.swift */,
@@ -864,6 +867,7 @@
 				FAC7FFC78BEBF62D5B7A2EFB /* DownloadOutcomeClassifierTests.swift in Sources */,
 				C71B594433F3B411CAE5DE7E /* FocusCapabilityResolverTests.swift in Sources */,
 				A147C5EC3F2214A670F7556E /* FocusPollBackoffTests.swift in Sources */,
+				156E6AB3D24134EEC29FDB93 /* FocusSnapshotResolverSelectionTests.swift in Sources */,
 				31DCCE980B6708401256D4D1 /* FoundationModelDriftEvalTests.swift in Sources */,
 				2EE05B312C990104BE934772 /* GhostFontSizeStabilizerTests.swift in Sources */,
 				A0BB87E3665EF6C209034798 /* GhostSuggestionLayoutTests.swift in Sources */,
