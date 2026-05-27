@@ -281,6 +281,9 @@ struct SettingsView: View {
                 }
             }
 
+            Toggle("Accept Punctuation With Word", isOn: autoAcceptTrailingPunctuationBinding)
+                .help("When on, accepting a word also takes punctuation attached to it, like the \"?\" in \"you?\".")
+
             LabeledContent("Accept Entire Suggestion") {
                 HStack(spacing: 8) {
                     Text(suggestionSettings.fullAcceptanceKeyLabel)
@@ -633,6 +636,13 @@ struct SettingsView: View {
         Binding(
             get: { suggestionSettings.isMultiLineEnabled },
             set: { suggestionSettings.setMultiLineEnabled($0) }
+        )
+    }
+
+    private var autoAcceptTrailingPunctuationBinding: Binding<Bool> {
+        Binding(
+            get: { suggestionSettings.autoAcceptTrailingPunctuation },
+            set: { suggestionSettings.setAutoAcceptTrailingPunctuation($0) }
         )
     }
 
