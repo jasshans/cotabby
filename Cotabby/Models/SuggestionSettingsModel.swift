@@ -27,6 +27,7 @@ final class SuggestionSettingsModel: ObservableObject {
     @Published private(set) var debounceMilliseconds: Int
     @Published private(set) var focusPollIntervalMilliseconds: Int
     @Published private(set) var isMultiLineEnabled: Bool
+    @Published private(set) var autoAcceptTrailingPunctuation: Bool
     @Published private(set) var acceptanceKeyCode: CGKeyCode
     @Published private(set) var acceptanceKeyLabel: String
     @Published private(set) var fullAcceptanceKeyCode: CGKeyCode
@@ -50,6 +51,7 @@ final class SuggestionSettingsModel: ObservableObject {
     private static let debounceMillisecondsDefaultsKey = "cotabbyDebounceMilliseconds"
     private static let focusPollIntervalMillisecondsDefaultsKey = "cotabbyFocusPollIntervalMilliseconds"
     private static let multiLineEnabledDefaultsKey = "cotabbyMultiLineEnabled"
+    private static let autoAcceptTrailingPunctuationDefaultsKey = "cotabbyAutoAcceptTrailingPunctuation"
     private static let acceptanceKeyCodeDefaultsKey = "cotabbyAcceptanceKeyCode"
     private static let acceptanceKeyLabelDefaultsKey = "cotabbyAcceptanceKeyLabel"
     private static let fullAcceptanceKeyCodeDefaultsKey = "cotabbyFullAcceptanceKeyCode"
@@ -140,6 +142,8 @@ final class SuggestionSettingsModel: ObservableObject {
         }()
 
         let resolvedMultiLineEnabled = userDefaults.object(forKey: Self.multiLineEnabledDefaultsKey) as? Bool ?? false
+        let resolvedAutoAcceptTrailingPunctuation =
+            userDefaults.object(forKey: Self.autoAcceptTrailingPunctuationDefaultsKey) as? Bool ?? true
 
         let resolvedAcceptanceKeyCode = CGKeyCode(
             userDefaults.object(forKey: Self.acceptanceKeyCodeDefaultsKey) as? Int
@@ -169,6 +173,7 @@ final class SuggestionSettingsModel: ObservableObject {
         debounceMilliseconds = resolvedDebounceMilliseconds
         focusPollIntervalMilliseconds = resolvedFocusPollIntervalMilliseconds
         isMultiLineEnabled = resolvedMultiLineEnabled
+        autoAcceptTrailingPunctuation = resolvedAutoAcceptTrailingPunctuation
         acceptanceKeyCode = resolvedAcceptanceKeyCode
         acceptanceKeyLabel = resolvedAcceptanceKeyLabel
         fullAcceptanceKeyCode = resolvedFullAcceptanceKeyCode
@@ -188,6 +193,7 @@ final class SuggestionSettingsModel: ObservableObject {
         userDefaults.set(resolvedDebounceMilliseconds, forKey: Self.debounceMillisecondsDefaultsKey)
         userDefaults.set(resolvedFocusPollIntervalMilliseconds, forKey: Self.focusPollIntervalMillisecondsDefaultsKey)
         userDefaults.set(resolvedMultiLineEnabled, forKey: Self.multiLineEnabledDefaultsKey)
+        userDefaults.set(resolvedAutoAcceptTrailingPunctuation, forKey: Self.autoAcceptTrailingPunctuationDefaultsKey)
         userDefaults.set(Int(resolvedAcceptanceKeyCode), forKey: Self.acceptanceKeyCodeDefaultsKey)
         userDefaults.set(resolvedAcceptanceKeyLabel, forKey: Self.acceptanceKeyLabelDefaultsKey)
         userDefaults.set(Int(resolvedFullAcceptanceKeyCode), forKey: Self.fullAcceptanceKeyCodeDefaultsKey)
@@ -211,7 +217,8 @@ final class SuggestionSettingsModel: ObservableObject {
             responseLanguages: responseLanguages,
             debounceMilliseconds: debounceMilliseconds,
             focusPollIntervalMilliseconds: focusPollIntervalMilliseconds,
-            isMultiLineEnabled: isMultiLineEnabled
+            isMultiLineEnabled: isMultiLineEnabled,
+            autoAcceptTrailingPunctuation: autoAcceptTrailingPunctuation
         )
     }
 
@@ -248,6 +255,14 @@ final class SuggestionSettingsModel: ObservableObject {
         }
         isMultiLineEnabled = enabled
         userDefaults.set(enabled, forKey: Self.multiLineEnabledDefaultsKey)
+    }
+
+    func setAutoAcceptTrailingPunctuation(_ enabled: Bool) {
+        guard autoAcceptTrailingPunctuation != enabled else {
+            return
+        }
+        autoAcceptTrailingPunctuation = enabled
+        userDefaults.set(enabled, forKey: Self.autoAcceptTrailingPunctuationDefaultsKey)
     }
 
     func setDebounceMilliseconds(_ value: Int) {
@@ -645,12 +660,17 @@ extension SuggestionSettingsModel: SuggestionSettingsProviding {
             ),
             $isClipboardContextEnabled,
             Publishers.CombineLatest3($userName, $customRules, $responseLanguages),
-            Publishers.CombineLatest3($debounceMilliseconds, $focusPollIntervalMilliseconds, $isMultiLineEnabled)
+            Publishers.CombineLatest4(
+                $debounceMilliseconds,
+                $focusPollIntervalMilliseconds,
+                $isMultiLineEnabled,
+                $autoAcceptTrailingPunctuation
+            )
         )
         .map { combinedSettings, clipboardContextEnabled, profile, timing in
             let (globallyEnabled, disabledAppRules, engine, wordCountPreset) = combinedSettings
             let (userName, customRules, responseLanguages) = profile
-            let (debounce, focusPoll, multiLine) = timing
+            let (debounce, focusPoll, multiLine, autoAcceptPunctuation) = timing
             return SuggestionSettingsSnapshot(
                 isGloballyEnabled: globallyEnabled,
                 disabledAppBundleIdentifiers: Set(disabledAppRules.map(\.bundleIdentifier)),
@@ -662,7 +682,8 @@ extension SuggestionSettingsModel: SuggestionSettingsProviding {
                 responseLanguages: responseLanguages,
                 debounceMilliseconds: debounce,
                 focusPollIntervalMilliseconds: focusPoll,
-                isMultiLineEnabled: multiLine
+                isMultiLineEnabled: multiLine,
+                autoAcceptTrailingPunctuation: autoAcceptPunctuation
             )
         }
         .removeDuplicates()

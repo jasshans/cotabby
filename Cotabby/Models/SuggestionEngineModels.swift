@@ -66,4 +66,7 @@ struct SuggestionSettingsSnapshot: Equatable, Sendable {
     let debounceMilliseconds: Int
     let focusPollIntervalMilliseconds: Int
     let isMultiLineEnabled: Bool
+    /// When true (the default), accepting a word also takes punctuation attached to it. When false,
+    /// trailing punctuation is left as its own acceptance part so a single Tab takes the word alone.
+    let autoAcceptTrailingPunctuation: Bool
 }

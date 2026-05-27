@@ -218,7 +218,8 @@ enum CotabbyTestFixtures {
         responseLanguages: [String] = [],
         debounceMilliseconds: Int = 50,
         focusPollIntervalMilliseconds: Int = 50,
-        isMultiLineEnabled: Bool = false
+        isMultiLineEnabled: Bool = false,
+        autoAcceptTrailingPunctuation: Bool = true
     ) -> SuggestionSettingsSnapshot {
         SuggestionSettingsSnapshot(
             isGloballyEnabled: isGloballyEnabled,
@@ -231,7 +232,8 @@ enum CotabbyTestFixtures {
             responseLanguages: responseLanguages,
             debounceMilliseconds: debounceMilliseconds,
             focusPollIntervalMilliseconds: focusPollIntervalMilliseconds,
-            isMultiLineEnabled: isMultiLineEnabled
+            isMultiLineEnabled: isMultiLineEnabled,
+            autoAcceptTrailingPunctuation: autoAcceptTrailingPunctuation
         )
     }
 }

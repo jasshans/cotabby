@@ -150,6 +150,9 @@ struct SettingsView: View {
 
             Toggle("Allow Multi-line Suggestions", isOn: multiLineEnabledBinding)
 
+            Toggle("Accept Punctuation With Word", isOn: autoAcceptTrailingPunctuationBinding)
+                .help("When on, accepting a word also takes punctuation attached to it, like the \"?\" in \"you?\".")
+
             Toggle("Include Clipboard Context", isOn: clipboardContextEnabledBinding)
 
             // Open at Login is hidden until the quarantine/SMAppService issue is resolved.
@@ -640,6 +643,13 @@ struct SettingsView: View {
         Binding(
             get: { suggestionSettings.isMultiLineEnabled },
             set: { suggestionSettings.setMultiLineEnabled($0) }
+        )
+    }
+
+    private var autoAcceptTrailingPunctuationBinding: Binding<Bool> {
+        Binding(
+            get: { suggestionSettings.autoAcceptTrailingPunctuation },
+            set: { suggestionSettings.setAutoAcceptTrailingPunctuation($0) }
         )
     }
 
