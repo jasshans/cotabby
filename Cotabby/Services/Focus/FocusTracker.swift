@@ -25,11 +25,21 @@ final class FocusTracker {
     private let permissionProvider: @MainActor () -> Bool
     private let ignoredBundleIdentifier: String?
     private let snapshotResolver: FocusSnapshotResolver
+    /// Retained only so debug instrumentation can read cache hit/miss counts; resolution itself goes
+    /// through `snapshotResolver`, which shares this same instance.
+    private let caretGeometryCache: CaretGeometrySourceCache?
 
     private var timer: Timer?
     private var pollSequence = 0
     private var focusChangeSequence: UInt64 = 0
     private var lastFocusedInputSignature: FocusedInputPollingSignature?
+
+    // Idle backoff. When consecutive captures stop producing changes, the timer runs the expensive
+    // AX snapshot walk on a progressively longer stride instead of every tick — the primary fix for
+    // #280, where an 80ms poll kept walking Chrome's Accessibility tree ~12.5x/second (and failing)
+    // even with no focus change and the user's hands off the keyboard. The transitions live in the
+    // pure `FocusPollBackoff` so they can be unit-tested without a live timer.
+    private var backoff = FocusPollBackoff()
 
     init(
         pollInterval: TimeInterval = 0.08,
@@ -45,8 +55,14 @@ final class FocusTracker {
         // The caret-geometry cache is owned here so its lifetime matches the tracker's; it memoizes
         // the focused field's text-run leaves so per-keystroke caret resolution can re-read them
         // instead of re-walking the AX tree.
-        self.snapshotResolver = snapshotResolver
-            ?? FocusSnapshotResolver(caretGeometryCache: CaretGeometrySourceCache())
+        if let snapshotResolver {
+            self.snapshotResolver = snapshotResolver
+            self.caretGeometryCache = nil
+        } else {
+            let cache = CaretGeometrySourceCache()
+            self.snapshotResolver = FocusSnapshotResolver(caretGeometryCache: cache)
+            self.caretGeometryCache = cache
+        }
     }
 
     /// Starts periodic AX polling and immediately captures an initial snapshot.
@@ -61,7 +77,7 @@ final class FocusTracker {
 
         let timer = Timer(timeInterval: pollInterval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.refreshNow()
+                self?.handleTimerTick()
             }
         }
         self.timer = timer
@@ -97,12 +113,35 @@ final class FocusTracker {
     ///
     /// Other subsystems still call this after input or acceptance events because they know a read is
     /// useful immediately. The implementation is still polling-style: no event is trusted as state;
-    /// it only triggers another full AX read.
+    /// it only triggers another full AX read. An explicit refresh also resets idle backoff, since it
+    /// signals real activity and the poll loop should return to its responsive cadence.
     func refreshNow() {
+        backoff.reset()
+        performCaptureAndPublish()
+    }
+
+    /// Timer entry point that applies idle backoff before the expensive Accessibility walk.
+    ///
+    /// While captures keep producing changes (typing, focus churn) the stride stays at 1 and the
+    /// poll runs at full cadence. Once captures stop changing, the stride grows so an idle machine
+    /// isn't paying for ~12.5 full Chrome AX tree walks per second — the dominant idle cost in #280.
+    private func handleTimerTick() {
+        guard backoff.shouldCaptureOnTick() else {
+            return
+        }
+        backoff.recordCapture(didChange: performCaptureAndPublish())
+    }
+
+    /// Captures the current snapshot, publishes any change, and reports whether anything changed.
+    /// Returns `true` when the published snapshot or the focused-input identity changed; idle
+    /// backoff uses this to decide whether to stay fast or stretch the poll stride.
+    @discardableResult
+    private func performCaptureAndPublish() -> Bool {
         pollSequence += 1
         let capture = captureSnapshot()
 
-        if capture.snapshot != snapshot {
+        let snapshotChanged = capture.snapshot != snapshot
+        if snapshotChanged {
             snapshot = capture.snapshot
         }
 
@@ -116,6 +155,8 @@ final class FocusTracker {
                 occurredAt: Date()
             )
         )
+
+        return snapshotChanged || capture.didChangeFocusedInput
     }
 
     /// Captures the current frontmost application's focused element and reduces it into a snapshot.
@@ -166,10 +207,16 @@ final class FocusTracker {
             )
         }
 
+        let resolveStart = ContinuousClock.now
         let firstPassSnapshot = snapshotResolver.resolveSnapshot(
             focusedElement: focusedElement,
             application: application,
             focusChangeSequence: focusChangeSequence
+        )
+        logResolveTiming(
+            since: resolveStart,
+            application: application,
+            snapshot: firstPassSnapshot
         )
 
         guard let context = firstPassSnapshot.context else {
@@ -205,6 +252,26 @@ final class FocusTracker {
             reason: "focused input snapshot changed"
         )
         return FocusCaptureResult(snapshot: finalSnapshot, didChangeFocusedInput: true)
+    }
+
+    /// Logs how long a single `resolveSnapshot` took on the main thread, with the caret source and
+    /// cache hit/miss tally. Gated behind `-cotabby-debug`. This is the signal that distinguishes
+    /// "keystrokes lag because the synchronous AX resolve is expensive" from other causes — a dump
+    /// with consistently high `resolveMs` in a browser confirms the main-thread walk is the stall.
+    private func logResolveTiming(
+        since start: ContinuousClock.Instant,
+        application: NSRunningApplication,
+        snapshot: FocusSnapshot
+    ) {
+        guard CotabbyDebugOptions.isEnabled else {
+            return
+        }
+        let millis = Double((ContinuousClock.now - start).components.attoseconds) / 1e15
+        let source = snapshot.context?.caretSource ?? snapshot.capability.shortLabel
+        let stats = caretGeometryCache?.debugStats ?? "no-cache"
+        let line = "Resolve timing: app=\(application.localizedName ?? "?") "
+            + "resolveMs=\(String(format: "%.1f", millis)) caret=\(source) cache=[\(stats)]"
+        CotabbyLogger.focus.debug("\(line)")
     }
 
     private func inactiveCapture(

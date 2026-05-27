@@ -21,6 +21,13 @@ final class VisualContextCoordinator {
     private var activeAugmentationSession: FocusedInputAugmentationSession?
     private var visualContextTask: Task<Void, Never>?
 
+    /// Debounce state for the capture pipeline. `pendingStartContext` is the field whose start is
+    /// currently waiting out the settle delay; a matching repeat call is ignored so a churning focus
+    /// doesn't keep re-arming the timer.
+    private var pendingStartTask: Task<Void, Never>?
+    private var pendingStartContext: FocusedInputSnapshot?
+    private static let sessionStartSettleNanoseconds: UInt64 = 350_000_000
+
     private static let permissionMissingReason =
         "Screen Recording permission is required for screenshot-derived prompt context."
 
@@ -41,20 +48,68 @@ final class VisualContextCoordinator {
     /// across unrelated AX elements. The monotonic `focusChangeSequence` counter provides a
     /// guaranteed-unique signal that the focus tracker actually observed a new element.
     func startSessionIfNeeded(for snapshotContext: FocusedInputSnapshot) {
-        if let activeAugmentationSession,
-            activeAugmentationSession.elementIdentifier == snapshotContext.elementIdentifier,
-            activeAugmentationSession.focusChangeSequence == snapshotContext.focusChangeSequence {
-            if case .unavailable(let reason) = activeAugmentationSession.status,
-                reason.localizedCaseInsensitiveContains("Screen Recording"),
-                screenRecordingPermissionProvider() {
-                cancel(resetState: true)
-            } else {
-                return
+        // Coalesce repeated calls for the same field (active or already pending) so a flapping focus
+        // can't restart the pipeline. The decision is pure so the invariants stay unit-testable.
+        let incoming = VisualContextFieldIdentity(
+            elementIdentifier: snapshotContext.elementIdentifier,
+            focusChangeSequence: snapshotContext.focusChangeSequence
+        )
+        let decision = VisualContextStartCoalescer.decide(
+            incoming: incoming,
+            active: activeAugmentationSession.map {
+                VisualContextFieldIdentity(elementIdentifier: $0.elementIdentifier, focusChangeSequence: $0.focusChangeSequence)
+            },
+            activeIsBlockedOnScreenRecording: activeIsBlockedOnScreenRecording,
+            hasScreenRecordingPermission: screenRecordingPermissionProvider(),
+            pending: pendingStartContext.map {
+                VisualContextFieldIdentity(elementIdentifier: $0.elementIdentifier, focusChangeSequence: $0.focusChangeSequence)
             }
+        )
+
+        switch decision {
+        case .ignore:
+            return
+        case .recoverPermissionThenStart:
+            cancel(resetState: true)
+        case .start:
+            break
         }
 
+        // Debounce the expensive screenshot -> OCR -> summarize pipeline. Chromium/Electron apps
+        // flap the focused AX element (lose and re-acquire it), calling this repeatedly with a
+        // churning focusChangeSequence. Coalescing (above) plus a short settle window runs the
+        // pipeline once focus is stable instead of once per flap — the retrigger storm in #280.
         cancel(resetState: false)
+        scheduleSessionStart(for: snapshotContext)
+    }
 
+    /// Whether the active session is currently parked on missing Screen Recording permission, so a
+    /// permission grant for the same field should restart it rather than be ignored as a duplicate.
+    private var activeIsBlockedOnScreenRecording: Bool {
+        guard let activeAugmentationSession,
+            case .unavailable(let reason) = activeAugmentationSession.status else {
+            return false
+        }
+        return reason.localizedCaseInsensitiveContains("Screen Recording")
+    }
+
+    /// Arms a debounced session start. Repeated calls for a churning focus replace the pending
+    /// timer, so only the final settled field actually launches the capture pipeline.
+    private func scheduleSessionStart(for snapshotContext: FocusedInputSnapshot) {
+        pendingStartContext = snapshotContext
+        pendingStartTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: Self.sessionStartSettleNanoseconds)
+            guard !Task.isCancelled, let self else {
+                return
+            }
+            self.pendingStartTask = nil
+            self.pendingStartContext = nil
+            self.launchSession(for: snapshotContext)
+        }
+    }
+
+    /// Launches the screenshot-derived augmentation session for a settled focused field.
+    private func launchSession(for snapshotContext: FocusedInputSnapshot) {
         CotabbyLogger.app.debug("Starting visual context session for element \(snapshotContext.elementIdentifier)")
         let hasPermission = screenRecordingPermissionProvider()
         let initialStatus: VisualContextStatus =
@@ -117,6 +172,9 @@ final class VisualContextCoordinator {
     /// 1. Fully returning the service to `.idle`
     /// 2. Silently tearing down a prior session because a replacement session is about to start
     func cancel(resetState: Bool) {
+        pendingStartTask?.cancel()
+        pendingStartTask = nil
+        pendingStartContext = nil
         visualContextTask?.cancel()
         visualContextTask = nil
         activeAugmentationSession = nil
