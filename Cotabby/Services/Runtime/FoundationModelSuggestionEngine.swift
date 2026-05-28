@@ -10,18 +10,34 @@ import FoundationModels
 /// `SuggestionGenerating` capability. The coordinator should not care whether suggestions come
 /// from llama.cpp or Apple Intelligence; that backend choice belongs in app composition.
 ///
-/// This engine creates a fresh `LanguageModelSession` per request. That is the right default for
-/// Cotabby's autocomplete flow because each suggestion is a single-turn interaction and we do not
-/// want prior model responses to accumulate in the context window.
+/// The engine caches a pristine `LanguageModelSession` so the focus-time `prewarm(for:)` call can
+/// hand the same prewarmed session to the first user-typed request. Reuse is bounded: once a
+/// session has actually serviced a `respond` (its transcript has grown past the pristine count)
+/// or is mid-stream (`isResponding == true`), the next request builds a fresh session instead.
+/// This keeps the prewarm latency win on the first keystroke after focus without inheriting
+/// Apple's two single-flight failure modes — `concurrentRequests` from overlapping streams on the
+/// same session, and `exceededContextWindowSize` from transcript entries piling up over many
+/// keystrokes in the same field. See `ensureSession` for the reuse predicate.
 ///
-/// The important behavioral nuance is that Foundation Models has a dedicated instructions channel.
-/// We use that to tell the system model "this is inline autocomplete, not a chat reply," because a
-/// bare text prefix like "hello" otherwise invites conversational continuations.
+/// `prewarm(for:)` is the supported hook for "the user just focused an editable field; a real
+/// request is likely within a second." The coordinator calls it from the focus path; the engine
+/// builds (or reuses) the session and calls Apple's `LanguageModelSession.prewarm()` so weight
+/// loading and instruction tokenization happen before the first user-visible respond call.
+///
+/// Generation itself goes through `session.streamResponse` rather than `session.respond`. Apple's
+/// stream yields cumulative partials, so the loop captures the latest snapshot and exits with it
+/// as the final raw text. The win is responsiveness to cancellation: `Task.checkCancellation()`
+/// inside the loop lets the coordinator interrupt mid-decode when the user types past the
+/// in-flight suggestion, where `respond` would otherwise have to run to completion. The external
+/// `SuggestionResult` shape is unchanged, so the rest of the pipeline (overlay, presenter,
+/// active-session reconciliation) stays as-is — pushing partials all the way to the overlay is a
+/// separate, larger change scoped to a follow-up.
 #if canImport(FoundationModels)
 @available(macOS 26.0, *)
 @MainActor
 final class FoundationModelSuggestionEngine {
     private let availabilityService: FoundationModelAvailabilityService
+    private var cachedSession: CachedSession?
 
     init(availabilityService: FoundationModelAvailabilityService) {
         self.availabilityService = availabilityService
@@ -52,17 +68,33 @@ final class FoundationModelSuggestionEngine {
                 )
             }
 
-            let session = LanguageModelSession(
-                model: model,
-                instructions: FoundationModelPromptRenderer.sessionInstructions(for: request)
-            )
-            let response = try await session.respond(
+            let session = ensureSession(for: request, model: model)
+            let stream = session.streamResponse(
                 to: prompt,
                 options: generationOptions(for: request)
             )
+            // Apple's stream yields cumulative `Snapshot` values whose `.content` carries the
+            // text generated so far. Capture each snapshot first and check cancellation after, so a
+            // late cancel between the final snapshot and its assignment doesn't discard fully
+            // decoded text — cancellation always throws, but keeping the best-available text saved
+            // before honoring the signal makes the intent obvious.
+            var rawSuggestion = ""
+            var didReceiveSnapshot = false
+            for try await partial in stream {
+                rawSuggestion = partial.content
+                didReceiveSnapshot = true
+                try Task.checkCancellation()
+            }
             try Task.checkCancellation()
-
-            let rawSuggestion = response.content
+            // Apple's documented contract is at least one snapshot on a successful stream, so a
+            // zero-snapshot path is treated as a generation failure rather than a silent empty
+            // suggestion — the latter would let the overlay clear without surfacing that the model
+            // produced literally nothing.
+            guard didReceiveSnapshot else {
+                throw SuggestionClientError.generationFailed(
+                    "Apple Intelligence finished streaming without producing any content."
+                )
+            }
             let normalizedSuggestion = SuggestionTextNormalizer.normalize(
                 rawSuggestion,
                 for: request,
@@ -96,8 +128,80 @@ final class FoundationModelSuggestionEngine {
         }
     }
 
-    /// Foundation Models sessions are already one-shot, so there is no backend context to clear.
-    func resetCachedGenerationContext() async {}
+    /// Best-effort warmup. Apple's prewarm loads weights into memory and primes the instruction
+    /// prefix cache. We swallow errors because prewarming is opportunistic — the next
+    /// `respond` call will surface real availability or generation failures with the right
+    /// vocabulary, and reporting them here would just produce noise.
+    func prewarm(for request: SuggestionRequest) async {
+        availabilityService.refresh()
+        guard availabilityService.isAvailable else {
+            return
+        }
+        guard let model = availabilityService.systemLanguageModel else {
+            return
+        }
+
+        let session = ensureSession(for: request, model: model)
+        session.prewarm()
+        CotabbyLogger.suggestion.debug("Foundation model session prewarmed")
+    }
+
+    /// Dropping the cached session forces the next request to rebuild instructions, which is the
+    /// right behavior when the coordinator signals the editing context is no longer continuous
+    /// (focus changes, settings edits). Apple's session also holds a transcript that we
+    /// deliberately do not want to leak across editing contexts.
+    func resetCachedGenerationContext() async {
+        cachedSession = nil
+    }
+
+    /// Returns the cached session when it is safe to reuse, otherwise builds a fresh session
+    /// and replaces the cache. The cache key (rendered instructions) keeps this correct if the
+    /// renderer composition rules change later.
+    ///
+    /// Reuse is gated on three conditions that together avoid two Apple-surfaced failures the
+    /// previous unconditional-reuse design was vulnerable to:
+    ///
+    /// - `cached.instructions == instructions`: the cached session was built with this exact
+    ///   instruction string. Any settings edit (custom rules, language override) that re-renders
+    ///   instructions forces a rebuild.
+    /// - `!cached.session.isResponding`: Apple's `LanguageModelSession` rejects a second concurrent
+    ///   `respond` / `streamResponse` with `.concurrentRequests`. Swift task cancellation is
+    ///   cooperative, so the coordinator's `cancelPredictionWork()` + `schedulePrediction()` pair
+    ///   can leave the previous stream still draining inside Apple's runtime when the next request
+    ///   arrives. Falling through to a fresh session keeps that case from surfacing as a
+    ///   user-visible `generationFailed` error.
+    /// - `cached.session.transcript.count == cached.pristineTranscriptCount`: a successful (or even
+    ///   cancelled) `respond` appends the prompt and response to the session's transcript. Reusing
+    ///   the session indefinitely accumulates entries that all replay through the 4096-token
+    ///   shared context, which Apple eventually surfaces as `.exceededContextWindowSize`. Bounded
+    ///   reuse keeps the prewarm benefit on the first keystroke after focus — the session is
+    ///   built and prewarmed on focus change, then consumed once — and any further keystroke in
+    ///   the same field starts from a fresh session, matching the pre-PR single-turn behavior.
+    ///
+    /// The cache key intentionally omits `model` identity. `availabilityService` owns the singleton
+    /// `SystemLanguageModel` and only swaps it on app restart, never mid-session — so a cached
+    /// session can never be silently bound to a stale model. If that invariant ever changes
+    /// (e.g. live Apple Intelligence asset reloads), include `ObjectIdentifier(model)` here.
+    private func ensureSession(
+        for request: SuggestionRequest,
+        model: SystemLanguageModel
+    ) -> LanguageModelSession {
+        let instructions = FoundationModelPromptRenderer.sessionInstructions(for: request)
+        if let cached = cachedSession,
+           cached.instructions == instructions,
+           !cached.session.isResponding,
+           cached.session.transcript.count == cached.pristineTranscriptCount {
+            return cached.session
+        }
+
+        let session = LanguageModelSession(model: model, instructions: instructions)
+        cachedSession = CachedSession(
+            instructions: instructions,
+            session: session,
+            pristineTranscriptCount: session.transcript.count
+        )
+        return session
+    }
 
     /// Maps Cotabby's existing generation knobs onto the subset of Foundation Models options the
     /// system model exposes. We preserve the same upstream request shape so the coordinator does
@@ -147,6 +251,15 @@ final class FoundationModelSuggestionEngine {
         @unknown default:
             return .generationFailed(error.localizedDescription)
         }
+    }
+
+    private struct CachedSession {
+        let instructions: String
+        let session: LanguageModelSession
+        /// Snapshot of `session.transcript.count` immediately after construction (and after any
+        /// `prewarm()`, which does not modify the transcript). A respond call appends entries,
+        /// so a count divergence is the cue that this session is no longer single-turn safe.
+        let pristineTranscriptCount: Int
     }
 }
 
