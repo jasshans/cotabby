@@ -287,8 +287,12 @@ struct SettingsView: View {
 
                     if isRecordingKeybind {
                         KeyRecorderView(
-                            onKeyRecorded: { keyCode, label in
-                                suggestionSettings.setAcceptanceKey(keyCode: keyCode, label: label)
+                            onKeyRecorded: { keyCode, modifiers, label in
+                                suggestionSettings.setAcceptanceKey(
+                                    keyCode: keyCode,
+                                    modifiers: modifiers,
+                                    label: label
+                                )
                                 isRecordingKeybind = false
                             },
                             onCancelled: {
@@ -299,13 +303,15 @@ struct SettingsView: View {
                         Button("Change") {
                             isRecordingKeybind = true
                         }
-                        .help("Record a new key. Press any key to bind it; Escape to cancel.")
+                        .help("Record a new shortcut. Hold any modifiers and press a key to bind it; Escape to cancel.")
                     }
 
-                    if suggestionSettings.acceptanceKeyCode != SuggestionSettingsModel.defaultAcceptanceKeyCode {
+                    if suggestionSettings.acceptanceKeyCode != SuggestionSettingsModel.defaultAcceptanceKeyCode
+                        || !suggestionSettings.acceptanceKeyModifiers.isEmpty {
                         Button("Reset") {
                             suggestionSettings.setAcceptanceKey(
                                 keyCode: SuggestionSettingsModel.defaultAcceptanceKeyCode,
+                                modifiers: [],
                                 label: SuggestionSettingsModel.defaultAcceptanceKeyLabel
                             )
                             isRecordingKeybind = false
@@ -336,8 +342,12 @@ struct SettingsView: View {
 
                     if isRecordingFullAcceptKeybind {
                         KeyRecorderView(
-                            onKeyRecorded: { keyCode, label in
-                                suggestionSettings.setFullAcceptanceKey(keyCode: keyCode, label: label)
+                            onKeyRecorded: { keyCode, modifiers, label in
+                                suggestionSettings.setFullAcceptanceKey(
+                                    keyCode: keyCode,
+                                    modifiers: modifiers,
+                                    label: label
+                                )
                                 isRecordingFullAcceptKeybind = false
                             },
                             onCancelled: {
@@ -348,13 +358,15 @@ struct SettingsView: View {
                         Button("Change") {
                             isRecordingFullAcceptKeybind = true
                         }
-                        .help("Record a new key. Press any key to bind it; Escape to cancel.")
+                        .help("Record a new shortcut. Hold any modifiers and press a key to bind it; Escape to cancel.")
                     }
 
-                    if suggestionSettings.fullAcceptanceKeyCode != SuggestionSettingsModel.defaultFullAcceptanceKeyCode {
+                    if suggestionSettings.fullAcceptanceKeyCode != SuggestionSettingsModel.defaultFullAcceptanceKeyCode
+                        || !suggestionSettings.fullAcceptanceKeyModifiers.isEmpty {
                         Button("Reset") {
                             suggestionSettings.setFullAcceptanceKey(
                                 keyCode: SuggestionSettingsModel.defaultFullAcceptanceKeyCode,
+                                modifiers: [],
                                 label: SuggestionSettingsModel.defaultFullAcceptanceKeyLabel
                             )
                             isRecordingFullAcceptKeybind = false
