@@ -50,6 +50,11 @@ final class SuggestionSettingsModel: ObservableObject {
     @Published private(set) var globalToggleKeyModifiers: ShortcutModifierMask
     @Published private(set) var globalToggleKeyLabel: String
     @Published private(set) var acceptanceGranularity: AcceptanceGranularity
+    /// Experimental: when true, a completion that finished generating after the user kept typing is
+    /// salvaged (its typed-ahead overlap is trimmed and the remainder shown) instead of being dropped
+    /// as stale. Hidden, off by default, toggled via the `cotabbyStaleCompletionSalvageEnabled`
+    /// default; the salvage opportunity is logged either way so rescue rate is measurable while off.
+    @Published private(set) var isStaleCompletionSalvageEnabled: Bool
     private let userDefaults: UserDefaults
 
     private static let isGloballyEnabledDefaultsKey = "cotabbyGloballyEnabled"
@@ -85,6 +90,7 @@ final class SuggestionSettingsModel: ObservableObject {
     private static let globalToggleKeyModifiersDefaultsKey = "cotabbyGlobalToggleKeyModifiers"
     private static let globalToggleKeyLabelDefaultsKey = "cotabbyGlobalToggleKeyLabel"
     private static let acceptanceGranularityDefaultsKey = "cotabbyAcceptanceGranularity"
+    private static let staleCompletionSalvageEnabledDefaultsKey = "cotabbyStaleCompletionSalvageEnabled"
 
     static let defaultAcceptanceKeyCode: CGKeyCode = 48
     static let defaultAcceptanceKeyLabel = "Tab"
@@ -246,6 +252,9 @@ final class SuggestionSettingsModel: ObservableObject {
             .string(forKey: Self.acceptanceGranularityDefaultsKey)
             .flatMap(AcceptanceGranularity.init(rawValue:))
             ?? .word
+        // Hidden experimental flag: defaults to off so the salvage path stays opt-in per machine.
+        let resolvedStaleCompletionSalvageEnabled =
+            userDefaults.object(forKey: Self.staleCompletionSalvageEnabledDefaultsKey) as? Bool ?? false
 
         isGloballyEnabled = resolvedGloballyEnabled
         disabledAppRules = resolvedDisabledAppRules
@@ -277,6 +286,7 @@ final class SuggestionSettingsModel: ObservableObject {
         globalToggleKeyModifiers = resolvedGlobalToggleKeyModifiers
         globalToggleKeyLabel = resolvedGlobalToggleKeyLabel
         acceptanceGranularity = resolvedAcceptanceGranularity
+        isStaleCompletionSalvageEnabled = resolvedStaleCompletionSalvageEnabled
 
         userDefaults.set(resolvedGloballyEnabled, forKey: Self.isGloballyEnabledDefaultsKey)
         persistDisabledAppRules(resolvedDisabledAppRules)
@@ -314,6 +324,7 @@ final class SuggestionSettingsModel: ObservableObject {
         )
         userDefaults.set(resolvedGlobalToggleKeyLabel, forKey: Self.globalToggleKeyLabelDefaultsKey)
         userDefaults.set(resolvedAcceptanceGranularity.rawValue, forKey: Self.acceptanceGranularityDefaultsKey)
+        userDefaults.set(resolvedStaleCompletionSalvageEnabled, forKey: Self.staleCompletionSalvageEnabledDefaultsKey)
 
         // The custom indicator icon feature was removed; scrub any previously-persisted PNG so
         // users who picked one in an older build get the default cat icon back automatically.
@@ -341,7 +352,8 @@ final class SuggestionSettingsModel: ObservableObject {
             autoAcceptTrailingPunctuation: autoAcceptTrailingPunctuation,
             isFastModeEnabled: isFastModeEnabled,
             mirrorPreference: mirrorPreference,
-            acceptanceGranularity: acceptanceGranularity
+            acceptanceGranularity: acceptanceGranularity,
+            isStaleCompletionSalvageEnabled: isStaleCompletionSalvageEnabled
         )
     }
 
@@ -413,6 +425,14 @@ final class SuggestionSettingsModel: ObservableObject {
         }
         isEmojiPickerEnabled = enabled
         userDefaults.set(enabled, forKey: Self.emojiPickerEnabledDefaultsKey)
+    }
+
+    func setStaleCompletionSalvageEnabled(_ enabled: Bool) {
+        guard isStaleCompletionSalvageEnabled != enabled else {
+            return
+        }
+        isStaleCompletionSalvageEnabled = enabled
+        userDefaults.set(enabled, forKey: Self.staleCompletionSalvageEnabledDefaultsKey)
     }
 
     func setAutoAcceptTrailingPunctuation(_ enabled: Bool) {
@@ -900,8 +920,9 @@ extension SuggestionSettingsModel: SuggestionSettingsProviding {
         // `presentationToggles` carries the visual-pipeline knobs (clipboard, fast mode, mirror
         // preference); they share the property of "affects how/when suggestions are shown".
         //
-        // The outer CombineLatest4 is at the cap, so `$acceptanceGranularity` is layered above it
-        // via a second CombineLatest to avoid restructuring the existing groupings.
+        // The outer CombineLatest4 is at the cap, so `$acceptanceGranularity` and
+        // `$isStaleCompletionSalvageEnabled` are layered above it via a second combiner to avoid
+        // restructuring the existing groupings.
         let primary = Publishers.CombineLatest4(
             Publishers.CombineLatest4(
                 $isGloballyEnabled,
@@ -918,8 +939,8 @@ extension SuggestionSettingsModel: SuggestionSettingsProviding {
                 $autoAcceptTrailingPunctuation
             )
         )
-        return Publishers.CombineLatest(primary, $acceptanceGranularity)
-            .map { primaryTuple, granularity in
+        return Publishers.CombineLatest3(primary, $acceptanceGranularity, $isStaleCompletionSalvageEnabled)
+            .map { primaryTuple, granularity, staleCompletionSalvageEnabled in
                 let (combinedSettings, presentationToggles, profile, timing) = primaryTuple
                 let (globallyEnabled, disabledAppRules, engine, wordCountPreset) = combinedSettings
                 let (clipboardContextEnabled, fastModeEnabled, mirrorPreference) = presentationToggles
@@ -940,7 +961,8 @@ extension SuggestionSettingsModel: SuggestionSettingsProviding {
                     autoAcceptTrailingPunctuation: autoAcceptPunctuation,
                     isFastModeEnabled: fastModeEnabled,
                     mirrorPreference: mirrorPreference,
-                    acceptanceGranularity: granularity
+                    acceptanceGranularity: granularity,
+                    isStaleCompletionSalvageEnabled: staleCompletionSalvageEnabled
                 )
             }
             .removeDuplicates()

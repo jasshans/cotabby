@@ -222,7 +222,8 @@ enum CotabbyTestFixtures {
         autoAcceptTrailingPunctuation: Bool = true,
         isFastModeEnabled: Bool = false,
         mirrorPreference: MirrorPreference = .auto,
-        acceptanceGranularity: AcceptanceGranularity = .word
+        acceptanceGranularity: AcceptanceGranularity = .word,
+        isStaleCompletionSalvageEnabled: Bool = false
     ) -> SuggestionSettingsSnapshot {
         SuggestionSettingsSnapshot(
             isGloballyEnabled: isGloballyEnabled,
@@ -239,7 +240,8 @@ enum CotabbyTestFixtures {
             autoAcceptTrailingPunctuation: autoAcceptTrailingPunctuation,
             isFastModeEnabled: isFastModeEnabled,
             mirrorPreference: mirrorPreference,
-            acceptanceGranularity: acceptanceGranularity
+            acceptanceGranularity: acceptanceGranularity,
+            isStaleCompletionSalvageEnabled: isStaleCompletionSalvageEnabled
         )
     }
 }

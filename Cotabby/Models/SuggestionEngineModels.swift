@@ -89,4 +89,8 @@ struct SuggestionSettingsSnapshot: Equatable, Sendable {
     /// How much of the buffered suggestion the primary accept key takes per press. Read once per
     /// accept call so a mid-press setting change can't strand a partially-handled press.
     let acceptanceGranularity: AcceptanceGranularity
+    /// Experimental rollout flag for stale-completion salvage. When true, the coordinator trims the
+    /// user's type-ahead off a stale result and shows the remainder instead of dropping it. Off by
+    /// default; carried in the snapshot so generation reads the same value the settings model holds.
+    let isStaleCompletionSalvageEnabled: Bool
 }
