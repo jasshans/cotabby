@@ -23,6 +23,11 @@ final class CotabbyAppEnvironment {
     let foundationModelAvailabilityService: FoundationModelAvailabilityService
     let clipboardContextProvider: ClipboardContextProvider
     let suggestionCoordinator: SuggestionCoordinator
+    /// Shared with the Advanced settings pane so the user can fire an ad-hoc generation against
+    /// the currently-selected engine and verify that Extended Context (and other prompt inputs)
+    /// are actually shaping the output. Reusing the live router means the playground produces the
+    /// same answer the autocomplete pipeline would, not a stand-in.
+    let suggestionEngine: any SuggestionGenerating
     let emojiPickerController: EmojiPickerController
     let welcomeCoordinator: WelcomeCoordinator
     let huggingFaceSearchService: HuggingFaceSearchService
@@ -87,19 +92,9 @@ final class CotabbyAppEnvironment {
             foundationModelAvailabilityService: foundationModelAvailabilityService
         )
         let huggingFaceSearchService = HuggingFaceSearchService()
-        let settingsCoordinator = SettingsCoordinator(
-            appUpdateManager: appUpdateManager,
-            launchAtLoginService: launchAtLoginService,
-            permissionManager: permissionManager,
-            suggestionSettings: suggestionSettings,
-            foundationModelAvailabilityService: foundationModelAvailabilityService,
-            runtimeModel: runtimeModel,
-            modelDownloadManager: modelDownloadManager,
-            huggingFaceSearchService: huggingFaceSearchService,
-            onShowWelcome: { [weak welcomeCoordinator] in
-                welcomeCoordinator?.showWelcome()
-            }
-        )
+        // Settings coordinator construction is deferred below until after `suggestionEngine` is
+        // built — the Advanced pane's "try it" playground needs the engine so it can fire ad-hoc
+        // generations using the same router the autocomplete pipeline does.
         let suggestionInserter = SuggestionInserter(suppressionController: suppressionController)
         let overlayController = OverlayController(suggestionSettings: suggestionSettings)
         let activationIndicatorController = ActivationIndicatorController()
@@ -135,6 +130,22 @@ final class CotabbyAppEnvironment {
             suggestionSettings: suggestionSettings,
             foundationModelEngine: foundationModelEngine,
             llamaEngine: LlamaSuggestionEngine(runtimeManager: runtimeManager)
+        )
+
+        let settingsCoordinator = SettingsCoordinator(
+            appUpdateManager: appUpdateManager,
+            launchAtLoginService: launchAtLoginService,
+            permissionManager: permissionManager,
+            suggestionSettings: suggestionSettings,
+            foundationModelAvailabilityService: foundationModelAvailabilityService,
+            runtimeModel: runtimeModel,
+            modelDownloadManager: modelDownloadManager,
+            huggingFaceSearchService: huggingFaceSearchService,
+            suggestionEngine: suggestionEngine,
+            configuration: configuration,
+            onShowWelcome: { [weak welcomeCoordinator] in
+                welcomeCoordinator?.showWelcome()
+            }
         )
 
         let interactionState = SuggestionInteractionState()
@@ -185,6 +196,7 @@ final class CotabbyAppEnvironment {
         self.foundationModelAvailabilityService = foundationModelAvailabilityService
         self.clipboardContextProvider = clipboardContextProvider
         self.suggestionCoordinator = suggestionCoordinator
+        self.suggestionEngine = suggestionEngine
         self.emojiPickerController = emojiPickerController
         self.welcomeCoordinator = welcomeCoordinator
         self.huggingFaceSearchService = huggingFaceSearchService
