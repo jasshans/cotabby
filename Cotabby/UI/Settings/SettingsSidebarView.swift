@@ -25,9 +25,14 @@ struct SettingsSidebarView: View {
         .safeAreaInset(edge: .top, spacing: 0) {
             Color.clear.frame(height: 12)
         }
-        // A single fixed width (not a min/ideal/max range) so `.balanced` can't squeeze the column
-        // down to where labels truncate — the exact failure mode of the previous ranged width.
-        .navigationSplitViewColumnWidth(340)
+        // `.navigationSplitViewColumnWidth` is only a hint — AppKit's underlying split view ignores
+        // it when the window is at or near its minimum, which is what truncated labels like
+        // "Engine &..." and "Permissio..." in the small-window screenshots. A direct `.frame()` is a
+        // real SwiftUI layout constraint, so the split view has to give the sidebar at least the
+        // minWidth. Keep the column-width hint as a paired ideal so a fresh window opens at the
+        // right size before the user resizes.
+        .frame(minWidth: 300, idealWidth: 340)
+        .navigationSplitViewColumnWidth(min: 300, ideal: 340, max: 420)
     }
 
     @ViewBuilder
