@@ -172,8 +172,7 @@ extension SuggestionCoordinator {
         // Generation numbers are our stale-result guard. If the text changed while the model was
         // thinking, the answer was generated against an older prefix. Before dropping it, try to
         // salvage it by trimming the characters the user typed during the race (see
-        // `StaleCompletionReconciler`). Presenting the salvaged tail is gated behind a flag, but the
-        // opportunity is always logged so the rescue rate is measurable while the flag is off.
+        // `StaleCompletionReconciler`) and present the remaining tail instead of dropping it.
         guard liveContext.generation == result.generation else {
             latestRawModelOutput = SuggestionDebugLogger.debugPreview(result.rawText)
 
@@ -182,20 +181,8 @@ extension SuggestionCoordinator {
                 requestContext: requestContext,
                 liveContext: liveContext
             ) {
-                if settingsSnapshot.isStaleCompletionSalvageEnabled {
-                    presentSalvagedCompletion(salvage, result: result, liveContext: liveContext, workID: workID)
-                    return
-                }
-
-                logStage(
-                    "stale-salvageable",
-                    workID: workID,
-                    generation: result.generation,
-                    message: "Stale result could be salvaged (\(salvage.confidence.rawValue)); " +
-                        "salvage disabled, dropping.",
-                    rawOutput: result.rawText,
-                    normalizedOutput: salvage.text
-                )
+                presentSalvagedCompletion(salvage, result: result, liveContext: liveContext, workID: workID)
+                return
             }
 
             logStage(

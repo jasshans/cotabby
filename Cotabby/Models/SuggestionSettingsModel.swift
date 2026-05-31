@@ -37,6 +37,10 @@ final class SuggestionSettingsModel: ObservableObject {
     /// Whether the inline `:emoji:` picker is active. Read live by `EmojiPickerController` at event
     /// time, so toggling it takes effect on the next keystroke without restarting capture.
     @Published private(set) var isEmojiPickerEnabled: Bool
+    /// Emoji-customization preferences, read live by the picker's variant resolver at match time.
+    @Published private(set) var preferredEmojiSkinTone: EmojiSkinTone
+    @Published private(set) var includeNeutralEmojiVariant: Bool
+    @Published private(set) var preferredEmojiGender: EmojiGender
     @Published private(set) var autoAcceptTrailingPunctuation: Bool
     @Published private(set) var acceptanceKeyCode: CGKeyCode
     @Published private(set) var acceptanceKeyModifiers: ShortcutModifierMask
@@ -50,11 +54,6 @@ final class SuggestionSettingsModel: ObservableObject {
     @Published private(set) var globalToggleKeyModifiers: ShortcutModifierMask
     @Published private(set) var globalToggleKeyLabel: String
     @Published private(set) var acceptanceGranularity: AcceptanceGranularity
-    /// Experimental: when true, a completion that finished generating after the user kept typing is
-    /// salvaged (its typed-ahead overlap is trimmed and the remainder shown) instead of being dropped
-    /// as stale. Hidden, off by default, toggled via the `cotabbyStaleCompletionSalvageEnabled`
-    /// default; the salvage opportunity is logged either way so rescue rate is measurable while off.
-    @Published private(set) var isStaleCompletionSalvageEnabled: Bool
     private let userDefaults: UserDefaults
 
     private static let isGloballyEnabledDefaultsKey = "cotabbyGloballyEnabled"
@@ -79,6 +78,9 @@ final class SuggestionSettingsModel: ObservableObject {
     private static let focusPollIntervalMillisecondsDefaultsKey = "cotabbyFocusPollIntervalMilliseconds"
     private static let multiLineEnabledDefaultsKey = "cotabbyMultiLineEnabled"
     private static let emojiPickerEnabledDefaultsKey = "cotabbyEmojiPickerEnabled"
+    private static let preferredEmojiSkinToneDefaultsKey = "cotabbyPreferredEmojiSkinTone"
+    private static let includeNeutralEmojiVariantDefaultsKey = "cotabbyIncludeNeutralEmojiVariant"
+    private static let preferredEmojiGenderDefaultsKey = "cotabbyPreferredEmojiGender"
     private static let autoAcceptTrailingPunctuationDefaultsKey = "cotabbyAutoAcceptTrailingPunctuation"
     private static let acceptanceKeyCodeDefaultsKey = "cotabbyAcceptanceKeyCode"
     private static let acceptanceKeyModifiersDefaultsKey = "cotabbyAcceptanceKeyModifiers"
@@ -90,7 +92,6 @@ final class SuggestionSettingsModel: ObservableObject {
     private static let globalToggleKeyModifiersDefaultsKey = "cotabbyGlobalToggleKeyModifiers"
     private static let globalToggleKeyLabelDefaultsKey = "cotabbyGlobalToggleKeyLabel"
     private static let acceptanceGranularityDefaultsKey = "cotabbyAcceptanceGranularity"
-    private static let staleCompletionSalvageEnabledDefaultsKey = "cotabbyStaleCompletionSalvageEnabled"
 
     static let defaultAcceptanceKeyCode: CGKeyCode = 48
     static let defaultAcceptanceKeyLabel = "Tab"
@@ -209,6 +210,12 @@ final class SuggestionSettingsModel: ObservableObject {
 
         let resolvedMultiLineEnabled = userDefaults.object(forKey: Self.multiLineEnabledDefaultsKey) as? Bool ?? false
         let resolvedEmojiPickerEnabled = userDefaults.object(forKey: Self.emojiPickerEnabledDefaultsKey) as? Bool ?? true
+        let resolvedPreferredEmojiSkinTone = userDefaults.string(forKey: Self.preferredEmojiSkinToneDefaultsKey)
+            .flatMap(EmojiSkinTone.init(rawValue:)) ?? .neutral
+        let resolvedIncludeNeutralEmojiVariant =
+            userDefaults.object(forKey: Self.includeNeutralEmojiVariantDefaultsKey) as? Bool ?? false
+        let resolvedPreferredEmojiGender = userDefaults.string(forKey: Self.preferredEmojiGenderDefaultsKey)
+            .flatMap(EmojiGender.init(rawValue:)) ?? .neutral
         let resolvedAutoAcceptTrailingPunctuation =
             userDefaults.object(forKey: Self.autoAcceptTrailingPunctuationDefaultsKey) as? Bool ?? true
 
@@ -252,10 +259,6 @@ final class SuggestionSettingsModel: ObservableObject {
             .string(forKey: Self.acceptanceGranularityDefaultsKey)
             .flatMap(AcceptanceGranularity.init(rawValue:))
             ?? .word
-        // Hidden experimental flag: defaults to off so the salvage path stays opt-in per machine.
-        let resolvedStaleCompletionSalvageEnabled =
-            userDefaults.object(forKey: Self.staleCompletionSalvageEnabledDefaultsKey) as? Bool ?? false
-
         isGloballyEnabled = resolvedGloballyEnabled
         disabledAppRules = resolvedDisabledAppRules
         showIndicator = resolvedShowIndicator
@@ -275,6 +278,9 @@ final class SuggestionSettingsModel: ObservableObject {
         focusPollIntervalMilliseconds = resolvedFocusPollIntervalMilliseconds
         isMultiLineEnabled = resolvedMultiLineEnabled
         isEmojiPickerEnabled = resolvedEmojiPickerEnabled
+        preferredEmojiSkinTone = resolvedPreferredEmojiSkinTone
+        includeNeutralEmojiVariant = resolvedIncludeNeutralEmojiVariant
+        preferredEmojiGender = resolvedPreferredEmojiGender
         autoAcceptTrailingPunctuation = resolvedAutoAcceptTrailingPunctuation
         acceptanceKeyCode = resolvedAcceptanceKeyCode
         acceptanceKeyModifiers = resolvedAcceptanceKeyModifiers
@@ -286,7 +292,6 @@ final class SuggestionSettingsModel: ObservableObject {
         globalToggleKeyModifiers = resolvedGlobalToggleKeyModifiers
         globalToggleKeyLabel = resolvedGlobalToggleKeyLabel
         acceptanceGranularity = resolvedAcceptanceGranularity
-        isStaleCompletionSalvageEnabled = resolvedStaleCompletionSalvageEnabled
 
         userDefaults.set(resolvedGloballyEnabled, forKey: Self.isGloballyEnabledDefaultsKey)
         persistDisabledAppRules(resolvedDisabledAppRules)
@@ -307,6 +312,9 @@ final class SuggestionSettingsModel: ObservableObject {
         userDefaults.set(resolvedFocusPollIntervalMilliseconds, forKey: Self.focusPollIntervalMillisecondsDefaultsKey)
         userDefaults.set(resolvedMultiLineEnabled, forKey: Self.multiLineEnabledDefaultsKey)
         userDefaults.set(resolvedEmojiPickerEnabled, forKey: Self.emojiPickerEnabledDefaultsKey)
+        userDefaults.set(resolvedPreferredEmojiSkinTone.rawValue, forKey: Self.preferredEmojiSkinToneDefaultsKey)
+        userDefaults.set(resolvedIncludeNeutralEmojiVariant, forKey: Self.includeNeutralEmojiVariantDefaultsKey)
+        userDefaults.set(resolvedPreferredEmojiGender.rawValue, forKey: Self.preferredEmojiGenderDefaultsKey)
         userDefaults.set(resolvedAutoAcceptTrailingPunctuation, forKey: Self.autoAcceptTrailingPunctuationDefaultsKey)
         userDefaults.set(Int(resolvedAcceptanceKeyCode), forKey: Self.acceptanceKeyCodeDefaultsKey)
         userDefaults.set(Int(resolvedAcceptanceKeyModifiers.rawValue), forKey: Self.acceptanceKeyModifiersDefaultsKey)
@@ -324,7 +332,6 @@ final class SuggestionSettingsModel: ObservableObject {
         )
         userDefaults.set(resolvedGlobalToggleKeyLabel, forKey: Self.globalToggleKeyLabelDefaultsKey)
         userDefaults.set(resolvedAcceptanceGranularity.rawValue, forKey: Self.acceptanceGranularityDefaultsKey)
-        userDefaults.set(resolvedStaleCompletionSalvageEnabled, forKey: Self.staleCompletionSalvageEnabledDefaultsKey)
 
         // The custom indicator icon feature was removed; scrub any previously-persisted PNG so
         // users who picked one in an older build get the default cat icon back automatically.
@@ -352,8 +359,7 @@ final class SuggestionSettingsModel: ObservableObject {
             autoAcceptTrailingPunctuation: autoAcceptTrailingPunctuation,
             isFastModeEnabled: isFastModeEnabled,
             mirrorPreference: mirrorPreference,
-            acceptanceGranularity: acceptanceGranularity,
-            isStaleCompletionSalvageEnabled: isStaleCompletionSalvageEnabled
+            acceptanceGranularity: acceptanceGranularity
         )
     }
 
@@ -427,12 +433,31 @@ final class SuggestionSettingsModel: ObservableObject {
         userDefaults.set(enabled, forKey: Self.emojiPickerEnabledDefaultsKey)
     }
 
-    func setStaleCompletionSalvageEnabled(_ enabled: Bool) {
-        guard isStaleCompletionSalvageEnabled != enabled else {
-            return
-        }
-        isStaleCompletionSalvageEnabled = enabled
-        userDefaults.set(enabled, forKey: Self.staleCompletionSalvageEnabledDefaultsKey)
+    func setPreferredEmojiSkinTone(_ tone: EmojiSkinTone) {
+        guard preferredEmojiSkinTone != tone else { return }
+        preferredEmojiSkinTone = tone
+        userDefaults.set(tone.rawValue, forKey: Self.preferredEmojiSkinToneDefaultsKey)
+    }
+
+    func setIncludeNeutralEmojiVariant(_ included: Bool) {
+        guard includeNeutralEmojiVariant != included else { return }
+        includeNeutralEmojiVariant = included
+        userDefaults.set(included, forKey: Self.includeNeutralEmojiVariantDefaultsKey)
+    }
+
+    func setPreferredEmojiGender(_ gender: EmojiGender) {
+        guard preferredEmojiGender != gender else { return }
+        preferredEmojiGender = gender
+        userDefaults.set(gender.rawValue, forKey: Self.preferredEmojiGenderDefaultsKey)
+    }
+
+    /// Live snapshot the emoji picker's variant resolver reads at match time.
+    var emojiVariantPreferences: EmojiVariantPreferences {
+        EmojiVariantPreferences(
+            skinTone: preferredEmojiSkinTone,
+            includeNeutral: includeNeutralEmojiVariant,
+            gender: preferredEmojiGender
+        )
     }
 
     func setAutoAcceptTrailingPunctuation(_ enabled: Bool) {
@@ -920,9 +945,8 @@ extension SuggestionSettingsModel: SuggestionSettingsProviding {
         // `presentationToggles` carries the visual-pipeline knobs (clipboard, fast mode, mirror
         // preference); they share the property of "affects how/when suggestions are shown".
         //
-        // The outer CombineLatest4 is at the cap, so `$acceptanceGranularity` and
-        // `$isStaleCompletionSalvageEnabled` are layered above it via a second combiner to avoid
-        // restructuring the existing groupings.
+        // The outer CombineLatest4 is at the cap, so `$acceptanceGranularity` is layered above it via
+        // a second combiner to avoid restructuring the existing groupings.
         let primary = Publishers.CombineLatest4(
             Publishers.CombineLatest4(
                 $isGloballyEnabled,
@@ -939,8 +963,8 @@ extension SuggestionSettingsModel: SuggestionSettingsProviding {
                 $autoAcceptTrailingPunctuation
             )
         )
-        return Publishers.CombineLatest3(primary, $acceptanceGranularity, $isStaleCompletionSalvageEnabled)
-            .map { primaryTuple, granularity, staleCompletionSalvageEnabled in
+        return Publishers.CombineLatest(primary, $acceptanceGranularity)
+            .map { primaryTuple, granularity in
                 let (combinedSettings, presentationToggles, profile, timing) = primaryTuple
                 let (globallyEnabled, disabledAppRules, engine, wordCountPreset) = combinedSettings
                 let (clipboardContextEnabled, fastModeEnabled, mirrorPreference) = presentationToggles
@@ -961,8 +985,7 @@ extension SuggestionSettingsModel: SuggestionSettingsProviding {
                     autoAcceptTrailingPunctuation: autoAcceptPunctuation,
                     isFastModeEnabled: fastModeEnabled,
                     mirrorPreference: mirrorPreference,
-                    acceptanceGranularity: granularity,
-                    isStaleCompletionSalvageEnabled: staleCompletionSalvageEnabled
+                    acceptanceGranularity: granularity
                 )
             }
             .removeDuplicates()

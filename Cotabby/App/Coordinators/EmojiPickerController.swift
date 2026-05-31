@@ -18,11 +18,15 @@ import Foundation
 final class EmojiPickerController {
     private var machine = EmojiTriggerStateMachine()
     private let matcher: EmojiMatcher
-    private let panel: EmojiPickerPanelController
+    private let panel: any EmojiPickerPanelPresenting
     private let focusModel: any SuggestionFocusProviding
     private let inputMonitor: any EmojiInputIntercepting
     private let inserter: any EmojiTextInserting
     private let isEnabled: () -> Bool
+    /// Live emoji-customization preferences (skin tone / gender / neutral variant), read at match time.
+    private let emojiPreferences: () -> EmojiVariantPreferences
+    /// The accept-word key label shown as a keycap on the highlighted row; `nil` hides the hint.
+    private let acceptKeyLabel: () -> String?
 
     private var currentQuery = ""
     private var matches: [EmojiMatch] = []
@@ -47,11 +51,13 @@ final class EmojiPickerController {
 
     init(
         matcher: EmojiMatcher,
-        panel: EmojiPickerPanelController,
+        panel: any EmojiPickerPanelPresenting,
         focusModel: any SuggestionFocusProviding,
         inputMonitor: any EmojiInputIntercepting,
         inserter: any EmojiTextInserting,
-        isEnabled: @escaping () -> Bool
+        isEnabled: @escaping () -> Bool,
+        emojiPreferences: @escaping () -> EmojiVariantPreferences,
+        acceptKeyLabel: @escaping () -> String?
     ) {
         self.matcher = matcher
         self.panel = panel
@@ -59,6 +65,8 @@ final class EmojiPickerController {
         self.inputMonitor = inputMonitor
         self.inserter = inserter
         self.isEnabled = isEnabled
+        self.emojiPreferences = emojiPreferences
+        self.acceptKeyLabel = acceptKeyLabel
     }
 
     func start() {
@@ -131,11 +139,19 @@ final class EmojiPickerController {
             return .dismissExternally
         }
 
+        // Commit only on the user's configured word-accept binding (keyCode + modifiers), matched the
+        // same way the suggestion accept path matches it, so the picker stays consistent with
+        // accepting a word. Checked before the keyCode switch so a rebind wins (Tab by default), and
+        // so Return is no longer a commit key.
+        if inputMonitor.isWordAcceptKey(InputMonitorKeyEvent(keyCode: event.keyCode, flags: event.flags)) {
+            return .commitKey
+        }
+
         switch event.keyCode {
         case 53:
             return .escape
-        case 36, 76, 48:                  // Return, Keypad Enter, Tab
-            return .commitKey
+        case 36, 76:                      // Return, Keypad Enter: dismiss and pass through, never commit
+            return .dismissExternally
         case 126:
             return .navigate(.up)
         case 125:
@@ -143,7 +159,10 @@ final class EmojiPickerController {
         case 123, 124, 117:               // Left, Right, Forward-Delete: caret moved, end capture
             return .dismissExternally
         case 51:
-            return .backspace
+            // Option + Backspace deletes a whole word, which the single-character query model can't
+            // track, so treat it as a dismissal rather than a one-character backspace. (Command +
+            // Backspace is already handled by the modifier check above.)
+            return modifiers.contains(.option) ? .dismissExternally : .backspace
         default:
             break
         }
@@ -227,7 +246,7 @@ final class EmojiPickerController {
         let glyph = matches[selectedIndex].glyph
         let fallback = currentQuery.utf16.count + 1   // ":" + query
         teardownCapture()
-        replaceEmojiQuery(with: glyph, fallbackUTF16: fallback)
+        scheduleReplaceEmojiQuery(with: glyph, fallbackUTF16: fallback)
     }
 
     /// Mode B: the passed-through closing `:`. The field will hold `:query:` once the colon lands, so
@@ -238,9 +257,7 @@ final class EmojiPickerController {
         let fallback = query.utf16.count + 2   // ":" + query + ":"
         teardownCapture()
         guard let glyph else { return }   // no match: leave the literal ":query:" untouched
-        DispatchQueue.main.async { [weak self] in
-            self?.replaceEmojiQuery(with: glyph, fallbackUTF16: fallback)
-        }
+        scheduleReplaceEmojiQuery(with: glyph, fallbackUTF16: fallback)
     }
 
     private func cancelCapture() {
@@ -265,30 +282,52 @@ final class EmojiPickerController {
 
     private func refreshMatches(query: String) {
         currentQuery = query
-        matches = matcher.matches(for: query)
+        matches = EmojiVariantResolver.resolve(matcher.matches(for: query), preferences: emojiPreferences())
         selectedIndex = 0
     }
 
     private func presentPanel() {
         let caretRect = lastCaretRect ?? focusModel.snapshot.context?.caretRect ?? .zero
-        panel.show(query: currentQuery, matches: matches, selectedIndex: selectedIndex, caretRect: caretRect)
+        panel.show(
+            query: currentQuery,
+            matches: matches,
+            selectedIndex: selectedIndex,
+            caretRect: caretRect,
+            acceptKeyLabel: acceptKeyLabel()
+        )
     }
 
     private func bestGlyphForClosingColon(query: String) -> String? {
         let lowercased = query.lowercased()
-        let results = matcher.matches(for: query)
+        let results = EmojiVariantResolver.resolve(matcher.matches(for: query), preferences: emojiPreferences())
         if let exact = results.first(where: { $0.entry.aliases.contains(lowercased) }) {
             return exact.glyph
         }
         return results.first?.glyph
     }
 
+    /// Posts the delete+glyph replace on the next runloop tick. Both commit modes defer through here
+    /// so the synthetic events are never posted re-entrantly from inside the keystroke's own tap
+    /// callback (EMOJI.md §4.4, §5.5). Posting them synchronously from the observer pass was the
+    /// source of the flaky "panel vanished but no emoji landed" Enter/Tab commits; deferring also
+    /// lets the field settle before we measure the run to delete.
+    private func scheduleReplaceEmojiQuery(with glyph: String, fallbackUTF16: Int) {
+        DispatchQueue.main.async { [weak self] in
+            self?.replaceEmojiQuery(with: glyph, fallbackUTF16: fallbackUTF16)
+        }
+    }
+
     private func replaceEmojiQuery(with glyph: String, fallbackUTF16: Int) {
+        // Measure the literal run from the field and replace it. `trailingRunUTF16Length` returns nil
+        // when the field no longer ends in a `:query` run, so we fall back to the known typed length;
+        // that nil-check is what keeps a stray commit from deleting unrelated text. We deliberately do
+        // NOT force a fresh AX resolve + `focusChangeSequence` guard here: the resolve re-stamped the
+        // sequence and made the guard abort legitimate commits (the panel vanished with no emoji).
         let preceding = focusModel.snapshot.context?.precedingText ?? ""
         let deleteCount = EmojiQueryRun.trailingRunUTF16Length(in: preceding) ?? fallbackUTF16
         _ = inserter.replace(deletingUTF16Count: deleteCount, with: glyph)
-        // Let the focus pipeline re-read the field immediately so any pending suggestion uses the
-        // post-insertion text instead of the stale `:query` we just removed.
+        // Let the focus pipeline re-read the field so any pending suggestion uses the post-insertion
+        // text instead of the stale `:query` we just removed.
         focusModel.refreshNow()
     }
 
@@ -315,7 +354,8 @@ final class EmojiPickerController {
             query: currentQuery,
             matches: matches,
             selectedIndex: selectedIndex,
-            caretRect: context.caretRect
+            caretRect: context.caretRect,
+            acceptKeyLabel: acceptKeyLabel()
         )
     }
 

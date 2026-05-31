@@ -11,7 +11,7 @@ import SwiftUI
 /// the controller, so the picker works while the user keeps typing in another app. This controller is
 /// a thin AppKit shell: all selection and lifecycle logic lives in `EmojiPickerController`.
 @MainActor
-final class EmojiPickerPanelController {
+final class EmojiPickerPanelController: EmojiPickerPanelPresenting {
     /// Called with the row index when the user clicks a match.
     var onSelectIndex: ((Int) -> Void)?
 
@@ -55,10 +55,11 @@ final class EmojiPickerPanelController {
 
     /// Shows or repositions the panel for the current query and matches. Recomputes the panel frame
     /// because the match count (and therefore the height) can change between calls.
-    func show(query: String, matches: [EmojiMatch], selectedIndex: Int, caretRect: CGRect) {
+    func show(query: String, matches: [EmojiMatch], selectedIndex: Int, caretRect: CGRect, acceptKeyLabel: String?) {
         model.query = query
         model.matches = matches
         model.selectedIndex = selectedIndex
+        model.acceptKeyLabel = acceptKeyLabel
 
         let contentSize = EmojiPickerMetrics.contentSize(matchCount: matches.count)
         let visibleFrame = targetVisibleFrame(for: caretRect)

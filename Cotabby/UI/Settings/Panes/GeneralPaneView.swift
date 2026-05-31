@@ -58,8 +58,43 @@ struct GeneralPaneView: View {
                     SettingsRowLabel(
                         title: "Inline Emoji Picker",
                         description: "Type a colon and a name like :smile to pick an emoji inline, " +
-                            "then press Tab or Return to insert it."
+                            "then press your accept-word key (Tab by default) to insert it."
                     )
+                }
+            }
+
+            if suggestionSettings.isEmojiPickerEnabled {
+                Section("Emoji Customization") {
+                    Picker(selection: emojiSkinToneBinding) {
+                        ForEach(EmojiSkinTone.allCases, id: \.self) { tone in
+                            Text("\(tone.displayName)  \(tone.sampleGlyph)").tag(tone)
+                        }
+                    } label: {
+                        SettingsRowLabel(
+                            title: "Preferred Skin Tone",
+                            description: "Applied to emoji that support skin tone modifiers."
+                        )
+                    }
+
+                    Toggle(isOn: includeNeutralEmojiVariantBinding) {
+                        SettingsRowLabel(
+                            title: "Include Neutral Variant",
+                            description: "When enabled, the neutral (default) skin tone variant is included " +
+                                "alongside your preferred skin tone in emoji suggestions."
+                        )
+                    }
+
+                    Picker(selection: emojiGenderBinding) {
+                        ForEach(EmojiGender.allCases, id: \.self) { gender in
+                            Text("\(gender.displayName)  \(gender.sampleGlyph)").tag(gender)
+                        }
+                    } label: {
+                        SettingsRowLabel(
+                            title: "Preferred Gender",
+                            description: "Applies to people emoji that have separate male/female variants " +
+                                "(e.g., firefighters, doctors, artists)."
+                        )
+                    }
                 }
             }
 
@@ -194,6 +229,27 @@ struct GeneralPaneView: View {
         Binding(
             get: { suggestionSettings.isEmojiPickerEnabled },
             set: { suggestionSettings.setEmojiPickerEnabled($0) }
+        )
+    }
+
+    private var emojiSkinToneBinding: Binding<EmojiSkinTone> {
+        Binding(
+            get: { suggestionSettings.preferredEmojiSkinTone },
+            set: { suggestionSettings.setPreferredEmojiSkinTone($0) }
+        )
+    }
+
+    private var includeNeutralEmojiVariantBinding: Binding<Bool> {
+        Binding(
+            get: { suggestionSettings.includeNeutralEmojiVariant },
+            set: { suggestionSettings.setIncludeNeutralEmojiVariant($0) }
+        )
+    }
+
+    private var emojiGenderBinding: Binding<EmojiGender> {
+        Binding(
+            get: { suggestionSettings.preferredEmojiGender },
+            set: { suggestionSettings.setPreferredEmojiGender($0) }
         )
     }
 
