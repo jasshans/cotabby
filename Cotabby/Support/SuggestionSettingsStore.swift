@@ -87,6 +87,7 @@ struct SuggestionSettingsStore {
     private static let focusPollIntervalMillisecondsDefaultsKey = "cotabbyFocusPollIntervalMilliseconds"
     private static let multiLineEnabledDefaultsKey = "cotabbyMultiLineEnabled"
     private static let emojiPickerEnabledDefaultsKey = "cotabbyEmojiPickerEnabled"
+    private static let macroExpansionEnabledDefaultsKey = "cotabbyMacroExpansionEnabled"
     private static let preferredEmojiSkinToneDefaultsKey = "cotabbyPreferredEmojiSkinTone"
     private static let preferredEmojiGenderDefaultsKey = "cotabbyPreferredEmojiGender"
     private static let autoAcceptTrailingPunctuationDefaultsKey = "cotabbyAutoAcceptTrailingPunctuation"
@@ -233,6 +234,7 @@ struct SuggestionSettingsStore {
 
         let resolvedMultiLineEnabled = userDefaults.object(forKey: Self.multiLineEnabledDefaultsKey) as? Bool ?? false
         let resolvedEmojiPickerEnabled = userDefaults.object(forKey: Self.emojiPickerEnabledDefaultsKey) as? Bool ?? true
+        let resolvedMacroExpansionEnabled = userDefaults.object(forKey: Self.macroExpansionEnabledDefaultsKey) as? Bool ?? true
         let resolvedPreferredEmojiSkinTone = userDefaults.string(forKey: Self.preferredEmojiSkinToneDefaultsKey)
             .flatMap(EmojiSkinTone.init(rawValue:)) ?? .neutral
         let resolvedPreferredEmojiGender = userDefaults.string(forKey: Self.preferredEmojiGenderDefaultsKey)
@@ -308,6 +310,7 @@ struct SuggestionSettingsStore {
             focusPollIntervalMilliseconds: resolvedFocusPollIntervalMilliseconds,
             isMultiLineEnabled: resolvedMultiLineEnabled,
             isEmojiPickerEnabled: resolvedEmojiPickerEnabled,
+            isMacroExpansionEnabled: resolvedMacroExpansionEnabled,
             preferredEmojiSkinTone: resolvedPreferredEmojiSkinTone,
             preferredEmojiGender: resolvedPreferredEmojiGender,
             autoAcceptTrailingPunctuation: resolvedAutoAcceptTrailingPunctuation,
@@ -350,6 +353,7 @@ struct SuggestionSettingsStore {
         saveFocusPollIntervalMilliseconds(data.focusPollIntervalMilliseconds)
         saveMultiLineEnabled(data.isMultiLineEnabled)
         saveEmojiPickerEnabled(data.isEmojiPickerEnabled)
+        saveMacroExpansionEnabled(data.isMacroExpansionEnabled)
         savePreferredEmojiSkinTone(data.preferredEmojiSkinTone)
         savePreferredEmojiGender(data.preferredEmojiGender)
         saveAutoAcceptTrailingPunctuation(data.autoAcceptTrailingPunctuation)
@@ -496,6 +500,10 @@ struct SuggestionSettingsStore {
 
     func saveEmojiPickerEnabled(_ enabled: Bool) {
         userDefaults.set(enabled, forKey: Self.emojiPickerEnabledDefaultsKey)
+    }
+
+    func saveMacroExpansionEnabled(_ enabled: Bool) {
+        userDefaults.set(enabled, forKey: Self.macroExpansionEnabledDefaultsKey)
     }
 
     func savePreferredEmojiSkinTone(_ tone: EmojiSkinTone) {

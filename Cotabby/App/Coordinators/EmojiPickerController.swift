@@ -44,6 +44,15 @@ final class EmojiPickerController {
     private var longPauseTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
 
+    /// Whether an emoji capture is currently open. Read by `InlineCommandCoordinator` to keep the
+    /// input monitor's shared accept-tap interception in sync across the emoji and macro features.
+    var isCapturing: Bool { machine.isCapturing }
+
+    /// Invoked when capture opens or tears down, including teardown outside an `observe` pass (focus
+    /// change, long pause, click-away), so the coordinator can recompute tap interception. The
+    /// coordinator, not this controller, owns the input monitor's single interception flag.
+    var onCaptureStateChanged: (() -> Void)?
+
     /// The consume decision `observe(_:)` computed for one key, read back by `decideCaptureKey(_:)`
     /// during the same event. The key code guards against a stale decision being applied to a later
     /// key if the decider is ever called without a preceding observer pass.
@@ -81,9 +90,8 @@ final class EmojiPickerController {
     }
 
     func start() {
-        inputMonitor.emojiCaptureKeyDecider = { [weak self] keyEvent in
-            self?.decideCaptureKey(keyEvent) ?? .notHandled
-        }
+        // The accept-tap capture decider is owned by `InlineCommandCoordinator` (it is a single slot
+        // shared with the macro feature), so this controller no longer installs it here.
         panel.onSelectIndex = { [weak self] index in
             guard let self else { return }
             self.selectedIndex = index
@@ -99,7 +107,6 @@ final class EmojiPickerController {
 
     func stop() {
         cancelCapture()
-        inputMonitor.emojiCaptureKeyDecider = nil
         cancellables.removeAll()
     }
 
@@ -217,10 +224,11 @@ final class EmojiPickerController {
         }
         captureFocusSequence = context.focusChangeSequence
         lastCaretRect = context.caretRect
-        inputMonitor.setCaptureInterceptionActive(true)
         refreshMatches(query: query)
+        // A bare ":" opens with an empty query and immediately shows the user's recents/popular set.
         presentPanel()
         armLongPauseTimer()
+        onCaptureStateChanged?()
         CotabbyLogger.suggestion.debug("emoji capture opened query=\"\(query)\" matches=\(matches.count)")
     }
 
@@ -294,6 +302,7 @@ final class EmojiPickerController {
     }
 
     private func teardownCapture() {
+        let wasCapturing = machine.isCapturing
         machine.reset()
         matches = []
         selectedIndex = 0
@@ -303,8 +312,11 @@ final class EmojiPickerController {
         pendingDecision = nil
         longPauseTask?.cancel()
         longPauseTask = nil
-        inputMonitor.setCaptureInterceptionActive(false)
         panel.hide()
+        // Notify the coordinator so it drops the input monitor's interception when no capture remains.
+        if wasCapturing {
+            onCaptureStateChanged?()
+        }
     }
 
     // MARK: - Matching and presentation

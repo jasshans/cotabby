@@ -69,6 +69,15 @@ struct GeneralPaneView: View {
                         systemImage: "textformat.abc"
                     )
                 }
+
+                Toggle(isOn: macroExpansionEnabledBinding) {
+                    SettingsRowLabel(
+                        title: "Inline Macros",
+                        description: "Type / then a macro like today, 5+5=, 10km->mi, or random(1,6), " +
+                            "then press your accept-word shortcut to insert the result.",
+                        systemImage: "slash.circle"
+                    )
+                }
             }
 
             Section("Help") {
@@ -152,6 +161,13 @@ struct GeneralPaneView: View {
         Binding(
             get: { suggestionSettings.autoAcceptTrailingPunctuation },
             set: { suggestionSettings.setAutoAcceptTrailingPunctuation($0) }
+        )
+    }
+
+    private var macroExpansionEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { suggestionSettings.isMacroExpansionEnabled },
+            set: { suggestionSettings.setMacroExpansionEnabled($0) }
         )
     }
 }
