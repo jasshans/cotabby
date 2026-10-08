@@ -35,11 +35,11 @@
 	<true/>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
-	<key>SUScheduledCheckInterval</key>
-	<integer>86400</integer>
 	<key>SUFeedURL</key>
 	<string>https://github.com/jasshans/cotabby/releases/download/stable/appcast.xml</string>
-    <key>SUPublicEDKey</key>
-    <string>REPLACE_WITH_GENERATED_SPARKLE_PUBLIC_ED_KEY</string>
+	<key>SUPublicEDKey</key>
+	<string>2ebzkKv9WGFRr/nby60euezBxEWXHSbbdAdH1+XsZSE=</string>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
 </dict>
 </plist>
