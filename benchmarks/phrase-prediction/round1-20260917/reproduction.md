@@ -80,7 +80,7 @@ for root, key in ((app, 'appPatchedFileSHA256'), (native, 'nativePatchedFileSHA2
 assert hashlib.sha256((app / 'CotabbyTests/Fixtures/phrase-prediction-1337.json').read_bytes()).hexdigest() == manifest['corpusSHA256']
 workspace.mkdir(parents=True)
 document = ET.Element('Workspace', version='1.0')
-for path in (app / 'Cotabby.xcodeproj', native):
+for path in (app / 'Ghostype.xcodeproj', native):
     ET.SubElement(document, 'FileRef', location='absolute:' + str(path))
 ET.ElementTree(document).write(workspace / 'contents.xcworkspacedata', encoding='UTF-8', xml_declaration=True)
 lock = workspace / 'xcshareddata/swiftpm/Package.resolved'
@@ -97,7 +97,7 @@ The frozen CLI predates the current-main dependency-resolution fix. A first buil
 
 ```bash
 xcodebuild -resolvePackageDependencies -workspace "$WORKSPACE" \
-  -scheme Cotabby -configuration Release \
+  -scheme Ghostype -configuration Release \
   -derivedDataPath "$APP/build/DerivedData" \
   -onlyUsePackageVersionsFromResolvedFile -skipPackageUpdates
 

@@ -1,6 +1,6 @@
-# Cotabby — McHamster's Build 0.6.2.2
+# Ghostype — McHamster's Build 0.6.2.2
 
-An independent experimental build of [Cotabby](https://github.com/FuJacob/cotabby), published from [McHamster's master branch](https://github.com/mc-hamster/cotabby/tree/master). This is not an official upstream release.
+An independent experimental build of [Ghostype](https://github.com/FuJacob/cotabby), published from [McHamster's master branch](https://github.com/mc-hamster/cotabby/tree/master). This is not an official upstream release.
 
 ## Changes since McHamster 0.6.2.1
 
@@ -19,10 +19,10 @@ The checked-in experiment report compares a controlled baseline with the selecte
 ## Installation and identity
 
 - Apple Silicon, macOS 14 or later. Apple Intelligence requires compatible hardware and macOS 26 or later. No Intel build or model weights are included.
-- Download **Cotabby-McHamster-0.6.2-mchamster.2-arm64.dmg** and drag **Cotabby McHamster.app** into Applications, replacing the previous McHamster build. Quit the app first.
+- Download **Ghostype-McHamster-0.6.2-mchamster.2-arm64.dmg** and drag **Ghostype McHamster.app** into Applications, replacing the previous McHamster build. Quit the app first.
 - The app keeps `org.mchamster.cotabby`, your McHamster settings/model storage, and Jorge Miguel Casler's Developer ID team `8RN882MNR5`.
-- Upstream Cotabby remains a separate installation. Quit the other build before enabling autocomplete. Upstream Sparkle updates remain disabled; **Check for Updates** opens this fork's releases.
+- Upstream Ghostype remains a separate installation. Quit the other build before enabling autocomplete. Upstream Sparkle updates remain disabled; **Check for Updates** opens this fork's releases.
 - Screenshot/OCR processing and the new dictionary fallback remain local. The existing explicitly selected endpoint backend can receive bounded text context; this release adds no new hosted transmission.
-- Original Cotabby authorship, licensing, and third-party acknowledgements are retained.
+- Original Ghostype authorship, licensing, and third-party acknowledgements are retained.
 
 Tag: `mchamster-v0.6.2.2`. In-app version: `0.6.2-mchamster.2`. Build: `2026091702`.

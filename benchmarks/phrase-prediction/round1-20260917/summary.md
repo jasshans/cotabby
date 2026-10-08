@@ -1,4 +1,4 @@
-# Cotabby 1337 improvement round — September 17, 2026
+# Ghostype 1337 improvement round — September 17, 2026
 
 **Decision: Candidate selected by explicit report command.** This report does not modify the application.
 

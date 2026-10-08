@@ -1,6 +1,6 @@
-# Cotabby — McHamster's Build 0.6.2.3
+# Ghostype — McHamster's Build 0.6.2.3
 
-An independent experimental build of [Cotabby](https://github.com/FuJacob/cotabby), published from [McHamster's repository](https://github.com/mc-hamster/cotabby). This is not an official upstream release.
+An independent experimental build of [Ghostype](https://github.com/FuJacob/cotabby), published from [McHamster's repository](https://github.com/mc-hamster/cotabby). This is not an official upstream release.
 
 ## Changes since McHamster 0.6.2.2
 
@@ -19,9 +19,9 @@ Those replays use the production coordinator and local model with synthetic edit
 ## Installation and identity
 
 - Apple Silicon, macOS 14 or later. Apple Intelligence requires compatible hardware and macOS 26 or later. No Intel build or model weights are included.
-- Download **Cotabby-McHamster-0.6.2-mchamster.3-arm64.dmg** and drag **Cotabby McHamster.app** into Applications, replacing the previous McHamster build. Quit the app first.
+- Download **Ghostype-McHamster-0.6.2-mchamster.3-arm64.dmg** and drag **Ghostype McHamster.app** into Applications, replacing the previous McHamster build. Quit the app first.
 - The app retains `org.mchamster.cotabby`, existing McHamster settings/model storage, and Developer ID team `8RN882MNR5`.
-- Quit other Cotabby builds before enabling autocomplete. Upstream automatic updates remain disabled; **Check for Updates** opens this fork's releases.
-- Original Cotabby authorship, licensing, and third-party acknowledgements are retained.
+- Quit other Ghostype builds before enabling autocomplete. Upstream automatic updates remain disabled; **Check for Updates** opens this fork's releases.
+- Original Ghostype authorship, licensing, and third-party acknowledgements are retained.
 
 Tag: `mchamster-v0.6.2.3`. In-app version: `0.6.2-mchamster.3`. Build: `2026092401`.

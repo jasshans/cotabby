@@ -1,9 +1,9 @@
-# Contributing To Cotabby
+# Contributing To Ghostype
 
-Thanks for helping improve Cotabby. This guide is the contributor entry point for local setup,
+Thanks for helping improve Ghostype. This guide is the contributor entry point for local setup,
 validation, and codebase orientation.
 
-Cotabby is a macOS menu bar app that provides on-device inline autocomplete in other apps. The repo
+Ghostype is a macOS menu bar app that provides on-device inline autocomplete in other apps. The repo
 is split by responsibility so contributors can make small, reviewable changes without spreading
 platform-specific behavior across unrelated layers.
 
@@ -31,7 +31,7 @@ You need:
 - Xcode with Command Line Tools installed.
 - An Apple ID added to Xcode (Settings > Accounts) if you want to launch the app from the IDE. A
   free account is enough; the paid Apple Developer Program is not required for local development.
-  Contributors outside Cotabby's default development team run `scripts/dev-setup.sh` once to
+  Contributors outside Ghostype's default development team run `scripts/dev-setup.sh` once to
   configure a local override (see Local Setup).
 - SwiftLint for local lint checks. CI installs it with Homebrew when needed.
 - XcodeGen if you need to change the project structure (targets, build settings, dependencies,
@@ -41,18 +41,18 @@ Apple Silicon is strongly recommended for local model-runtime work.
 
 ## Local Setup
 
-Clone the repo and open the project. If your Apple ID is not on Cotabby's development team, run the
+Clone the repo and open the project. If your Apple ID is not on Ghostype's development team, run the
 one-time signing setup first:
 
 ```sh
-git clone https://github.com/FuJacob/Cotabby.git
-cd Cotabby
+git clone https://github.com/FuJacob/Ghostype.git
+cd Ghostype
 scripts/dev-setup.sh
 scripts/prepare_cotabby_workspace.sh
-open build/cotabby-dependencies/Cotabby.xcworkspace
+open build/cotabby-dependencies/Ghostype.xcworkspace
 ```
 
-The committed `Config/Signing.xcconfig` defaults to Cotabby's development team, which lets team
+The committed `Config/Signing.xcconfig` defaults to Ghostype's development team, which lets team
 members build immediately without Xcode modifying the generated project. `scripts/dev-setup.sh`
 writes a gitignored `Config/Signing.local.xcconfig` with a contributor's own Apple Development team
 id; that local value overrides the shared default and persists across pulls and project
@@ -61,21 +61,21 @@ Accounts (a free account is enough), then re-run the script. To set the team by 
 `Config/Signing.local.xcconfig.example` to `Config/Signing.local.xcconfig`, or pass it explicitly:
 `DEVELOPMENT_TEAM=XXXXXXXXXX scripts/dev-setup.sh`.
 
-You do not need a paid Apple Developer account to build or run Cotabby locally; a free personal
+You do not need a paid Apple Developer account to build or run Ghostype locally; a free personal
 team can sign and launch it. The paid program is only needed to distribute notarized builds.
 
-For everyday local work, use the **Cotabby Dev** scheme rather than `Cotabby`. It builds a separate
-app identity (`com.jacobfu.tabby.dev`, its own icon, auto-update disabled), so the permissions you
-grant your dev build never collide with a released copy of Cotabby you have installed, and your
+For everyday local work, use the **Ghostype Dev** scheme rather than `Ghostype`. It builds a separate
+app identity (`com.jasshans.ghostype.dev`, its own icon, auto-update disabled), so the permissions you
+grant your dev build never collide with a released copy of Ghostype you have installed, and your
 Accessibility grant survives rebuilds. See [Run](#run).
 
 ## The Xcode Project Is Generated
 
-`Cotabby.xcodeproj` is generated from `project.yml` by [XcodeGen](https://github.com/yonaskolb/XcodeGen).
+`Ghostype.xcodeproj` is generated from `project.yml` by [XcodeGen](https://github.com/yonaskolb/XcodeGen).
 It is committed to the repo; the prepared workspace supplies the pending native APIs,
 but **`project.yml` is the source of truth**.
 
-Source files under `Cotabby/` and `CotabbyTests/` are auto-discovered by folder, so adding a new
+Source files under `Ghostype/` and `GhostypeTests/` are auto-discovered by folder, so adding a new
 file (including a new test) needs no project edit — just create it and regenerate. Only structural
 changes (targets, build settings, package dependencies, scheme) require editing `project.yml`.
 
@@ -85,7 +85,7 @@ After any structural change, regenerate and commit the result:
 xcodegen generate
 ```
 
-CI runs the `XcodeGen` workflow on every PR and fails if the committed `Cotabby.xcodeproj` differs
+CI runs the `XcodeGen` workflow on every PR and fails if the committed `Ghostype.xcodeproj` differs
 from what `project.yml` produces. If that check is red, run `xcodegen generate` and commit the diff.
 Avoid hand-editing the project in Xcode without mirroring the change into `project.yml`.
 
@@ -93,16 +93,16 @@ Avoid hand-editing the project in Xcode without mirroring the change into `proje
 
 Start with these boundaries:
 
-- `Cotabby/App/`: app lifecycle, composition root, and top-level coordinators
-- `Cotabby/UI/`: SwiftUI presentation and menu/settings surfaces
-- `Cotabby/Services/`: OS integrations, async work, permissions, and runtime boundaries
-- `Cotabby/Models/`: shared value types, state snapshots, and protocol contracts
-- `Cotabby/Support/`: pure rules, prompt helpers, normalization, and low-level utilities
+- `Ghostype/App/`: app lifecycle, composition root, and top-level coordinators
+- `Ghostype/UI/`: SwiftUI presentation and menu/settings surfaces
+- `Ghostype/Services/`: OS integrations, async work, permissions, and runtime boundaries
+- `Ghostype/Models/`: shared value types, state snapshots, and protocol contracts
+- `Ghostype/Support/`: pure rules, prompt helpers, normalization, and low-level utilities
 
 Read [SOURCE_LAYOUT.md](SOURCE_LAYOUT.md) for the complete responsibility map. Swift folders do not
 create namespaces, so nested folders exist for human navigation: keep a small cohesive subsystem
 flat, and introduce a child folder only when at least two files form a stable, predictably named
-responsibility. Put a direct unit test under the matching `CotabbyTests/` responsibility whenever
+responsibility. Put a direct unit test under the matching `GhostypeTests/` responsibility whenever
 possible.
 
 If you are changing behavior, prefer this order:
@@ -120,8 +120,8 @@ For a local compile check:
 
 ```sh
 xcodebuild \
-  -workspace build/cotabby-dependencies/Cotabby.xcworkspace \
-  -scheme Cotabby \
+  -workspace build/cotabby-dependencies/Ghostype.xcworkspace \
+  -scheme Ghostype \
   -configuration Debug \
   -destination 'platform=macOS' \
   -derivedDataPath build/DerivedData \
@@ -137,11 +137,11 @@ launch the app locally.
 
 From Xcode:
 
-1. Select the **Cotabby Dev** scheme (see [Local Setup](#local-setup) for why).
+1. Select the **Ghostype Dev** scheme (see [Local Setup](#local-setup) for why).
 2. Choose your Mac as the run destination.
-3. Build and run. The dev build is named "Cotabby Dev" and has its own menu bar icon.
+3. Build and run. The dev build is named "Ghostype Dev" and has its own menu bar icon.
 4. Complete onboarding.
-5. Grant **Accessibility** and **Input Monitoring** to "Cotabby Dev" when prompted, and optionally
+5. Grant **Accessibility** and **Input Monitoring** to "Ghostype Dev" when prompted, and optionally
    **Screen Recording** for visual context. These map to the features in
    [README.md](README.md#permissions).
 6. Pick Apple Intelligence if available, or use the Open Source engine with a downloaded GGUF
@@ -153,8 +153,8 @@ switching signing identity, or when an earlier unsigned build left a stale entry
 grant again:
 
 ```sh
-tccutil reset Accessibility com.jacobfu.tabby.dev
-tccutil reset ListenEvent com.jacobfu.tabby.dev
+tccutil reset Accessibility com.jasshans.ghostype.dev
+tccutil reset ListenEvent com.jasshans.ghostype.dev
 ```
 
 Then toggle the app back on in System Settings > Privacy & Security. Avoid ad-hoc "Sign to Run
@@ -170,8 +170,8 @@ Run the unit test suite:
 
 ```sh
 xcodebuild test \
-  -workspace build/cotabby-dependencies/Cotabby.xcworkspace \
-  -scheme Cotabby \
+  -workspace build/cotabby-dependencies/Ghostype.xcworkspace \
+  -scheme Ghostype \
   -destination 'platform=macOS' \
   -derivedDataPath build/DerivedData \
   CODE_SIGNING_ALLOWED=NO
@@ -216,8 +216,8 @@ First compile the opt-in suites:
 
 ```sh
 xcodebuild build-for-testing \
-  -workspace build/cotabby-dependencies/Cotabby.xcworkspace \
-  -scheme Cotabby \
+  -workspace build/cotabby-dependencies/Ghostype.xcworkspace \
+  -scheme Ghostype \
   -configuration Release \
   -destination 'platform=macOS' \
   -derivedDataPath build/DerivedData \
@@ -226,7 +226,7 @@ xcodebuild build-for-testing \
   CODE_SIGNING_ALLOWED=NO
 ```
 
-By default the suites use the model available in Cotabby's normal runtime directory. To evaluate
+By default the suites use the model available in Ghostype's normal runtime directory. To evaluate
 a repo-local or other explicitly chosen model without changing app settings, set
 `COTABBY_EVAL_MODEL_PATH` in the generated **test process environment**. Exporting a shell variable
 before `xcodebuild` does not forward it into the app-hosted test runner. Find the generated run
@@ -236,21 +236,21 @@ file, then substitute its exact path and your model path below:
 rg --files build/DerivedData/Build/Products | rg '\.xctestrun$'
 
 # Replace the SDK/architecture filename with the one emitted by your build.
-eval_run_path='build/DerivedData/Build/Products/Cotabby_macosx27.0-arm64.xctestrun'
+eval_run_path='build/DerivedData/Build/Products/Ghostype_macosx27.0-arm64.xctestrun'
 eval_model_path='/absolute/path/to/model.gguf'
 /usr/libexec/PlistBuddy \
-  -c "Add :CotabbyTests:EnvironmentVariables:COTABBY_EVAL_MODEL_PATH string $eval_model_path" \
+  -c "Add :GhostypeTests:EnvironmentVariables:COTABBY_EVAL_MODEL_PATH string $eval_model_path" \
   "$eval_run_path"
 
 xcodebuild test-without-building \
   -xctestrun "$eval_run_path" \
   -destination 'platform=macOS' \
   -derivedDataPath build/DerivedData \
-  -only-testing:CotabbyTests/LlamaTypingSessionEvalTests
+  -only-testing:GhostypeTests/LlamaTypingSessionEvalTests
 ```
 
 Use `Set` instead of `Add` when updating an existing override. The current scheme emits xctestrun
-format 1, with `CotabbyTests.EnvironmentVariables`; if using a test plan that emits format 2,
+format 1, with `GhostypeTests.EnvironmentVariables`; if using a test plan that emits format 2,
 set the same variable in that target's `EnvironmentVariables` under `TestConfigurations` and
 `TestTargets`. Select `LlamaSuggestionEvalTests` instead to run the isolated-context suite. An
 explicit invalid model fails the evaluation; an absent default model skips it with a hint.
@@ -260,12 +260,12 @@ another run overwrites the same model's report, and compare the same model file,
 build configuration, settings, and hardware. The synthetic reference continuations are not
 exhaustive; inspect reported mismatches before treating a score change as a regression. The timing
 instrumentation stores no prompts or typed text. Eval reports contain their synthetic fixtures and
-generated suggestions; the existing `-cotabby-debug` LLM I/O log still records prompts/completions
+generated suggestions; the existing `-ghostype-debug` LLM I/O log still records prompts/completions
 as documented in [AGENTS.md](AGENTS.md). No new background writing-history collection is enabled.
 
 ### Paired CotabbyInference Changes
 
-Cotabby currently uses the pinned CotabbyInference source plus
+Ghostype currently uses the pinned CotabbyInference source plus
 `patches/cotabbyinference-upstream-pending.patch`. The plain remote package does not yet expose all the
 APIs used by the app. Prepare the matching dependency and workspace before building:
 
@@ -296,7 +296,7 @@ unrelated style rewrites into functional PRs.
 
 ## Debugging
 
-The shared Xcode scheme passes `-cotabby-debug` by default in Debug builds. This enables
+The shared Xcode scheme passes `-ghostype-debug` by default in Debug builds. This enables
 developer-only diagnostics:
 
 - **Focus debug overlay**: translucent panels showing caret geometry, element bounds, focus
@@ -306,7 +306,7 @@ developer-only diagnostics:
 - **Screenshot capture**: saves OCR debug screenshots to disk when the visual-context pipeline
   runs.
 
-To disable it, uncheck `-cotabby-debug` in the scheme's Run → Arguments tab.
+To disable it, uncheck `-ghostype-debug` in the scheme's Run → Arguments tab.
 
 ## Pull Requests
 
