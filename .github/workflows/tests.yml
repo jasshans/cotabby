@@ -1,6 +1,6 @@
 # PR-time test runner.
 #
-# Runs `xcodebuild test` against the Cotabby scheme on every PR into main and on
+# Runs `xcodebuild test` against the Ghostype scheme on every PR into main and on
 # every push to main. Fails the check on any test failure. Sibling to the
 # Build and Lint workflows; kept as a separate file so each gate has one
 # clear failure mode.
@@ -65,11 +65,11 @@ jobs:
         # RUN_FM_EVAL too, but skipping it explicitly keeps the CI intent visible.
         run: |
           xcodebuild test \
-            -workspace build/cotabby-dependencies/Cotabby.xcworkspace \
-            -scheme Cotabby \
+            -workspace build/cotabby-dependencies/Ghostype.xcworkspace \
+            -scheme Ghostype \
             -destination 'platform=macOS' \
             -derivedDataPath build/DerivedData \
-            -skip-testing:CotabbyTests/FoundationModelDriftEvalTests \
+            -skip-testing:GhostypeTests/FoundationModelDriftEvalTests \
             CODE_SIGNING_ALLOWED=NO
 
       - name: Clean build cache

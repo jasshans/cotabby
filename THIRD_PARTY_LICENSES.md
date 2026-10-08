@@ -1,20 +1,20 @@
 # Third-Party Licenses
 
-Cotabby is licensed under the GNU Affero General Public License v3.0 (see
+Ghostype is licensed under the GNU Affero General Public License v3.0 (see
 [`LICENSE`](LICENSE)). It bundles third-party software and data that keep their own
 licenses; the notices that ask to be reproduced are included below.
 
-The Swift package dependencies Cotabby links against (llama.cpp, CotabbyInference,
+The Swift package dependencies Ghostype links against (llama.cpp, CotabbyInference,
 Sparkle, swift-log, LaunchAtLogin) are credited in the in-app Acknowledgements
 (Settings → About → Acknowledgements) and in the README, each linking to its
 upstream license text. Full license texts for these packages and gemoji are also bundled in
-`Cotabby/Resources/ThirdPartyLicenses/`; provenance is recorded in its `SOURCES.md`.
+`Ghostype/Resources/ThirdPartyLicenses/`; provenance is recorded in its `SOURCES.md`.
 
 ## SymSpell
 
 The inline autocorrect feature uses a Swift port of SymSpell (Wolf Garbe's
 Symmetric Delete spelling-correction algorithm). The port lives in
-`Cotabby/Support/Spelling/SymSpell.swift`. SymSpell is distributed under the MIT License:
+`Ghostype/Support/Spelling/SymSpell.swift`. SymSpell is distributed under the MIT License:
 
 ```
 MIT License
@@ -44,7 +44,7 @@ Upstream: https://github.com/wolfgarbe/SymSpell
 
 ## Frequency dictionaries
 
-`Cotabby/Resources/frequency_dictionary_en_82_765.txt` is the English frequency
+`Ghostype/Resources/frequency_dictionary_en_82_765.txt` is the English frequency
 dictionary that ships with SymSpell. Per SymSpell, it is derived from two sources.
 
 ### Google Books Ngram data (CC BY 3.0)
@@ -82,7 +82,7 @@ full SCOWL copyright file.
 
 ### Multilingual dictionaries
 
-Cotabby also bundles the German, Spanish, French, Hebrew, Italian, and Russian
+Ghostype also bundles the German, Spanish, French, Hebrew, Italian, and Russian
 frequency dictionaries published in SymSpell's `SymSpell.FrequencyDictionary`
 folder at commit `b8b2905bde` (March 13, 2020). SymSpell generated these by
 intersecting Google Books Ngram frequencies with Hunspell word lists.
@@ -90,7 +90,7 @@ intersecting Google Books Ngram frequencies with Hunspell word lists.
 The exact source notices, applicable full license texts, upstream commits, and
 file checksums are bundled with the app under:
 
-`Cotabby/Resources/SpellingDictionaries/NOTICE.md`
+`Ghostype/Resources/SpellingDictionaries/NOTICE.md`
 
 The corresponding source word-list notices were captured from
 `wooorm/dictionaries` commit
@@ -98,5 +98,5 @@ The corresponding source word-list notices were captured from
 SymSpell published the derived multilingual files.
 
 Chinese is intentionally not bundled: SymSpell's generation notes do not identify
-the source word list and license for that file, and Cotabby's current typo gate does
+the source word list and license for that file, and Ghostype's current typo gate does
 not yet provide reliable word segmentation for languages without whitespace.

@@ -1,6 +1,6 @@
-# Cotabby — McHamster's Build 0.6.2.1
+# Ghostype — McHamster's Build 0.6.2.1
 
-An independent, experimental McHamster build of [Cotabby](https://github.com/FuJacob/cotabby), based on upstream commit `ac2699e4ab40b68cf7429b7d13d5a7206c99dbbc` (after `v0.6.2-beta`). This is not an official upstream Cotabby release.
+An independent, experimental McHamster build of [Ghostype](https://github.com/FuJacob/cotabby), based on upstream commit `ac2699e4ab40b68cf7429b7d13d5a7206c99dbbc` (after `v0.6.2-beta`). This is not an official upstream Ghostype release.
 
 ## What changed in this fork
 
@@ -15,7 +15,7 @@ The app changes originated in fork commits `fb47cb2` and `b345ced`. This release
 
 ## Separate from upstream
 
-- App: **Cotabby McHamster.app**; bundle identifier: `org.mchamster.cotabby`.
+- App: **Ghostype McHamster.app**; bundle identifier: `org.mchamster.cotabby`.
 - Signed using **Jorge Miguel Casler's Developer ID**, Apple team `8RN882MNR5`.
 - Separate preferences, Keychain service, macOS permission grants, downloaded models, and file logs. Existing upstream settings and models are not migrated automatically.
 - Upstream Sparkle updates are disabled. **Check for Updates** opens this fork's GitHub releases; updates are installed manually.
@@ -26,6 +26,6 @@ The app changes originated in fork commits `fb47cb2` and `b345ced`. This release
 
 Apple Silicon Mac, macOS 14 or later. Apple Intelligence requires compatible hardware and macOS 26 or later; other engines retain their existing requirements. This asset does not include an Intel build or model weights.
 
-Download the `Cotabby-McHamster-0.6.2-mchamster.1-arm64.dmg` asset, open it, and drag **Cotabby McHamster** into Applications. Grant Accessibility and Input Monitoring to this separately named app; grant Screen Recording only if using visual context. Quit the other Cotabby build before enabling this one: separate identities allow both to be installed, but both monitor typing and should not run autocomplete simultaneously.
+Download the `Ghostype-McHamster-0.6.2-mchamster.1-arm64.dmg` asset, open it, and drag **Ghostype McHamster** into Applications. Grant Accessibility and Input Monitoring to this separately named app; grant Screen Recording only if using visual context. Quit the other Ghostype build before enabling this one: separate identities allow both to be installed, but both monitor typing and should not run autocomplete simultaneously.
 
-Original authorship and license remain with Cotabby and its contributors; see the repository's LICENSE and acknowledgements. The upstream Homebrew cask installs upstream Cotabby, not this build.
+Original authorship and license remain with Ghostype and its contributors; see the repository's LICENSE and acknowledgements. The upstream Homebrew cask installs upstream Ghostype, not this build.

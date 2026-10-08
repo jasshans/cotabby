@@ -1,13 +1,8 @@
 // Code signing for local development.
 //
-// The shared default is Cotabby's development team so maintainers can pull main and immediately
-// run the app without Xcode writing a personal choice into the generated project.pbxproj. A
-// contributor who is not on that team overrides it once in Config/Signing.local.xcconfig
-// (gitignored). Generate that override with
-//
-//   scripts/dev-setup.sh
-//
-// or copy Config/Signing.local.xcconfig.example and fill it in by hand.
+// The shared default below is upstream's development team id, kept as a placeholder so the file
+// stays structurally valid. It is not your team: run scripts/dev-setup.sh once to write your own
+// team id into Config/Signing.local.xcconfig (gitignored), which overrides the default.
 //
 // The trailing `?` makes the include optional. Unsigned compile checks and CI still pass
 // CODE_SIGNING_ALLOWED=NO, so they do not need access to the shared team or a local override.

@@ -21,9 +21,9 @@ def main() -> None:
         parser.error(f"No Package.swift in {checkout}")
 
     root = Path(__file__).resolve().parent.parent
-    project = root / "Cotabby.xcodeproj"
+    project = root / "Ghostype.xcodeproj"
     if not project.is_dir():
-        parser.error("Generate Cotabby.xcodeproj with XcodeGen first")
+        parser.error("Generate Ghostype.xcodeproj with XcodeGen first")
 
     destination = args.output.resolve() if args.output else root / "build" / "CotabbyDevelopment.xcworkspace"
     destination.mkdir(parents=True, exist_ok=True)

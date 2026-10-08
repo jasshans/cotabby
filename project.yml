@@ -1,6 +1,6 @@
-name: Cotabby
+name: Ghostype
 options:
-  bundleIdPrefix: com.jacobfu
+  bundleIdPrefix: com.jasshans
   defaultConfig: Release
   deploymentTarget:
     macOS: "14.0"
@@ -85,7 +85,7 @@ settings:
       MTL_ENABLE_DEBUG_INFO: NO
       SWIFT_COMPILATION_MODE: wholemodule
 # Signing lives in xcconfig files, not the generated project. `Config/Signing.xcconfig` (committed)
-# supplies Cotabby's team as the maintainer-friendly default and optionally includes the gitignored
+# supplies Ghostype's team as the maintainer-friendly default and optionally includes the gitignored
 # `Config/Signing.local.xcconfig` that `scripts/dev-setup.sh` writes for contributors on another
 # team. It sits in a subdirectory on purpose: a root-level config file makes XcodeGen name a group
 # after the checkout directory, which drifts between clones and CI. DEVELOPMENT_TEAM must also stay
@@ -94,16 +94,16 @@ settings:
 configFiles:
   Debug: Config/Signing.xcconfig
   Release: Config/Signing.xcconfig
-# Shared application target body. `Cotabby` (prod) and `Cotabby Dev` both build the same sources
+# Shared application target body. `Ghostype` (prod) and `Ghostype Dev` both build the same sources
 # from this template and differ only in identity-bearing settings below, so the dev build can hold
 # its own Accessibility/TCC grant without ever clobbering the released app's.
 targetTemplates:
-  CotabbyApp:
+  GhostypeApp:
     type: application
     platform: macOS
     deploymentTarget: "14.0"
     sources:
-      - path: Cotabby
+      - path: Ghostype
       - path: LICENSE
         buildPhase: resources
       - path: THIRD_PARTY_LICENSES.md
@@ -133,18 +133,17 @@ targetTemplates:
         ENABLE_PREVIEWS: YES
         ENABLE_USER_SELECTED_FILES: readonly
         GENERATE_INFOPLIST_FILE: NO
-        INFOPLIST_FILE: CotabbyInfo.plist
+        INFOPLIST_FILE: GhostypeInfo.plist
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
         LD_RUNPATH_SEARCH_PATHS:
           - $(inherited)
           - "@executable_path/../Frameworks"
-        MARKETING_VERSION: "1.0"
-        # PRODUCT_NAME follows the target name, so the prod target ships "Cotabby.app" while the dev
-        # target ships "Cotabby Dev.app" — two products that can coexist in /Applications, each with
+        MARKETING_VERSION: "0.1.0"
+        # PRODUCT_NAME follows the target name, so the prod target ships "Ghostype.app" while the dev
+        # target ships "Ghostype Dev.app" — two products that can coexist in /Applications, each with
         # its own row in System Settings > Privacy. The per-target bundle identifier is set below.
         PRODUCT_NAME: $(TARGET_NAME)
         REGISTER_APP_GROUPS: YES
-        SPARKLE_PUBLIC_ED_KEY: efJeZNfUISOs6npbxI2MLLe7sBB5tT/sVnTk9t/qBSY=
         STRING_CATALOG_GENERATE_SYMBOLS: YES
         SWIFT_APPROACHABLE_CONCURRENCY: YES
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
@@ -153,39 +152,39 @@ targetTemplates:
         SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
         SWIFT_VERSION: "5.0"
 targets:
-  Cotabby:
+  Ghostype:
     templates:
-      - CotabbyApp
+      - GhostypeApp
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.jacobfu.tabby
+        PRODUCT_BUNDLE_IDENTIFIER: com.jasshans.ghostype
   # Local development build. Distinct bundle identifier + product name means a separate, stable
   # TCC identity (Accessibility, Input Monitoring, Screen Recording survive rebuilds), the dev app
-  # icon makes it visually distinct, and the COTABBY_DEV compilation condition disables Sparkle so
+  # icon makes it visually distinct, and the GHOSTYPE_DEV compilation condition disables Sparkle so
   # the prod appcast never replaces it.
-  "Cotabby Dev":
+  "Ghostype Dev":
     templates:
-      - CotabbyApp
+      - GhostypeApp
     settings:
       base:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIconDev
         # Overridable so a contributor whose personal team rejects the shared id can set their own
-        # COTABBY_DEV_BUNDLE_ID in Signing.local.xcconfig; defaults to the canonical dev identity.
-        PRODUCT_BUNDLE_IDENTIFIER: "$(COTABBY_DEV_BUNDLE_ID:default=com.jacobfu.tabby.dev)"
-        # Keep this under `base:` so COTABBY_DEV is defined in EVERY configuration, Release included.
+        # GHOSTYPE_DEV_BUNDLE_ID in Signing.local.xcconfig; defaults to the canonical dev identity.
+        PRODUCT_BUNDLE_IDENTIFIER: "$(GHOSTYPE_DEV_BUNDLE_ID:default=com.jasshans.ghostype.dev)"
+        # Keep this under `base:` so GHOSTYPE_DEV is defined in EVERY configuration, Release included.
         # Do not scope it to `configs: Debug:`. A Release-config dev build (the scheme's Profile and
         # Archive actions) must still compile Sparkle out; otherwise it could pull the prod appcast
         # and replace itself with the released bundle, the exact identity collapse this target exists
         # to prevent.
-        SWIFT_ACTIVE_COMPILATION_CONDITIONS: COTABBY_DEV $(inherited)
-  CotabbyTests:
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: GHOSTYPE_DEV $(inherited)
+  GhostypeTests:
     type: bundle.unit-test
     platform: macOS
     deploymentTarget: "14.0"
     sources:
-      - path: CotabbyTests
+      - path: GhostypeTests
     dependencies:
-      - target: Cotabby
+      - target: Ghostype
     settings:
       base:
         BUNDLE_LOADER: $(TEST_HOST)
@@ -198,27 +197,27 @@ targets:
           - "@executable_path/../Frameworks"
           - "@loader_path/../Frameworks"
         MACOSX_DEPLOYMENT_TARGET: "14.0"
-        PRODUCT_BUNDLE_IDENTIFIER: com.jacobfu.tabby.CotabbyTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.jasshans.ghostype.GhostypeTests
         PRODUCT_MODULE_NAME: $(TARGET_NAME)
         PRODUCT_NAME: $(TARGET_NAME)
         SDKROOT: macosx
         SWIFT_OBJC_INTEROP_MODE: objcxx
         SWIFT_VERSION: "5.0"
-        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Cotabby.app/Contents/MacOS/Cotabby
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Ghostype.app/Contents/MacOS/Ghostype
 schemes:
-  Cotabby:
+  Ghostype:
     build:
       targets:
-        Cotabby: all
+        Ghostype: all
     run:
       config: Debug
       commandLineArguments:
-        -cotabby-debug: true
+        -ghostype-debug: true
     test:
       config: Debug
       gatherCoverageData: false
       targets:
-        - CotabbyTests
+        - GhostypeTests
     profile:
       config: Release
     analyze:
@@ -226,18 +225,18 @@ schemes:
     archive:
       config: Release
   # Daily-driver scheme. Builds the dev-identity target so running from Xcode never touches the
-  # released app's permissions. No test action here: CotabbyTests is bound to the prod `Cotabby`
-  # target (its TEST_HOST points at "Cotabby.app"), so tests continue to run from the Cotabby scheme.
-  "Cotabby Dev":
+  # released app's permissions. No test action here: GhostypeTests is bound to the prod `Ghostype`
+  # target (its TEST_HOST points at "Ghostype.app"), so tests continue to run from the Ghostype scheme.
+  "Ghostype Dev":
     build:
       targets:
-        "Cotabby Dev": all
+        "Ghostype Dev": all
     run:
       config: Debug
       commandLineArguments:
-        -cotabby-debug: true
+        -ghostype-debug: true
     # Profile/Archive intentionally stay on Release for representative optimized timings. Versus a
-    # prod Release build the only difference is COTABBY_DEV (Sparkle compiled out), which is not on
+    # prod Release build the only difference is GHOSTYPE_DEV (Sparkle compiled out), which is not on
     # any hot path, so dev profiling stays representative while the artifact is never shippable.
     profile:
       config: Release

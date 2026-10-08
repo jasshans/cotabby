@@ -1,0 +1,93 @@
+import XCTest
+@testable import Ghostype
+
+/// Pure-function tests for the memory phrase extractor. The contract: normalization folds case
+/// and punctuation so repeated wording accumulates under one key; n-grams are bounded in length
+/// and count so one long paste cannot flood the database; and scoring rewards net acceptance
+/// while letting stale wording decay away.
+final class MemoryPhraseExtractorTests: XCTestCase {
+
+    // MARK: - Extraction
+
+    func test_normalizesCaseAndEdgePunctuation() {
+        let phrases = MemoryPhraseExtractor.phrases(from: "Hello, hello! HELLO.")
+        XCTAssertEqual(phrases, ["hello"])
+    }
+
+    func test_extractsUniBiAndTrigrams() {
+        let phrases = MemoryPhraseExtractor.phrases(from: "the quick brown fox")
+        // "the" and "fox" are too short to be single-word signal, but survive in longer n-grams.
+        XCTAssertTrue(phrases.contains("quick"))
+        XCTAssertTrue(phrases.contains("brown"))
+        XCTAssertFalse(phrases.contains("the"))
+        XCTAssertTrue(phrases.contains("the quick"))
+        XCTAssertTrue(phrases.contains("quick brown"))
+        XCTAssertTrue(phrases.contains("the quick brown"))
+        XCTAssertFalse(phrases.contains("the quick brown fox"))
+    }
+
+    func test_dropsNumericSingleWords() {
+        let phrases = MemoryPhraseExtractor.phrases(from: "meeting in 2026")
+        XCTAssertFalse(phrases.contains("2026"))
+        XCTAssertTrue(phrases.contains("meeting"))
+    }
+
+    func test_emptyAndBlankTextYieldsNothing() {
+        XCTAssertTrue(MemoryPhraseExtractor.phrases(from: "").isEmpty)
+        XCTAssertTrue(MemoryPhraseExtractor.phrases(from: "   \n … ").isEmpty)
+    }
+
+    func test_capsPhrasesPerEvent() {
+        let text = (0..<200).map { "word\($0)" }.joined(separator: " ")
+        let phrases = MemoryPhraseExtractor.phrases(from: text)
+        XCTAssertEqual(phrases.count, MemoryPhraseExtractor.maxPhrasesPerEvent)
+    }
+
+    func test_longPhrasesAreDropped() {
+        let longWord = String(repeating: "a", count: MemoryPhraseExtractor.maxPhraseCharacters + 1)
+        let phrases = MemoryPhraseExtractor.phrases(from: "ok \(longWord)")
+        XCTAssertFalse(phrases.contains(longWord))
+    }
+
+    // MARK: - Scoring
+
+    func test_scoreIsNetEvidence() {
+        let now = Date()
+        XCTAssertEqual(
+            MemoryPhraseExtractor.score(acceptCount: 4, rejectCount: 1, lastUsed: now, now: now),
+            3.0,
+            accuracy: 1e-9
+        )
+    }
+
+    func test_scoreIsZeroWithoutNetPositiveEvidence() {
+        let now = Date()
+        XCTAssertEqual(
+            MemoryPhraseExtractor.score(acceptCount: 1, rejectCount: 1, lastUsed: now, now: now), 0
+        )
+        XCTAssertEqual(
+            MemoryPhraseExtractor.score(acceptCount: 0, rejectCount: 3, lastUsed: now, now: now), 0
+        )
+    }
+
+    func test_scoreDecaysWithThirtyDayHalfLife() {
+        let now = Date()
+        let thirtyDaysAgo = now.addingTimeInterval(-30 * 86_400)
+        XCTAssertEqual(
+            MemoryPhraseExtractor.score(acceptCount: 4, rejectCount: 0, lastUsed: thirtyDaysAgo, now: now),
+            2.0,
+            accuracy: 1e-9
+        )
+    }
+
+    // MARK: - Hashing
+
+    func test_phraseHashIsStableHex() {
+        let first = MemoryPhraseExtractor.phraseHash("kind regards")
+        let second = MemoryPhraseExtractor.phraseHash("kind regards")
+        XCTAssertEqual(first, second)
+        XCTAssertEqual(first.count, 64)
+        XCTAssertTrue(first.allSatisfy(\.isHexDigit))
+        XCTAssertNotEqual(first, MemoryPhraseExtractor.phraseHash("kind regard"))
+    }
+}

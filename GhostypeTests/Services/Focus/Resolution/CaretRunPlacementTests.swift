@@ -1,0 +1,403 @@
+import CoreGraphics
+import XCTest
+@testable import Ghostype
+
+/// Locks the caret-to-text-run mapping used by the child-run geometry path (Gmail/Outlook-class
+/// editors). The mapping must be alignment-based: Chromium parent values separate blocks with
+/// newlines (and sometimes nothing at all) that the run texts do not contain, so cumulative-length
+/// math drifts the caret into the wrong run — one visual line per unaccounted character. Real
+/// captured values also mix non-breaking and plain spaces and fuse adjacent blocks into clumps
+/// like "i'mhi", which is what the boundary rule and the windowed second pass defend against.
+@MainActor
+final class CaretRunPlacementTests: XCTestCase {
+    private typealias Placement = AXTextGeometryResolver.CaretRunPlacement
+
+    private func placement(
+        runs: [String],
+        parent: String,
+        caret: Int
+    ) -> Placement? {
+        AXTextGeometryResolver.caretRunPlacement(
+            runTexts: runs,
+            parentText: parent,
+            caretOffset: caret
+        )
+    }
+
+    func test_placement_newlineSeparatorsDoNotDriftTheCaretIntoLaterRuns() {
+        // Caret at the start of "bb" (offset 3, past "aa\n"). Cumulative math would land it
+        // mid-"bb" because the separator newline inflates the offset; alignment must not.
+        let result = placement(runs: ["aa", "bb"], parent: "aa\nbb", caret: 3)
+
+        XCTAssertEqual(result, Placement(runIndex: 1, fraction: 0, mode: .aligned))
+    }
+
+    func test_placement_multipleParagraphSeparatorsStayExact() {
+        // End of the last paragraph after several separators — the historical "ghost lands four
+        // lines below" shape.
+        let parent = "first line\nsecond line\nthird line"
+        let caret = (parent as NSString).length
+        let result = placement(
+            runs: ["first line", "second line", "third line"],
+            parent: parent,
+            caret: caret
+        )
+
+        XCTAssertEqual(result, Placement(runIndex: 2, fraction: 1, mode: .aligned))
+    }
+
+    func test_placement_midRunCaretProducesProportionalFraction() {
+        let result = placement(runs: ["aaaa", "bbbb"], parent: "aaaa\nbbbb", caret: 7)
+
+        XCTAssertEqual(result?.runIndex, 1)
+        XCTAssertEqual(result?.fraction ?? -1, 0.5, accuracy: 0.001)
+    }
+
+    func test_placement_caretInBlankLineGapSnapsToNearestRenderedEdge() {
+        // Caret on a blank line between paragraphs ("aa\n|\nbb"): equidistant from both runs,
+        // which snaps to the previous run's trailing edge — at most one line from the truth,
+        // which text alone cannot resolve.
+        let result = placement(runs: ["aa", "bb"], parent: "aa\n\nbb", caret: 3)
+
+        XCTAssertEqual(result, Placement(runIndex: 0, fraction: 1, mode: .aligned))
+    }
+
+    func test_placement_collapsedBlankParentStaysExact() {
+        // Hosts that collapse blank lines emit a parent value with single separators; alignment
+        // is indifferent to how many visual blanks the separators hide.
+        let result = placement(runs: ["aa", "bb"], parent: "aa\nbb", caret: 5)
+
+        XCTAssertEqual(result, Placement(runIndex: 1, fraction: 1, mode: .aligned))
+    }
+
+    func test_placement_caretOffsetBeyondParentClampsToEnd() {
+        let result = placement(runs: ["aa", "bb"], parent: "aa\nbb", caret: 99)
+
+        XCTAssertEqual(result?.runIndex, 1)
+        XCTAssertEqual(result?.fraction, 1)
+    }
+
+    // MARK: - Flattened-value hardening
+
+    func test_placement_nonBreakingSpacesMatchPlainSpaces() {
+        // Hosts mix NBSP and plain spaces between the parent value and run texts; matching must
+        // survive both directions.
+        let nbspRun = placement(runs: ["aa", "\u{00A0}bb"], parent: "aa\n bb", caret: 5)
+        XCTAssertEqual(nbspRun?.runIndex, 1)
+        XCTAssertEqual(nbspRun?.mode, .aligned)
+
+        let nbspParent = placement(runs: ["aa", "bb"], parent: "aa\u{00A0}bb", caret: 3)
+        XCTAssertEqual(nbspParent, Placement(runIndex: 1, fraction: 0, mode: .aligned))
+    }
+
+    func test_placement_shortRunDoesNotAnchorInsideFusedClump() {
+        // Captured Gmail values fuse adjacent blocks with no separator ("i'm"+"hi" → "i'mhi").
+        // The boundary rule must reject "hi" inside the clump, and the windowed second pass must
+        // then recover both fused runs between the boundary-clean anchors.
+        let parent = "i'mhi echo"
+        let result = placement(runs: ["i'm", "hi", "echo"], parent: parent, caret: 4)
+
+        XCTAssertEqual(result?.runIndex, 1)
+        XCTAssertEqual(result?.fraction ?? -1, 0.5, accuracy: 0.001)
+        XCTAssertEqual(result?.mode, .aligned)
+    }
+
+    func test_placement_standaloneRunPreferredOverFusedOccurrence() {
+        // "hi" occurs fused at the start and standalone later; the anchor must be the standalone
+        // occurrence, not the clump.
+        let parent = "i'mhi went\nhi"
+        let caret = (parent as NSString).length
+        let result = placement(runs: ["i'm", "hi went", "hi"], parent: parent, caret: caret)
+
+        XCTAssertEqual(result, Placement(runIndex: 2, fraction: 1, mode: .aligned))
+    }
+
+    func test_placement_unanchorableRunIsSkippedAndCaretMapsAgainstTheRest() {
+        // One run's text is absent from the parent value entirely; the others still anchor and
+        // the caret maps against them (partial alignment), not the legacy walk.
+        let result = placement(runs: ["zz", "bb"], parent: "aa\nbb", caret: 4)
+
+        XCTAssertEqual(result?.runIndex, 1)
+        XCTAssertEqual(result?.mode, .partiallyAligned)
+    }
+
+    func test_placement_nothingAnchorableFallsBackToCumulativeWalk() {
+        let result = placement(runs: ["zz", "qq"], parent: "aa\nbb", caret: 1)
+
+        XCTAssertEqual(result, Placement(runIndex: 0, fraction: 0.5, mode: .legacyCumulative))
+    }
+
+    func test_placement_emptyRunListReturnsNil() {
+        XCTAssertNil(placement(runs: [], parent: "aa", caret: 1))
+    }
+
+    // MARK: - Proportional-frame safety
+
+    func test_proportionalPlacement_acceptsPlausibleSingleLineRun() {
+        XCTAssertTrue(
+            AXTextGeometryResolver.canUseProportionalCaretPlacement(
+                text: "A short line of text",
+                frame: CGRect(x: 0, y: 0, width: 240, height: 20)
+            )
+        )
+    }
+
+    func test_proportionalPlacement_acceptsLongWideSingleLineRun() {
+        // Gmail-style hosts expose each visual line separately. A long run is still trustworthy
+        // when its frame is wide enough for that text; tightening Claude detection must preserve
+        // this fast measured-geometry path.
+        XCTAssertTrue(
+            AXTextGeometryResolver.canUseProportionalCaretPlacement(
+                text: "i want to know if there is a way to get the points i lost today",
+                frame: CGRect(x: 0, y: 0, width: 600, height: 20)
+            )
+        )
+    }
+
+    func test_proportionalPlacement_rejectsClaudeWrappedUnionFrame() {
+        // Captured from Claude Desktop: one AXStaticText leaf contains the full two-line prompt,
+        // while its 562x43 frame is the union of both visual lines. Treating this as one line put
+        // the caret at the rectangle's right edge and wrapped the ghost over line two.
+        let text = "What should I be thinking about my next project or hobby."
+            + "I should consider something different"
+
+        XCTAssertFalse(
+            AXTextGeometryResolver.canUseProportionalCaretPlacement(
+                text: text,
+                frame: CGRect(x: 589, y: 455, width: 562, height: 43)
+            )
+        )
+    }
+
+    func test_proportionalPlacement_rejectsWiderClaudeWrappedUnionFrame() {
+        // A later live capture widened the same editor but still exposed one union frame. The
+        // classifier must not become permissive merely because the prompt box grew horizontally.
+        let text = "What is this doing It's a tool that helps you write code and plan upgrades. "
+            + "This should be aligning "
+
+        XCTAssertFalse(
+            AXTextGeometryResolver.canUseProportionalCaretPlacement(
+                text: text,
+                frame: CGRect(x: 589, y: 455, width: 635, height: 43)
+            )
+        )
+    }
+
+    func test_proportionalPlacement_rejectsExplicitMultilineRun() {
+        XCTAssertFalse(
+            AXTextGeometryResolver.canUseProportionalCaretPlacement(
+                text: "first\nsecond",
+                frame: CGRect(x: 0, y: 0, width: 240, height: 40)
+            )
+        )
+    }
+
+    /// Degenerate runs never qualify: there is nothing to place proportionally, and a NaN or empty
+    /// frame would feed garbage coordinates into the overlay.
+    func test_proportionalPlacement_rejectsDegenerateRuns() {
+        let cases: [(text: String, frame: CGRect, label: String)] = [
+            ("", CGRect(x: 0, y: 0, width: 240, height: 20), "empty text"),
+            ("hello", .zero, "empty frame"),
+            ("hello", CGRect(x: 0, y: 0, width: 240, height: 0), "zero-height frame"),
+            ("hello", CGRect(x: CGFloat.nan, y: 0, width: 240, height: 20), "non-finite frame")
+        ]
+
+        for testCase in cases {
+            XCTAssertFalse(
+                AXTextGeometryResolver.canUseProportionalCaretPlacement(text: testCase.text, frame: testCase.frame),
+                testCase.label
+            )
+        }
+    }
+
+    func test_wrappedRunCharacterBoundsAnchorAtTheTrailingEdge() {
+        let characterFrame = CGRect(x: 610, y: 490, width: 7, height: 21)
+
+        XCTAssertEqual(
+            AXTextGeometryResolver.caretRect(afterCharacterFrame: characterFrame),
+            CGRect(x: 617, y: 490, width: 2, height: 21)
+        )
+    }
+
+    // MARK: - Field regression (captured Gmail value, 2026-06-11)
+
+    /// Verbatim shape captured from a real Gmail compose via the llm-io stream: the parent value
+    /// flattens visual lines with single spaces (or none), and the run texts are the individual
+    /// rendered lines. The caret was at the end, on the last short "hi" line; every earlier
+    /// mapping placed it lines away. This is the exact data the alignment must survive.
+    func test_placement_capturedGmailFlatValueMapsCaretToItsRealLine() {
+        let runs = [
+            "hi how's",
+            "i want to know if there is a way to get the points i lost it 'secho the quick brown fox is",
+            " hi how's it",
+            "hi",
+            "i wanted to",
+            "hi"
+        ]
+        let parent = "hi how's i want to know if there is a way to get the points i lost it 'secho "
+            + "the quick brown fox is hi how's it hi i wanted to hi"
+        let caret = (parent as NSString).length
+
+        let atEnd = placement(runs: runs, parent: parent, caret: caret)
+        XCTAssertEqual(atEnd, Placement(runIndex: 5, fraction: 1, mode: .aligned))
+
+        // Caret at the end of the long wrapped paragraph ("...brown fox is|"): must stay on that
+        // run, not bleed into the " hi how's it" line that follows with no separator but its own
+        // leading space.
+        let foxLineEnd = (parent as NSString).range(of: "brown fox is").upperBound
+        let midDocument = placement(runs: runs, parent: parent, caret: foxLineEnd)
+        XCTAssertEqual(midDocument?.runIndex, 1)
+        XCTAssertEqual(midDocument?.fraction ?? -1, 1, accuracy: 0.001)
+        XCTAssertEqual(midDocument?.mode, .aligned)
+
+        // Caret mid-"i wanted to" (the line every stale mapping kept landing on): maps there only
+        // when the offset genuinely points there.
+        let wantedStart = (parent as NSString).range(of: " i wanted to").location + 1
+        let midWanted = placement(runs: runs, parent: parent, caret: wantedStart + 5)
+        XCTAssertEqual(midWanted?.runIndex, 4)
+        XCTAssertEqual(midWanted?.mode, .aligned)
+    }
+
+    // MARK: - Trailing-gap extrapolation (text published before run frames reflow)
+
+    func test_placement_whitespaceSpacerRunsNeverAnchor() {
+        // CodeMirror (Obsidian): every line starts with a single-space spacer run. Anchoring " "
+        // at the first space of the parent pushed every later run's search past its real
+        // location, and the caret ended up mapped against a spacer two lines away (measured
+        // live: the ghost flapped between the paragraph's first line and a line below it).
+        let runs = [" ", "First line stays above.", " ", "Second line too.", " ", "Third paragraph that is being typed"]
+        let parent = "First line stays above.\nSecond line too.\nThird paragraph that is being typed now"
+        let atEnd = placement(runs: runs, parent: parent, caret: (parent as NSString).length)
+        XCTAssertEqual(atEnd?.runIndex, 5)
+        XCTAssertEqual(atEnd?.fraction, 1)
+        XCTAssertEqual(atEnd?.trailingGapCharacters, 4)
+
+        let inside = placement(runs: runs, parent: parent, caret: 30)
+        XCTAssertEqual(inside?.runIndex, 3, "offset 30 is inside \"Second line too.\"")
+    }
+
+    func test_lineGeometryFromSingleLineRunsGivesThePitchAndBox() {
+        // Spacer and text runs at three line tops 24pt apart, 20pt tall (AX coordinates, y down).
+        func run(_ text: String, x: CGFloat, y: CGFloat, w: CGFloat) -> StaticTextRunWalkThrottle.TextRun {
+            StaticTextRunWalkThrottle.TextRun(
+                text: text, frame: CGRect(x: x, y: y, width: w, height: 20), allowsProportionalCaretPlacement: true
+            )
+        }
+        let union = StaticTextRunWalkThrottle.TextRun(
+            text: "a long wrapped paragraph", frame: CGRect(x: 612, y: 267, width: 628, height: 116),
+            allowsProportionalCaretPlacement: false
+        )
+        let runs = [run(" ", x: 608, y: 219, w: 5), run("the note", x: 612, y: 219, w: 60), run(" ", x: 608, y: 243, w: 5),
+                    run("Third line", x: 612, y: 243, w: 70), union, run(" ", x: 608, y: 387, w: 5), run("Fifth", x: 612, y: 387, w: 40)]
+        let geometry = AXTextGeometryResolver.lineGeometry(fromSingleLineRuns: runs)
+        XCTAssertEqual(geometry.pitch, 24)
+        XCTAssertEqual(geometry.boxHeight, 20)
+    }
+
+    /// Measured 2026-09-11 in Obsidian: the note's only one-line paragraphs were the second and the
+    /// fourth, a wrapped paragraph between them, and their 72pt distance became the pitch of 24pt
+    /// lines. Runs three lines apart are not a pitch; there is none until two adjacent lines show.
+    func test_lineGeometryTakesNoPitchFromRunsLinesApart() {
+        func run(_ text: String, y: CGFloat) -> StaticTextRunWalkThrottle.TextRun {
+            StaticTextRunWalkThrottle.TextRun(
+                text: text, frame: CGRect(x: 608, y: y, width: 300, height: 20), allowsProportionalCaretPlacement: true
+            )
+        }
+        let geometry = AXTextGeometryResolver.lineGeometry(fromSingleLineRuns: [run("A short second paragraph", y: 291), run("And a final short one", y: 363)])
+        XCTAssertNil(geometry.pitch)
+        XCTAssertEqual(geometry.boxHeight, 20)
+    }
+
+    /// CodeMirror (Obsidian) runs its paragraphs together in the parent value with nothing between
+    /// them: the caret's run text starts where that run was anchored, not after a line break.
+    func test_runTextBeforeCaret_startsWhereTheCaretsRunWasAnchored() {
+        let runs = ["This opening paragraph wraps.", "A short second paragraph"]
+        let parent = "This opening paragraph wraps.A short second paragraph"
+        let caret = (parent as NSString).length
+        let result = AXTextGeometryResolver.caretRunPlacementWithStart(runTexts: runs, parentText: parent, caretOffset: caret)
+        XCTAssertEqual(result?.placement, Placement(runIndex: 1, fraction: 1, mode: .aligned))
+        XCTAssertEqual(result?.runStartOffset, 29)
+        XCTAssertEqual(
+            AXTextGeometryResolver.runTextBeforeCaret(in: parent, runStartOffset: result?.runStartOffset, caretOffset: caret),
+            "A short second paragraph"
+        )
+    }
+
+    /// Typed text the run frames have not caught up with belongs to the caret's run all the same.
+    func test_runTextBeforeCaret_includesTextTypedPastTheLaggingRun() {
+        let runs = ["This opening paragraph wraps.", "A short second paragraph"]
+        let parent = "This opening paragraph wraps.A short second paragraph that"
+        let caret = (parent as NSString).length
+        let result = AXTextGeometryResolver.caretRunPlacementWithStart(runTexts: runs, parentText: parent, caretOffset: caret)
+        XCTAssertEqual(result?.placement.trailingGapCharacters, 5)
+        XCTAssertEqual(
+            AXTextGeometryResolver.runTextBeforeCaret(in: parent, runStartOffset: result?.runStartOffset, caretOffset: caret),
+            "A short second paragraph that"
+        )
+    }
+
+    func test_runTextBeforeCaret_edges() {
+        XCTAssertEqual(AXTextGeometryResolver.runTextBeforeCaret(in: "aa\nbb", runStartOffset: 3, caretOffset: 5), "bb")
+        XCTAssertEqual(AXTextGeometryResolver.runTextBeforeCaret(in: "abc", runStartOffset: 3, caretOffset: 3), "", "the caret at the run's start")
+        XCTAssertEqual(AXTextGeometryResolver.runTextBeforeCaret(in: "abc", runStartOffset: 5, caretOffset: 3), "", "the caret before the run")
+        XCTAssertEqual(AXTextGeometryResolver.runTextBeforeCaret(in: "yy\nzz", runStartOffset: nil, caretOffset: 5), "zz", "no anchor: after the line break")
+        XCTAssertEqual(AXTextGeometryResolver.runTextBeforeCaret(in: "aa\nbb cc", runStartOffset: 0, caretOffset: 8), "bb cc", "never back across a line break")
+    }
+
+    func test_paragraphTextBeforeCaretStopsAtTheLineBreak() {
+        XCTAssertEqual(AXTextGeometryResolver.paragraphTextBeforeCaret(in: "one\ntwo three\nfour", caretOffset: 9), "two t")
+        XCTAssertEqual(AXTextGeometryResolver.paragraphTextBeforeCaret(in: "single", caretOffset: 3), "sin")
+        XCTAssertEqual(AXTextGeometryResolver.paragraphTextBeforeCaret(in: "one\n", caretOffset: 4), "")
+    }
+
+    func test_placement_textGrownPastTheLastRunReportsTheTrailingGap() {
+        // The accept-time staleness signature: the parent value already contains the inserted
+        // " world" but the cached runs predate it. Parking the caret at the stale trailing edge
+        // sat a full word left of the truth; the gap count lets the caller extend the estimate by
+        // measured character widths instead.
+        let result = placement(runs: ["Hello"], parent: "Hello world", caret: 11)
+
+        XCTAssertEqual(
+            result,
+            Placement(runIndex: 0, fraction: 1, mode: .aligned, trailingGapCharacters: 6)
+        )
+    }
+
+    func test_placement_interiorGapNearThePreviousEdgeReportsTheGap() {
+        // Insert before a later block: the caret sits in the widened separator gap, nearer the
+        // run it extends; the gap is extrapolable because it stays on the same line.
+        let result = placement(runs: ["Hello", "later block"], parent: "Hello inserted\nlater block", caret: 8)
+
+        XCTAssertEqual(
+            result,
+            Placement(runIndex: 0, fraction: 1, mode: .aligned, trailingGapCharacters: 3)
+        )
+    }
+
+    func test_placement_gapSpanningALineBreakKeepsTheSnap() {
+        // A newline in the gap means the caret renders on another line entirely; linear
+        // extrapolation along X would be wrong, so the trailing-edge snap stays.
+        let result = placement(runs: ["Hello"], parent: "Hello\nworld", caret: 11)
+
+        XCTAssertEqual(
+            result,
+            Placement(runIndex: 0, fraction: 1, mode: .aligned, trailingGapCharacters: 0)
+        )
+    }
+
+    func test_placement_hugeTrailingGapRefusesExtrapolation() {
+        // A reflow-everything edit (large paste) cannot be modeled by a linear extension; fall
+        // back to the snap and let the fresh walk correct.
+        let pasted = String(repeating: "a", count: 80)
+        let result = placement(runs: ["Hello"], parent: "Hello " + pasted, caret: 6 + 80)
+
+        XCTAssertEqual(result?.trailingGapCharacters, 0)
+        XCTAssertEqual(result?.fraction ?? -1, 1, accuracy: 0.001)
+    }
+
+    func test_placement_caretInsideARunReportsNoGap() {
+        let result = placement(runs: ["Hello world"], parent: "Hello world", caret: 5)
+
+        XCTAssertEqual(result?.trailingGapCharacters, 0)
+    }
+}

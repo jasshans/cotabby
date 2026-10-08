@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an improvement to Cotabby
+about: Suggest an improvement to Ghostype
 title: "[Feature] "
 labels: enhancement
 assignees: ""

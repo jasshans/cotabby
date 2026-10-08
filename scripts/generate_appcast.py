@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Generate a Sparkle appcast entry for a notarized Cotabby DMG.
+"""Generate a Sparkle appcast entry for a Ghostype release archive.
 
-This script intentionally does not depend on Sparkle's `generate_appcast` helper because Cotabby's
+This script intentionally does not depend on Sparkle's `generate_appcast` helper because Ghostype's
 release flow is small and predictable:
-1. a notarized `Cotabby.dmg` is uploaded to GitHub Releases
+1. a `Ghostype.zip` is uploaded to GitHub Releases (floating `stable` tag)
 2. `sign_update` produces the EdDSA enclosure signature and archive length
 3. this script renders one `appcast.xml` from a checked-in template
 
@@ -24,21 +24,21 @@ import subprocess
 import sys
 
 
-DEFAULT_OWNER = "FuJacob"
-DEFAULT_REPOSITORY = "Cotabby"
+DEFAULT_OWNER = "jasshans"
+DEFAULT_REPOSITORY = "cotabby"
 # Sparkle's <releaseNotesLink> is fetched by the update alert's embedded WKWebView.
-# Point it at the dedicated slim route on the landing site rather than GitHub's
-# full release page, which pulls in GitHub's chrome and is unreadable in the small
-# alert window. Override per-environment via --release-notes-base-url.
-DEFAULT_RELEASE_NOTES_BASE_URL = "https://cotabby.app/release-notes"
+# GitHub's full release page pulls in a lot of chrome, but it is the honest
+# destination for this fork (there is no dedicated landing site). Override
+# per-environment via --release-notes-base-url.
+DEFAULT_RELEASE_NOTES_BASE_URL = "https://github.com/jasshans/cotabby/releases"
 SIGNATURE_PATTERN = re.compile(r'sparkle:edSignature="([^"]+)"\s+length="([^"]+)"')
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate Cotabby's Sparkle appcast XML.")
+    parser = argparse.ArgumentParser(description="Generate Ghostype's Sparkle appcast XML.")
     parser.add_argument("--release-version", required=True, help="Marketing version, eg. 1.0.0")
     parser.add_argument("--build-number", required=True, help="CURRENT_PROJECT_VERSION value")
-    parser.add_argument("--archive", required=True, help="Path to the notarized Cotabby.dmg")
+    parser.add_argument("--archive", required=True, help="Path to the notarized Ghostype.dmg")
     parser.add_argument(
         "--output",
         default="build/appcast.xml",
@@ -76,6 +76,19 @@ def parse_args() -> argparse.Namespace:
         "--github-repository",
         default=DEFAULT_REPOSITORY,
         help="GitHub repository name used to build release and repository URLs",
+    )
+    parser.add_argument(
+        "--release-tag",
+        default=None,
+        help=(
+            "GitHub release tag hosting the archive. Defaults to v<release-version>; "
+            "pass 'stable' for a floating release channel."
+        ),
+    )
+    parser.add_argument(
+        "--app-name",
+        default="Ghostype",
+        help="Product name used for the appcast channel title and description",
     )
     parser.add_argument(
         "--release-notes-base-url",
@@ -166,6 +179,7 @@ def sign_archive(sign_update_tool: Path, archive: Path, ed_key_file: Path | None
 
 def render_appcast(
     template_path: Path,
+    app_name: str,
     repository_url: str,
     release_page_url: str,
     archive_url: str,
@@ -178,6 +192,7 @@ def render_appcast(
     pub_date = dt.datetime.now(dt.timezone.utc).strftime("%a, %d %b %Y %H:%M:%S %z")
 
     replacements = {
+        "{{APP_NAME}}": escape_xml(app_name),
         "{{REPOSITORY_URL}}": escape_xml(repository_url),
         "{{RELEASE_PAGE_URL}}": escape_xml(release_page_url),
         "{{ARCHIVE_URL}}": escape_xml(archive_url),
@@ -217,7 +232,7 @@ def main() -> int:
     ed_signature, archive_length = sign_archive(sign_update_tool, archive, ed_key_file)
 
     repository_url = f"https://github.com/{args.github_owner}/{args.github_repository}"
-    release_tag = f"v{args.release_version}"
+    release_tag = args.release_tag or f"v{args.release_version}"
     # Strip any trailing slash from the base so the joined URL is canonical
     # regardless of how the caller wrote the flag.
     release_notes_base = args.release_notes_base_url.rstrip("/")
@@ -227,6 +242,7 @@ def main() -> int:
 
     rendered_appcast = render_appcast(
         template_path=template_path,
+        app_name=args.app_name,
         repository_url=repository_url,
         release_page_url=release_page_url,
         archive_url=archive_url,
