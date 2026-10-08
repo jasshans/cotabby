@@ -1,6 +1,6 @@
 # Automated model qualification
 
-`scripts/model_eval.py` evaluates candidate GGUFs against a baseline through Cotabby's actual
+`scripts/model_eval.py` evaluates candidate GGUFs against a baseline through Ghostype's actual
 local autocomplete pipeline. It discovers models on Hugging Face, in a directory, or acquires them from a manifest,
 then runs candidates sequentially and writes `qualification.md` and `qualification.json`.
 It does not change the catalog or the user's model/settings. No prompts or writing data are uploaded.
@@ -17,7 +17,7 @@ When neither `--models-dir` nor `--manifest` is supplied, candidate discovery ru
 ```sh
 python3 scripts/model_eval.py \
   --baseline build/models/Qwen3.5-0.8B-Base.i1-Q6_K.gguf \
-  --workspace build/cotabby-dependencies/Cotabby.xcworkspace \
+  --workspace build/cotabby-dependencies/Ghostype.xcworkspace \
   --output build/eval/model-qualification/huggingface-first
 ```
 
@@ -68,7 +68,7 @@ Prepare the pinned native workspace once using `scripts/prepare_cotabby_workspac
 python3 scripts/model_eval.py \
   --baseline build/models/Qwen3.5-0.8B-Base.i1-Q6_K.gguf \
   --models-dir build/models/candidates \
-  --workspace build/cotabby-dependencies/Cotabby.xcworkspace \
+  --workspace build/cotabby-dependencies/Ghostype.xcworkspace \
   --output build/eval/model-qualification/first-campaign
 ```
 

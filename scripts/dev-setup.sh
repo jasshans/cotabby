@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# dev-setup.sh - generate Config/Signing.local.xcconfig so you can build and run Cotabby locally.
+# dev-setup.sh - generate Config/Signing.local.xcconfig so you can build and run Ghostype locally.
 #
-# Cotabby's shared xcconfig defaults to the maintainer team so its members can build immediately.
+# Ghostype's shared xcconfig defaults to the maintainer team so its members can build immediately.
 # Contributors on another team supply their own team id once. This script detects it from an Apple
 # Development signing certificate and writes the gitignored Config/Signing.local.xcconfig, whose
 # value overrides the shared default without dirtying the generated Xcode project.
@@ -79,11 +79,11 @@ cat > "$local_xcconfig" <<EOF
 DEVELOPMENT_TEAM = $team
 
 // Optional: uncomment and set if your personal team rejects the shared dev bundle id
-// (Xcode: "Failed to register bundle identifier"). Gives the "Cotabby Dev" build its own id.
-// COTABBY_DEV_BUNDLE_ID = com.yourname.tabby.dev
+// (Xcode: "Failed to register bundle identifier"). Gives the "Ghostype Dev" build its own id.
+// GHOSTYPE_DEV_BUNDLE_ID = com.yourname.tabby.dev
 EOF
 
 echo "Wrote $local_xcconfig"
 echo "  DEVELOPMENT_TEAM = $team"
 echo
-echo "Next: run scripts/prepare_cotabby_workspace.sh, open build/cotabby-dependencies/Cotabby.xcworkspace, select the \"Cotabby Dev\" scheme, and run."
+echo "Next: run scripts/prepare_cotabby_workspace.sh, open build/cotabby-dependencies/Ghostype.xcworkspace, select the \"Ghostype Dev\" scheme, and run."

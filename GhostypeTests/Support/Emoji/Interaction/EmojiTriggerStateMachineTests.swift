@@ -1,0 +1,285 @@
+import XCTest
+@testable import Ghostype
+
+/// Tests for the pure `:emoji:` trigger state machine.
+///
+/// These lock down the capture lifecycle and, critically, the consumption policy: query characters
+/// always pass through to the field, while navigation, commit, and Escape are consumed only when
+/// doing so will not surprise the user (there must be matches to act on). The boundary rules keep
+/// the picker from opening inside tokens like `http://` or `foo::bar`.
+final class EmojiTriggerStateMachineTests: XCTestCase {
+
+    private func open(_ machine: inout EmojiTriggerStateMachine) {
+        _ = machine.reduce(.character(":"), selectableMatchCount: 0)
+    }
+
+    private func type(_ text: String, into machine: inout EmojiTriggerStateMachine, matchCount: Int = 0) {
+        for character in text {
+            _ = machine.reduce(.character(character), selectableMatchCount: matchCount)
+        }
+    }
+
+    // MARK: - Trigger boundary
+
+    func test_trigger_atStartOfField_opens() {
+        var sut = EmojiTriggerStateMachine()
+
+        let output = sut.reduce(.character(":"), selectableMatchCount: 0)
+
+        XCTAssertEqual(output.actions, [.open(query: "")])
+        XCTAssertFalse(output.consumesKey)
+        XCTAssertEqual(sut.state, .capturing(query: ""))
+    }
+
+    func test_trigger_afterWhitespace_opens() {
+        var sut = EmojiTriggerStateMachine()
+        type("hi ", into: &sut)
+
+        let output = sut.reduce(.character(":"), selectableMatchCount: 0)
+
+        XCTAssertEqual(output.actions, [.open(query: "")])
+        XCTAssertTrue(sut.isCapturing)
+    }
+
+    func test_trigger_afterLetter_doesNotOpen() {
+        var sut = EmojiTriggerStateMachine()
+        type("a", into: &sut)
+
+        let output = sut.reduce(.character(":"), selectableMatchCount: 0)
+
+        XCTAssertEqual(output, .ignored)
+        XCTAssertFalse(sut.isCapturing)
+    }
+
+    func test_doubleColon_doesNotOpen() {
+        var sut = EmojiTriggerStateMachine()
+        type("a", into: &sut)
+
+        XCTAssertEqual(sut.reduce(.character(":"), selectableMatchCount: 0), .ignored)
+        XCTAssertEqual(sut.reduce(.character(":"), selectableMatchCount: 0), .ignored)
+        XCTAssertFalse(sut.isCapturing)
+    }
+
+    // MARK: - Query editing (never consumed)
+
+    func test_nameCharacters_extendQueryWithoutConsuming() {
+        var sut = EmojiTriggerStateMachine()
+        open(&sut)
+
+        let first = sut.reduce(.character("s"), selectableMatchCount: 0)
+        XCTAssertEqual(first.actions, [.updateQuery("s")])
+        XCTAssertFalse(first.consumesKey)
+
+        let second = sut.reduce(.character("m"), selectableMatchCount: 0)
+        XCTAssertEqual(second.actions, [.updateQuery("sm")])
+        XCTAssertFalse(second.consumesKey)
+        XCTAssertEqual(sut.state, .capturing(query: "sm"))
+    }
+
+    func test_aliasPunctuationExtendsQuery() {
+        var sut = EmojiTriggerStateMachine()
+        open(&sut)
+
+        let plus = sut.reduce(.character("+"), selectableMatchCount: 0)
+        XCTAssertEqual(plus.actions, [.updateQuery("+")])
+        let one = sut.reduce(.character("1"), selectableMatchCount: 0)
+        XCTAssertEqual(one.actions, [.updateQuery("+1")])
+    }
+
+    func test_backspace_shortensQuery() {
+        var sut = EmojiTriggerStateMachine()
+        open(&sut)
+        type("sm", into: &sut)
+
+        let output = sut.reduce(.backspace, selectableMatchCount: 5)
+
+        XCTAssertEqual(output.actions, [.updateQuery("s")])
+        XCTAssertFalse(output.consumesKey)
+    }
+
+    func test_backspaceOnEmptyQuery_cancels() {
+        var sut = EmojiTriggerStateMachine()
+        open(&sut)
+
+        let output = sut.reduce(.backspace, selectableMatchCount: 0)
+
+        XCTAssertEqual(output.actions, [.cancel])
+        XCTAssertFalse(output.consumesKey)
+        XCTAssertFalse(sut.isCapturing)
+    }
+
+    func test_whitespace_cancelsCapture() {
+        var sut = EmojiTriggerStateMachine()
+        open(&sut)
+        type("smi", into: &sut)
+
+        let output = sut.reduce(.character(" "), selectableMatchCount: 4)
+
+        XCTAssertEqual(output.actions, [.cancel])
+        XCTAssertFalse(output.consumesKey)
+        XCTAssertFalse(sut.isCapturing)
+    }
+
+    func test_terminatorIsRememberedAsTheBoundaryForTheNextColon() {
+        // Whitespace ends capture at a boundary, so `:sm :` reopens; punctuation does not, so a
+        // following `:` (as in `:sm.:`) is treated like any mid-token colon.
+        var afterSpace = EmojiTriggerStateMachine()
+        open(&afterSpace)
+        type("sm ", into: &afterSpace)
+        XCTAssertEqual(afterSpace.reduce(.character(":"), selectableMatchCount: 0).actions, [.open(query: "")])
+
+        var afterPunctuation = EmojiTriggerStateMachine()
+        open(&afterPunctuation)
+        type("sm", into: &afterPunctuation)
+        XCTAssertEqual(afterPunctuation.reduce(.character("."), selectableMatchCount: 0).actions, [.cancel])
+        XCTAssertEqual(afterPunctuation.state, .idle(previousCharacter: "."))
+        XCTAssertEqual(afterPunctuation.reduce(.character(":"), selectableMatchCount: 0), .ignored)
+    }
+
+    func test_underscoreAndHyphenExtendQuery() {
+        var sut = EmojiTriggerStateMachine()
+        open(&sut)
+        type("thumbs_up-", into: &sut)
+
+        XCTAssertEqual(sut.state, .capturing(query: "thumbs_up-"))
+    }
+
+    // MARK: - Navigation
+
+    func test_navigate_withMatches_consumesAndMoves() {
+        var sut = EmojiTriggerStateMachine()
+        open(&sut)
+        type("s", into: &sut, matchCount: 3)
+
+        let output = sut.reduce(.navigate(.down), selectableMatchCount: 3)
+
+        XCTAssertEqual(output.actions, [.moveSelection(.down)])
+        XCTAssertTrue(output.consumesKey)
+        // Moving the selection leaves the typed query untouched.
+        XCTAssertEqual(sut.state, .capturing(query: "s"))
+    }
+
+    func test_navigate_withoutMatches_cancelsAndPassesThrough() {
+        var sut = EmojiTriggerStateMachine()
+        open(&sut)
+        type("zz", into: &sut)
+
+        let output = sut.reduce(.navigate(.down), selectableMatchCount: 0)
+
+        XCTAssertEqual(output.actions, [.cancel])
+        XCTAssertFalse(output.consumesKey)
+        XCTAssertFalse(sut.isCapturing)
+    }
+
+    // MARK: - Commit
+
+    func test_commit_withMatches_consumesAndCommitsModeA() {
+        var sut = EmojiTriggerStateMachine()
+        open(&sut)
+        type("smile", into: &sut, matchCount: 4)
+
+        let output = sut.reduce(.commitKey, selectableMatchCount: 4)
+
+        XCTAssertEqual(output.actions, [.commit(.key)])
+        XCTAssertTrue(output.consumesKey)
+        XCTAssertFalse(sut.isCapturing)
+    }
+
+    func test_commit_withoutMatches_passesThrough() {
+        var sut = EmojiTriggerStateMachine()
+        open(&sut)
+        type("zz", into: &sut)
+
+        let output = sut.reduce(.commitKey, selectableMatchCount: 0)
+
+        XCTAssertEqual(output.actions, [.cancel])
+        XCTAssertFalse(output.consumesKey)
+    }
+
+    func test_closingColon_commitsModeB_andIsNotConsumed() {
+        var sut = EmojiTriggerStateMachine()
+        open(&sut)
+        type("smile", into: &sut, matchCount: 4)
+
+        let output = sut.reduce(.character(":"), selectableMatchCount: 4)
+
+        XCTAssertEqual(output.actions, [.commit(.closingColon)])
+        XCTAssertFalse(output.consumesKey)
+        XCTAssertFalse(sut.isCapturing)
+    }
+
+    func test_emptyQueryClosingColon_commitsModeB() {
+        var sut = EmojiTriggerStateMachine()
+        open(&sut)   // boundary ":" opens capture with an empty query
+        XCTAssertTrue(sut.isCapturing)
+
+        // A second ":" on an empty query is the closing colon of a bare "::"; it commits Mode B (the
+        // controller leaves the literal "::" untouched when there is no match) and is not consumed.
+        // The macro feature now lives on "/", so the emoji picker no longer yields this colon.
+        let output = sut.reduce(.character(":"), selectableMatchCount: 0)
+
+        XCTAssertEqual(output.actions, [.commit(.closingColon)])
+        XCTAssertFalse(output.consumesKey)
+        XCTAssertFalse(sut.isCapturing)
+    }
+
+    // MARK: - Cancellation
+
+    func test_escape_consumesAndCancels() {
+        var sut = EmojiTriggerStateMachine()
+        open(&sut)
+        type("s", into: &sut, matchCount: 3)
+
+        let output = sut.reduce(.escape, selectableMatchCount: 3)
+
+        XCTAssertEqual(output.actions, [.cancel])
+        XCTAssertTrue(output.consumesKey)
+        XCTAssertFalse(sut.isCapturing)
+    }
+
+    func test_focusChange_cancelsWithoutConsuming() {
+        var sut = EmojiTriggerStateMachine()
+        open(&sut)
+        type("s", into: &sut, matchCount: 3)
+
+        let output = sut.reduce(.focusChanged, selectableMatchCount: 3)
+
+        XCTAssertEqual(output.actions, [.cancel])
+        XCTAssertFalse(output.consumesKey)
+        XCTAssertFalse(sut.isCapturing)
+    }
+
+    func test_dismissExternally_cancels() {
+        var sut = EmojiTriggerStateMachine()
+        open(&sut)
+        type("s", into: &sut, matchCount: 3)
+
+        let output = sut.reduce(.dismissExternally, selectableMatchCount: 3)
+
+        XCTAssertEqual(output.actions, [.cancel])
+        XCTAssertFalse(sut.isCapturing)
+    }
+
+    func test_nonCharacterInputsWhileIdle_areIgnoredAndEraseBoundaryKnowledge() {
+        let inputs: [EmojiTriggerInput] = [
+            .backspace, .navigate(.down), .commitKey, .escape, .focusChanged, .dismissExternally
+        ]
+        for input in inputs {
+            var sut = EmojiTriggerStateMachine()
+            type("a", into: &sut)
+
+            let output = sut.reduce(input, selectableMatchCount: 3)
+
+            XCTAssertEqual(output, .ignored, "input \(input) should be ignored while idle")
+            XCTAssertFalse(sut.isCapturing)
+            // The preceding "a" is forgotten, so the next ":" is evaluated like the start of the
+            // field and opens a capture even though a letter was the last typed character.
+            let reopened = sut.reduce(.character(":"), selectableMatchCount: 0)
+            XCTAssertEqual(
+                reopened.actions,
+                [.open(query: "")],
+                "input \(input) should erase the preceding-character memory"
+            )
+        }
+    }
+}

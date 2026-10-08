@@ -1,10 +1,10 @@
-# Cotabby Source Layout
+# Ghostype Source Layout
 
 This document is the canonical placement map for production and test source files. It complements
 `ARCHITECTURE.md`, which explains runtime ownership and data flow.
 
-Swift folders do not create namespaces. Every Swift file discovered under `Cotabby/` still compiles
-into the application module, and every file under `CotabbyTests/` compiles into the test module.
+Swift folders do not create namespaces. Every Swift file discovered under `Ghostype/` still compiles
+into the application module, and every file under `GhostypeTests/` compiles into the test module.
 Folders exist so a maintainer can predict where a responsibility lives before searching.
 
 ## Placement Rules
@@ -15,15 +15,15 @@ Folders exist so a maintainer can predict where a responsibility lives before se
 3. Keep a small cohesive subsystem flat.
 4. Add a child folder only when at least two files form a stable responsibility with a predictable
    name. Do not create one-file folders merely to shorten a file list.
-5. Put a direct unit test under the corresponding `CotabbyTests/` responsibility. Cross-cutting
+5. Put a direct unit test under the corresponding `GhostypeTests/` responsibility. Cross-cutting
    coordinator tests may remain grouped by the coordinator they exercise.
 6. Folder moves must not change Swift access control, runtime ownership, or target membership.
-   XcodeGen discovers the new paths; regenerate `Cotabby.xcodeproj` after moving files.
+   XcodeGen discovers the new paths; regenerate `Ghostype.xcodeproj` after moving files.
 
 ## Production Tree
 
 ~~~text
-Cotabby/
+Ghostype/
 ├── App/
 │   ├── Core/                         process entry, composition root, lifecycle
 │   └── Coordinators/
@@ -131,22 +131,22 @@ whole focus lifecycle rather than one resolution or caching technique.
 
 ## Test Tree
 
-`CotabbyTests/` mirrors the production responsibility after removing the leading `Cotabby/`. For
+`GhostypeTests/` mirrors the production responsibility after removing the leading `Ghostype/`. For
 example:
 
 ~~~text
-Cotabby/Support/Suggestion/Output/SuggestionTextNormalizer.swift
-CotabbyTests/Support/Suggestion/Output/SuggestionTextNormalizerTests.swift
+Ghostype/Support/Suggestion/Output/SuggestionTextNormalizer.swift
+GhostypeTests/Support/Suggestion/Output/SuggestionTextNormalizerTests.swift
 
-Cotabby/Services/Runtime/Llama/LlamaSuggestionEngine.swift
-CotabbyTests/Services/Runtime/Llama/LlamaSuggestionEngineStreamingTests.swift
+Ghostype/Services/Runtime/Llama/LlamaSuggestionEngine.swift
+GhostypeTests/Services/Runtime/Llama/LlamaSuggestionEngineStreamingTests.swift
 
-Cotabby/App/Coordinators/Suggestion/SuggestionCoordinator.swift
-CotabbyTests/App/Coordinators/Suggestion/SuggestionCoordinatorPredictionTests.swift
+Ghostype/App/Coordinators/Suggestion/SuggestionCoordinator.swift
+GhostypeTests/App/Coordinators/Suggestion/SuggestionCoordinatorPredictionTests.swift
 ~~~
 
 Tests that exercise several production values may stay at the nearest shared subsystem root. Evals
-remain under `CotabbyTests/Evals`, and shared fixtures remain under `CotabbyTests/TestSupport`.
+remain under `GhostypeTests/Evals`, and shared fixtures remain under `GhostypeTests/TestSupport`.
 
 ## Unfinished-Word Interaction
 

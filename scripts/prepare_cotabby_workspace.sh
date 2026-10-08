@@ -28,7 +28,7 @@ git -C "$native_dir" diff --no-ext-diff --no-color --src-prefix=a/ --dst-prefix=
     > "$workspace_root/native.patch"
 cmp -s patches/cotabbyinference-upstream-pending.patch "$workspace_root/native.patch" \
     || stale_checkout "does not match patches/cotabbyinference-upstream-pending.patch"
-workspace="$workspace_root/Cotabby.xcworkspace"
+workspace="$workspace_root/Ghostype.xcworkspace"
 python3 scripts/create-inference-workspace.py "$native_dir" --output "$workspace"
 mkdir -p "$workspace/xcshareddata/swiftpm"
 cp Config/Package.resolved "$workspace/xcshareddata/swiftpm/Package.resolved"

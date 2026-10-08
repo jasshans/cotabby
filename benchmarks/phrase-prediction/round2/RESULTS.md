@@ -1,4 +1,4 @@
-# Cotabby 1337 — round two results
+# Ghostype 1337 — round two results
 
 **Final decision: retain P2-H.** All twelve registered alternatives completed screening,
 but none improved screen-context accuracy while preserving the no-screen score. Selection

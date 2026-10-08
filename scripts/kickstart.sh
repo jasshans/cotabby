@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# kickstart.sh - reset this Mac to a first-install state and hand you a fresh Cotabby DMG.
+# kickstart.sh - reset this Mac to a first-install state and hand you a fresh Ghostype DMG.
 #
 # Use it to walk the real new-user path end to end: DMG window -> drag to Applications -> first
 # launch -> onboarding -> permission prompts. It covers both app identities (release
-# com.jacobfu.tabby and dev com.jacobfu.tabby.dev) because they share TCC, UserDefaults, and
+# com.jasshans.ghostype and dev com.jasshans.ghostype.dev) because they share TCC, UserDefaults, and
 # Application Support conventions, and a stale copy of either can make results misleading.
 #
 # What it does, in order:
-#   1. Stops running Cotabby / Cotabby Dev processes (exact process names, never a broad pkill).
+#   1. Stops running Ghostype / Ghostype Dev processes (exact process names, never a broad pkill).
 #   2. Resets every TCC permission (Accessibility, Input Monitoring, Screen Recording, ...), before
 #      removal and again against the new build.
-#   3. Ejects mounted Cotabby volumes, then removes installed/built app bundles for both identities.
+#   3. Ejects mounted Ghostype volumes, then removes installed/built app bundles for both identities.
 #   4. Deletes preferences (via `defaults`, so cfprefsd's cache is cleared too), caches, logs,
 #      saved state, and web/HTTP storage. Application Support is cleared except downloaded models,
 #      unless --wipe-models is passed.
@@ -37,12 +37,12 @@ cd "$REPO_ROOT"
 
 # Each pair is "<bundle id>|<product name>". The product name doubles as the executable name and
 # the Application Support / Logs folder name.
-APPS=("com.jacobfu.tabby|Cotabby" "com.jacobfu.tabby.dev|Cotabby Dev")
+APPS=("com.jasshans.ghostype|Ghostype" "com.jasshans.ghostype.dev|Ghostype Dev")
 # Folders under Application Support that hold downloaded models. Everything else there is state.
 MODEL_DIRS=("LlamaRuntime" "MlxRuntime")
 OUT_DIR="$REPO_ROOT/build/kickstart"
-DMG_PATH="$OUT_DIR/Cotabby.dmg"
-VENV_DIR="/tmp/Cotabby-dmg-venv"
+DMG_PATH="$OUT_DIR/Ghostype.dmg"
+VENV_DIR="/tmp/Ghostype-dmg-venv"
 # Local builds are stamped far above any CI run number so Sparkle never offers to "update" the
 # test build back to the latest public release mid-walkthrough.
 BUILD_NUMBER=999999
@@ -72,7 +72,7 @@ step() { printf '\n\033[1m==> %s\033[0m\n' "$1"; }
 note() { printf '    %s\n' "$1"; }
 
 bundle_id_of() { /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$1/Contents/Info.plist" 2>/dev/null || true; }
-is_cotabby_id() { [[ "$1" == "com.jacobfu.tabby" || "$1" == "com.jacobfu.tabby.dev" ]]; }
+is_ghostype_id() { [[ "$1" == "com.jasshans.ghostype" || "$1" == "com.jasshans.ghostype.dev" ]]; }
 
 # Pick the signing identity up front so a missing certificate fails before anything is deleted.
 signing_identity=""
@@ -90,8 +90,8 @@ if ! $clean_only; then
 fi
 
 cat <<EOF
-Cotabby kickstart will reset this Mac to a first-install state for BOTH app identities:
-  - quit Cotabby and Cotabby Dev, remove installed/built app bundles
+Ghostype kickstart will reset this Mac to a first-install state for BOTH app identities:
+  - quit Ghostype and Ghostype Dev, remove installed/built app bundles
   - delete preferences, caches, logs, and saved state (onboarding will run again)
   - reset all privacy permissions (Accessibility, Input Monitoring, Screen Recording)
   - $($wipe_models && echo "DELETE downloaded models" || echo "keep downloaded models ($(IFS=,; echo "${MODEL_DIRS[*]}"))")
@@ -102,20 +102,20 @@ if ! $assume_yes; then
     [[ "$reply" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 1; }
 fi
 
-step "Stopping Cotabby processes"
+step "Stopping Ghostype processes"
 for entry in "${APPS[@]}"; do
     name="${entry#*|}"
     # -x matches the process name exactly, so Xcode builds, test runners, and anything else with
-    # "Cotabby" in its arguments are left alone.
+    # "Ghostype" in its arguments are left alone.
     pkill -x "$name" 2>/dev/null && note "stopped $name" || true
 done
 # Sparkle's helpers run under their own names but carry the bundle id in their arguments.
-pkill -f "com.jacobfu.tabby/org.sparkle-project" 2>/dev/null || true
-pkill -f "Autoupdate com.jacobfu.tabby" 2>/dev/null || true
+pkill -f "com.jasshans.ghostype/org.sparkle-project" 2>/dev/null || true
+pkill -f "Autoupdate com.jasshans.ghostype" 2>/dev/null || true
 sleep 1
 
-step "Ejecting mounted Cotabby volumes"
-for vol in /Volumes/Cotabby*; do
+step "Ejecting mounted Ghostype volumes"
+for vol in /Volumes/Ghostype*; do
     [[ -d "$vol" ]] && hdiutil detach "$vol" -quiet 2>/dev/null && note "ejected $vol"
 done
 
@@ -137,15 +137,15 @@ removed=0
 candidates=()
 for dir in /Applications "$HOME/Applications" "$HOME/Desktop" "$HOME/Downloads"; do
     [[ -d "$dir" ]] && while IFS= read -r app; do candidates+=("$app"); done \
-        < <(find "$dir" -maxdepth 2 -name 'Cotabby*.app' -type d 2>/dev/null)
+        < <(find "$dir" -maxdepth 2 -name 'Ghostype*.app' -type d 2>/dev/null)
 done
 # Built products share the bundle id; if one is launched later it can take over the TCC entry.
 for dd in "$REPO_ROOT/build" "$HOME/Library/Developer/Xcode/DerivedData"; do
     [[ -d "$dd" ]] && while IFS= read -r app; do candidates+=("$app"); done \
-        < <(find "$dd" -path '*/Build/Products/*' -name 'Cotabby*.app' -type d -prune 2>/dev/null)
+        < <(find "$dd" -path '*/Build/Products/*' -name 'Ghostype*.app' -type d -prune 2>/dev/null)
 done
 for app in ${candidates[@]+"${candidates[@]}"}; do
-    if is_cotabby_id "$(bundle_id_of "$app")"; then
+    if is_ghostype_id "$(bundle_id_of "$app")"; then
         rm -rf "$app" && note "removed $app" && removed=$((removed + 1))
     fi
 done
@@ -186,7 +186,7 @@ fi
 
 step "Building signed Release DMG"
 mkdir -p "$OUT_DIR"
-archive="$OUT_DIR/Cotabby.xcarchive"
+archive="$OUT_DIR/Ghostype.xcarchive"
 rm -rf "$archive" "$DMG_PATH"
 "$REPO_ROOT/scripts/prepare_cotabby_workspace.sh"
 
@@ -196,8 +196,8 @@ sign_settings=(CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$signing_identity")
 [[ "$signing_identity" == "-" ]] || sign_settings+=(DEVELOPMENT_TEAM="$team_id" OTHER_CODE_SIGN_FLAGS="--timestamp")
 
 xcodebuild archive \
-    -workspace "$REPO_ROOT/build/cotabby-dependencies/Cotabby.xcworkspace" \
-    -scheme Cotabby \
+    -workspace "$REPO_ROOT/build/cotabby-dependencies/Ghostype.xcworkspace" \
+    -scheme Ghostype \
     -configuration Release \
     -archivePath "$archive" \
     -derivedDataPath "$OUT_DIR/DerivedData" \
@@ -206,8 +206,8 @@ xcodebuild archive \
     MARKETING_VERSION="$marketing_version" \
     CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
     -quiet
-app_path="$archive/Products/Applications/Cotabby.app"
-note "archived Cotabby $marketing_version ($BUILD_NUMBER)"
+app_path="$archive/Products/Applications/Ghostype.app"
+note "archived Ghostype $marketing_version ($BUILD_NUMBER)"
 
 # Mirror the release workflow: Xcode can leave Sparkle's helpers ad-hoc signed, so re-sign nested
 # code inside-out with the same identity and hardened runtime.
@@ -236,7 +236,7 @@ note "signed with: $([[ "$signing_identity" == "-" ]] && echo "ad-hoc" || echo "
     --output-path "$DMG_PATH" \
     --background-path "$REPO_ROOT/assets/release/dmg_background.png" \
     --background-2x-path "$REPO_ROOT/assets/release/dmg_background@2x.png" \
-    --volume-name "Cotabby"
+    --volume-name "Ghostype"
 if [[ "$signing_identity" != "-" ]]; then
     codesign --force --sign "$signing_identity" --options runtime --timestamp "$DMG_PATH"
     codesign --verify --strict "$DMG_PATH"
@@ -249,14 +249,14 @@ note "DMG ready: $DMG_PATH"
 # to reset the release id against it, then unregister so Launch Services never opens this copy.
 lsregister=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 "$lsregister" -f "$app_path"
-tccutil reset All com.jacobfu.tabby >/dev/null && note "reset com.jacobfu.tabby against the new build"
+tccutil reset All com.jasshans.ghostype >/dev/null && note "reset com.jasshans.ghostype against the new build"
 "$lsregister" -u "$app_path"
 
 if $open_dmg; then
     open "$DMG_PATH"
     step "Walk through it"
-    note "1. Drag Cotabby into Applications in the DMG window, then open it from Applications."
+    note "1. Drag Ghostype into Applications in the DMG window, then open it from Applications."
     note "2. Go through onboarding and grant the permissions it asks for."
-    note "3. Quit and reopen Cotabby to confirm the permissions stuck."
-    note "Logs: /usr/bin/log stream --predicate 'subsystem == \"com.cotabby.app\"' --level info"
+    note "3. Quit and reopen Ghostype to confirm the permissions stuck."
+    note "Logs: /usr/bin/log stream --predicate 'subsystem == \"com.jasshans.ghostype\"' --level info"
 fi

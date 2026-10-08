@@ -1,0 +1,186 @@
+# Build Ghostype and publish it to the floating `stable` release.
+#
+# Every push to main produces a signed-for-Sparkle `Ghostype.zip` plus a fresh
+# `appcast.xml`, both attached to the floating GitHub release tagged `stable`.
+# The app's SUFeedURL points at that release, so "Check for Updates" (menu bar
+# and Settings > About) picks up each new build automatically.
+#
+# Versioning: MARKETING_VERSION stays 0.1.0; CURRENT_PROJECT_VERSION is the
+# GitHub run number, which always increases. Sparkle treats a higher build
+# number as an update even when the marketing version is unchanged.
+#
+# Signing: ad-hoc only (CODE_SIGN_IDENTITY="-"). No Apple Developer identity
+# is needed. The update's integrity comes from the Sparkle EdDSA signature,
+# not from code signing.
+#
+# Required repository secret:
+#   SPARKLE_ED25519_PRIVATE_KEY — the private half of the EdDSA keypair used
+#   to sign updates. Generate it once on a Mac with Sparkle's `generate_keys`
+#   tool (ships in the Sparkle release tarball / SPM artifact bundle):
+#     1. run `generate_keys` and copy the printed keys,
+#     2. paste the PUBLIC key into GhostypeInfo.plist's SUPublicEDKey,
+#     3. paste the PRIVATE key into this secret.
+#   Without the secret this workflow fails fast before the expensive build.
+#
+# Two deliberate deviations from a naive xcodebuild invocation:
+#   - We build `-workspace build/cotabby-dependencies/Ghostype.xcworkspace`,
+#     not `-project`, because the workspace pins the patched local
+#     CotabbyInference checkout. A bare -project build would resolve
+#     CotabbyInference from `branch: main` (unpinned, unpatched) and fail.
+#   - We build the `Ghostype` (prod) scheme, not `Ghostype Dev`: the Dev
+#     scheme sets GHOSTYPE_DEV, which compiles Sparkle out entirely, so the
+#     shipped app would have a dead "Check for Updates" button.
+
+name: Build and Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# A second push while a release is building cancels the stale run; only the
+# newest commit per ref ever publishes to `stable`.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-sign-publish:
+    name: Build, sign, publish to stable
+    runs-on: macos-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write # create/update the floating `stable` release
+    env:
+      BUILD_NUMBER: ${{ github.run_number }}
+      MARKETING_VERSION: "0.1.0"
+      WORKSPACE: build/cotabby-dependencies/Ghostype.xcworkspace
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Fail fast: without the private key we can neither sign the archive nor
+      # produce an appcast the installed app would accept. No point burning
+      # ~30 minutes of macOS runner time on a build we cannot ship.
+      - name: Require Sparkle signing key
+        run: |
+          set -euo pipefail
+          if [[ -z "${{ secrets.SPARKLE_ED25519_PRIVATE_KEY }}" ]]; then
+            echo "::error::SPARKLE_ED25519_PRIVATE_KEY secret is not set."
+            echo "Generate a keypair with Sparkle's generate_keys tool, put the public key" >&2
+            echo "in GhostypeInfo.plist (SUPublicEDKey), and add the private key as the" >&2
+            echo "SPARKLE_ED25519_PRIVATE_KEY repository secret. See the workflow header" >&2
+            echo "and README for the full setup." >&2
+            exit 1
+          fi
+          # The app refuses to start Sparkle while the placeholder is in place, so a
+          # published build whose plist was never given the real public key could
+          # never be picked up by "Check for Updates".
+          if grep -q "REPLACE_WITH_GENERATED_SPARKLE_PUBLIC_ED_KEY" GhostypeInfo.plist; then
+            echo "::error::GhostypeInfo.plist still has the SUPublicEDKey placeholder." >&2
+            echo "Paste the public key from generate_keys into SUPublicEDKey and push again." >&2
+            exit 1
+          fi
+
+      # Same Xcode pin policy as the Build workflow: runner images drift their
+      # default Xcode without notice, so pin explicitly.
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: latest-stable
+
+      - name: Prepare matching inference dependency
+        run: scripts/prepare_cotabby_workspace.sh
+
+      - name: Install XcodeGen
+        run: |
+          if ! command -v xcodegen >/dev/null; then
+            brew install xcodegen
+          fi
+          xcodegen --version
+
+      - name: Regenerate Xcode project
+        run: xcodegen generate
+
+      - name: Build Release (ad-hoc signed)
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -workspace "${WORKSPACE}" \
+            -scheme Ghostype \
+            -configuration Release \
+            -destination 'platform=macOS' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="-" \
+            DEVELOPMENT_TEAM="" \
+            MARKETING_VERSION="${MARKETING_VERSION}" \
+            CURRENT_PROJECT_VERSION="${BUILD_NUMBER}" \
+            build
+
+      - name: Zip the app
+        run: |
+          set -euo pipefail
+          ditto -c -k --sequesterRsrc --keepParent \
+            "build/DerivedData/Build/Products/Release/Ghostype.app" \
+            "build/Ghostype.zip"
+          ls -la build/Ghostype.zip
+
+      # The Sparkle SPM artifact bundle ships sign_update; resolve the exact
+      # tool that matches the Sparkle version the app just built against, so
+      # the tools can never drift from the linked framework.
+      - name: Locate Sparkle sign_update
+        id: sparkle-tools
+        run: |
+          set -euo pipefail
+          sign_update="$(find build/DerivedData/SourcePackages/artifacts \
+            -path '*Sparkle/bin/sign_update' -type f 2>/dev/null | head -1)"
+          if [[ -z "${sign_update}" ]]; then
+            echo "::error::Could not find Sparkle's sign_update under build/DerivedData/SourcePackages/artifacts." >&2
+            exit 1
+          fi
+          echo "sign-update=${sign_update}" >> "${GITHUB_OUTPUT}"
+          echo "Using sign_update: ${sign_update}"
+
+      - name: Write Sparkle private key to file
+        run: |
+          set -euo pipefail
+          mkdir -p build/sparkle
+          printf '%s' "${{ secrets.SPARKLE_ED25519_PRIVATE_KEY }}" > build/sparkle/ed25519.key
+          chmod 600 build/sparkle/ed25519.key
+
+      - name: Generate appcast.xml
+        run: |
+          set -euo pipefail
+          python3 scripts/generate_appcast.py \
+            --release-version "${MARKETING_VERSION}" \
+            --build-number "${BUILD_NUMBER}" \
+            --archive "build/Ghostype.zip" \
+            --archive-filename "Ghostype.zip" \
+            --output "build/appcast.xml" \
+            --release-tag "stable" \
+            --app-name "Ghostype" \
+            --github-owner "jasshans" \
+            --github-repository "cotabby" \
+            --release-notes-base-url "https://github.com/jasshans/cotabby/releases" \
+            --sign-update-tool "${{ steps.sparkle-tools.outputs.sign-update }}" \
+            --ed-key-file "build/sparkle/ed25519.key"
+
+      - name: Publish to floating stable release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if gh release view stable >/dev/null 2>&1; then
+            gh release upload stable build/Ghostype.zip build/appcast.xml --clobber
+          else
+            gh release create stable build/Ghostype.zip build/appcast.xml \
+              --title "Ghostype (stable channel)" \
+              --notes "Floating release feeding Sparkle auto-updates. Rebuilt on every push to main." \
+              --latest=false
+          fi
+          echo "Published:"
+          gh release view stable --json assets --jq '.assets[].name'
+
+      - name: Clean up key material and build cache
+        if: always()
+        run: rm -rf build/sparkle build/DerivedData
