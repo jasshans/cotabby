@@ -1,0 +1,326 @@
+import Foundation
+
+/// File overview:
+/// Owns the pure rules for deciding whether Ghostype should generate and, when it should, how the
+/// request payload and backend-specific prompt preview are constructed.
+/// This keeps prompt policy out of the coordinator.
+///
+/// Architectural role:
+/// `SuggestionCoordinator` decides when a generation attempt should happen. This factory decides
+/// what the request should contain once that decision has already been made.
+struct SuggestionRequestBuildResult: Equatable, Sendable {
+    /// The engine-facing request plus the selected backend's prompt preview shown in diagnostics.
+    /// Keeping these together prevents preview text from drifting away from the chosen engine.
+    let request: SuggestionRequest
+    let promptPreview: String
+}
+
+/// Pure prompt-policy surface for the autocomplete pipeline.
+/// This type has no access to UserDefaults, tasks, overlays, or runtime services.
+enum SuggestionRequestFactory {
+    private static let maxClipboardContextCharacters = 1_200
+
+    /// Require at least one non-whitespace character so we don't suggest on a blank field.
+    /// The optional word-boundary preference gates new requests, never advancement of an already
+    /// visible tail. Sharing it here keeps ordinary and speculative generation in agreement.
+    /// Scripts without space-delimited words retain their normal completion path.
+    static func shouldGenerateSuggestion(for precedingText: String, suggestWithinWords: Bool = true) -> Bool {
+        let trimmed = precedingText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !trimmed.isEmpty && (suggestWithinWords || CaretWordContext.unfinishedWord(in: precedingText) == nil)
+    }
+
+    /// The full pre-generation gate: some typed text (and, when the boundary preference asks for
+    /// it, a finished word), and a caret that is not parked inside a token (see
+    /// `CaretTokenPosition`), where any completion would duplicate or splice what follows.
+    static func shouldGenerateSuggestion(
+        for precedingText: String, trailingText: String, suggestWithinWords: Bool = true
+    ) -> Bool {
+        guard shouldGenerateSuggestion(for: precedingText, suggestWithinWords: suggestWithinWords) else { return false }
+        return !CaretTokenPosition.isInsideToken(precedingText: precedingText, trailingText: trailingText)
+    }
+
+    /// Builds the generation request plus the exact prompt preview used by Ghostype's diagnostics UI.
+    static func buildRequest(
+        context: FocusedInputContext,
+        settings: SuggestionSettingsSnapshot,
+        configuration: SuggestionConfiguration,
+        clipboardContext: String? = nil,
+        visualContextSummary: String? = nil,
+        historyExamples: [String] = [],
+        learnedVocabulary: [String] = []
+    ) -> SuggestionRequestBuildResult {
+        let prefixText = truncatedPromptPrefix(
+            from: context.precedingText,
+            configuration: configuration,
+            engine: settings.selectedEngine
+        )
+        let completionLengthInstruction = settings.effectiveWordRange.promptInstruction
+        let userName = activeUserName(settings: settings)
+        // Custom rules are hidden from users (CustomRulesCatalog.isUserFacingEnabled == false): the
+        // base-model OSS path cannot obey free-text instructions and the rule text leaks into output,
+        // so injection is suppressed on every engine. Stored rules survive untouched, so flipping the
+        // flag restores this. When enabled, the value is already normalized (trimmed/deduped/capped)
+        // by SuggestionSettingsModel.setRules.
+        let customRules = CustomRulesCatalog.isUserFacingEnabled ? settings.customRules : []
+        // The settings model length-caps but does NOT trim whitespace (trimming on every keystroke
+        // would prevent the user from typing a space at the end of a word in the editor). Do the
+        // trim here, once per request, and collapse a whitespace-only body back to nil so renderers
+        // skip the section heading entirely.
+        let trimmedExtendedContext = settings.extendedContext
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let activeExtendedContext = trimmedExtendedContext.isEmpty ? nil : trimmedExtendedContext
+        // nil when the user declared no languages — the renderers then just match the surrounding text.
+        let languageInstruction = LanguageCatalog.promptInstruction(for: settings.responseLanguages)
+        let boundedClipboardContext = activeClipboardContext(
+            rawContext: clipboardContext,
+            settings: settings,
+            prefixText: prefixText
+        )
+        let boundedVisualContextSummary = activeVisualContextSummary(
+            rawSummary: visualContextSummary,
+            engine: settings.selectedEngine
+        )
+        // The composed surface description; nil when the user disabled it or the surface class
+        // suppresses it (code editors, terminals, anonymous generic apps). The composer sanitizes
+        // titles/placeholders and reduces the URL to a bare domain before anything reaches a prompt.
+        let surfaceContext = settings.isSurfaceContextEnabled
+            ? SurfaceContextComposer.compose(
+                surfaceClass: AppSurfaceClassifier.classify(
+                    bundleIdentifier: context.bundleIdentifier,
+                    isIntegratedTerminal: context.isIntegratedTerminal
+                ),
+                applicationName: context.applicationName,
+                windowTitle: context.windowTitle,
+                focusedURLString: context.focusedURLString,
+                fieldPlaceholder: context.fieldPlaceholder
+            )
+            : nil
+        // Learned vocabulary stays on this Mac, like typing history. The provider already returns
+        // nothing for the endpoint engine; dropping it here as well keeps that guarantee in the
+        // one pure place every request passes through.
+        let activeHistoryExamples = settings.selectedEngine == .openAICompatible ? [] : historyExamples
+        let activeLearnedVocabulary = settings.selectedEngine == .openAICompatible ? [] : learnedVocabulary
+        let maxPredictionTokens = activeMaxPredictionTokens(
+            configuration: configuration,
+            wordRange: settings.effectiveWordRange,
+            responseLanguages: settings.responseLanguages,
+            isMultiLineEnabled: settings.isMultiLineEnabled
+        )
+        // Ghostype 2 is a base-model continuation product on the Open Source path, so the local
+        // prompt is always the base render: no instruction blob, exact caret prefix last.
+        // Custom instructions and persona condition the output rather than being obeyed. The
+        // Foundation Models path builds its own messages from these same request fields, so this
+        // prompt string is only consumed by the llama engine and the endpoint.
+        let prompt = BaseCompletionPromptRenderer.prompt(
+            prefixText: prefixText,
+            applicationName: context.applicationName,
+            userName: userName,
+            // The endpoint backend shares this renderer, but adding document-tail content to a
+            // network request needs its own disclosure and consent. Keep this new context local;
+            // Apple's fallback request can use it because both eligible engines run on-device.
+            trailingText: settings.selectedEngine == .openAICompatible ? "" : context.trailingText,
+            maxSuffixCharacters: configuration.maxSuffixCharacters,
+            customRules: customRules,
+            extendedContext: activeExtendedContext,
+            languageInstruction: languageInstruction,
+            clipboardContext: boundedClipboardContext,
+            visualContextSummary: boundedVisualContextSummary,
+            surfaceContext: surfaceContext,
+            historyExamples: activeHistoryExamples,
+            learnedVocabulary: activeLearnedVocabulary,
+            contextBudget: settings.selectedEngine == .openAICompatible ? 2400 : BaseCompletionPromptRenderer.defaultContextBudget,
+            maxScreenCharacters: settings.selectedEngine == .openAICompatible ? 500 : 4000,
+            screenPriority: settings.selectedEngine == .openAICompatible ? 30 : 45,
+            // One budget for every engine: the endpoint shares the llama prefix window, and an
+            // Apple request's prompt is what its llama fallback decodes. Either way the request's
+            // whole output allowance has to fit beside it (see `promptTokenBudget`).
+            tokenBudget: promptTokenBudget(
+                configuredBudget: configuration.llamaPromptTokenBudget,
+                maxPredictionTokens: maxPredictionTokens
+            )
+        )
+
+        let request = SuggestionRequest(
+            context: context,
+            prefixText: prefixText,
+            prompt: prompt,
+            generation: context.generation,
+            maxPredictionTokens: maxPredictionTokens,
+            temperature: configuration.temperature,
+            topK: configuration.topK,
+            topP: configuration.topP,
+            minP: configuration.minP,
+            repetitionPenalty: configuration.repetitionPenalty,
+            randomSeed: configuration.randomSeed,
+            maxSuffixCharacters: configuration.maxSuffixCharacters,
+            completionLengthInstruction: completionLengthInstruction,
+            userName: userName,
+            customRules: customRules,
+            extendedContext: activeExtendedContext,
+            languageInstruction: languageInstruction,
+            clipboardContext: boundedClipboardContext,
+            visualContextSummary: boundedVisualContextSummary,
+            surfaceContext: surfaceContext,
+            historyExamples: activeHistoryExamples,
+            learnedVocabulary: activeLearnedVocabulary,
+            isMultiLineEnabled: settings.isMultiLineEnabled,
+            requestID: RequestID.generate(),
+            wordRange: settings.effectiveWordRange
+        )
+
+        return SuggestionRequestBuildResult(
+            request: request,
+            promptPreview: promptPreview(for: request, selectedEngine: settings.selectedEngine)
+        )
+    }
+
+    /// Keep the latest bounded text without rewriting its paragraphs or caret boundary.
+    ///
+    /// Exposed (non-private) so the coordinator can compute the same bounded window before
+    /// calling the relevance filter, ensuring the filter and the downstream distiller evaluate
+    /// token overlap against an identical prefix. The `engine` parameter selects between the
+    /// llama-sized window (small, low latency) and the FM-sized window (larger, fits Apple's
+    /// shared context). Default arg keeps existing call sites and external usages source-compatible.
+    static func truncatedPromptPrefix(
+        from precedingText: String,
+        configuration: SuggestionConfiguration,
+        engine: SuggestionEngineKind = .llamaOpenSource
+    ) -> String {
+        let maxCharacters: Int
+        let maxWords: Int
+        switch engine {
+        case .appleIntelligence:
+            maxCharacters = configuration.maxPrefixCharactersFoundationModel
+            maxWords = configuration.maxPrefixWordsFoundationModel
+        case .llamaOpenSource:
+            maxCharacters = configuration.maxPrefixCharacters
+            maxWords = configuration.maxPrefixWords
+        case .openAICompatible:
+            maxCharacters = configuration.maxPrefixCharacters
+            maxWords = configuration.maxPrefixWords
+        }
+
+        guard maxCharacters > 0, maxWords > 0 else { return "" }
+        let characterWindow = String(precedingText.suffix(maxCharacters))
+        let words = characterWindow.split(whereSeparator: { $0.isWhitespace })
+        guard words.count > maxWords else { return characterWindow }
+
+        // Substrings retain indices into the original string. Slice at the first retained word
+        // instead of joining words: paragraph breaks, list indentation, and the exact whitespace
+        // before the caret all carry meaning for continuation and token-boundary healing.
+        let firstKeptWord = words[words.count - maxWords]
+        return String(characterWindow[firstKeptWord.startIndex...])
+    }
+
+    private static func activeUserName(
+        settings: SuggestionSettingsSnapshot
+    ) -> String? {
+        settings.userName
+    }
+
+    private static func activeClipboardContext(
+        rawContext: String?,
+        settings: SuggestionSettingsSnapshot,
+        prefixText: String
+    ) -> String? {
+        guard settings.isClipboardContextEnabled,
+              let rawContext
+        else {
+            return nil
+        }
+
+        let sanitizedContext = PromptContextSanitizer.sanitize(rawContext)
+        guard !sanitizedContext.isEmpty,
+              PromptContextSanitizer.containsAlphanumericSignal(sanitizedContext)
+        else {
+            return nil
+        }
+
+        let distilled = ClipboardContentDistiller.distill(
+            clipboard: sanitizedContext,
+            prefixText: prefixText
+        )
+        return clippedText(distilled, maxCharacters: maxClipboardContextCharacters)
+    }
+
+    private static func activeVisualContextSummary(rawSummary: String?, engine: SuggestionEngineKind) -> String? {
+        guard let rawSummary else {
+            return nil
+        }
+
+        let limit = VisualContextConfiguration.forEngine(engine).maxSummaryCharacters
+        var sanitizedSummary = PromptContextSanitizer.sanitize(rawSummary, maxCharacters: limit)
+        // CJK and code can cost far more tokens per character than English. Reserve space for
+        // Apple's instructions, caret text and clipboard instead of filling its shared 4K window
+        // with screen text alone. Native llama additionally allocates the complete prompt by token.
+        if engine != .openAICompatible {
+            while TokenCountEstimator.estimate(sanitizedSummary)
+                + sanitizedSummary.unicodeScalars.filter({ !$0.isASCII }).count * 2 > 1200 {
+                sanitizedSummary = String(sanitizedSummary.prefix(sanitizedSummary.count * 9 / 10))
+            }
+        }
+        guard !sanitizedSummary.isEmpty,
+              PromptContextSanitizer.containsAlphanumericSignal(sanitizedSummary)
+        else {
+            return nil
+        }
+
+        return sanitizedSummary
+    }
+
+    private static func clippedText(_ text: String, maxCharacters: Int) -> String {
+        guard text.count > maxCharacters else {
+            return text
+        }
+
+        let suffix = "..."
+        let allowedPrefixCount = max(maxCharacters - suffix.count, 0)
+        return String(text.prefix(allowedPrefixCount))
+            .trimmingCharacters(in: .whitespacesAndNewlines) + suffix
+    }
+
+    /// Picks the per-request token budget from the *effective* word range (preset or custom) and
+    /// the language-aware tokens-per-word factor. The configuration floor still wins so multi-line
+    /// off + a tiny range can't drop us below the safe baseline; the * 2 cap on multi-line caps the
+    /// worst case so a 20-word German custom range can't unilaterally double the longest budget.
+    private static func activeMaxPredictionTokens(
+        configuration: SuggestionConfiguration,
+        wordRange: SuggestionWordRange,
+        responseLanguages: [String],
+        isMultiLineEnabled: Bool
+    ) -> Int {
+        let tokensPerWord = LanguageCatalog.effectiveTokensPerWord(for: responseLanguages)
+        let languageAware = SuggestionWordRange.predictionTokenBudget(
+            highWords: wordRange.highWords,
+            tokensPerWord: tokensPerWord
+        )
+        let base = max(configuration.maxPredictionTokens, languageAware)
+        return isMultiLineEnabled ? min(base * 2, 120) : base
+    }
+
+    /// The prompt's token budget for one request. The configured budget holds back
+    /// `llamaPromptOutputCeilingTokens` of the context window for output, but a request can ask for
+    /// more: a 50-word range reaches 100 tokens in a 2-tokens-per-word language, and multi-line
+    /// doubles budgets up to 120 (the default 12-20 range becomes 52). `LlamaRuntimeCore` reserves
+    /// the whole decode before admitting the prompt, so an overflowing prompt loses its oldest raw
+    /// tokens there: the preface is cut mid-section and the request forfeits KV prefix reuse.
+    /// Taking the excess out of the budget here lets the renderer trim by section priority instead.
+    static func promptTokenBudget(configuredBudget: Int, maxPredictionTokens: Int) -> Int {
+        let excess = max(0, maxPredictionTokens - SuggestionConfiguration.llamaPromptOutputCeilingTokens)
+        return max(0, configuredBudget - excess)
+    }
+
+    private static func promptPreview(
+        for request: SuggestionRequest,
+        selectedEngine: SuggestionEngineKind
+    ) -> String {
+        switch selectedEngine {
+        case .appleIntelligence:
+            return FoundationModelPromptRenderer.promptPreview(for: request)
+        case .llamaOpenSource:
+            return request.prompt
+        case .openAICompatible:
+            return request.prompt
+        }
+    }
+}

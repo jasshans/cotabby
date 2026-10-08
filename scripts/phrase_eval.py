@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plan, run, and compare Cotabby's fixed local next-word benchmark.
+"""Plan, run, and compare Ghostype's fixed local next-word benchmark.
 
 Swift owns replay and scoring. This standard-library CLI only selects inputs, launches the
 app-hosted test with explicit environment settings, and compares its versioned JSON reports.
@@ -26,7 +26,7 @@ import uuid
 import xml.etree.ElementTree as ET
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-CORPUS = ROOT / "CotabbyTests/Fixtures/phrase-prediction-1337.json"
+CORPUS = ROOT / "GhostypeTests/Fixtures/phrase-prediction-1337.json"
 DERIVED = ROOT / "build/DerivedData"
 BASELINES = ROOT / "benchmarks/phrase-prediction"
 CATEGORIES = ("conversation", "science", "entertainment", "work", "technology", "everyday", "travel")
@@ -188,7 +188,7 @@ def inject_environment(value, environment):
     """Support both legacy and TestConfigurations xctestrun layouts without moving TESTROOT."""
     count = 0
     if isinstance(value, dict):
-        if "CotabbyTests.xctest" in str(value.get("TestBundlePath", "")):
+        if "GhostypeTests.xctest" in str(value.get("TestBundlePath", "")):
             value.setdefault("EnvironmentVariables", {}).update(environment)
             count += 1
         else:
@@ -311,9 +311,9 @@ def build_input_snapshot(workspace=None):
     Only canonical package lock paths may change during explicit dependency resolution. A file
     merely named Package.resolved inside app/test fixtures is still an ordinary protected input.
     """
-    roots = [(ROOT, ["Cotabby", "CotabbyTests", "Cotabby.xcodeproj", "project.yml", "CotabbyInfo.plist", "Config"])]
+    roots = [(ROOT, ["Ghostype", "GhostypeTests", "Ghostype.xcodeproj", "project.yml", "GhostypeInfo.plist", "Config"])]
     inputs = set((ROOT / "Config").glob("*.xcconfig"))
-    package_locks = {ROOT / "Cotabby.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"}
+    package_locks = {ROOT / "Ghostype.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"}
     if workspace:
         workspace = workspace.resolve()
         document = workspace / "contents.xcworkspacedata"
@@ -385,7 +385,7 @@ def prepare_build_inputs(workspace, project, output, *, skip_build):
     record_path.write_text(json.dumps(record, indent=2) + "\n")
     try:
         logged_command([
-            "xcodebuild", "-resolvePackageDependencies", *project, "-scheme", "Cotabby", "-configuration", "Release",
+            "xcodebuild", "-resolvePackageDependencies", *project, "-scheme", "Ghostype", "-configuration", "Release",
             "-destination", "platform=macOS", "-derivedDataPath", DERIVED, "-skipPackageUpdates",
         ], output / "resolution.log")
         # Resolving is not complete until its resulting inputs can be captured. A concurrent
@@ -412,14 +412,14 @@ def sign_test_hosts(products, output):
     temporary copy avoids both, needs no developer identity, and never changes the installed app
     or the binaries fingerprinted for build reuse. The context manager removes it even on failure.
     """
-    source = products / "Release/Cotabby.app"
+    source = products / "Release/Ghostype.app"
     if not source.is_dir():
         raise RuntimeError("No Release test host found for ad-hoc signing")
     entitlements = output / "test-host.entitlements"
     entitlements.write_bytes(plistlib.dumps({"com.apple.security.get-task-allow": True,
         "com.apple.security.cs.disable-library-validation": True}))
     with tempfile.TemporaryDirectory(prefix="cohamster-eval-", dir="/private/tmp") as staging:
-        host = pathlib.Path(staging) / "Cotabby.app"
+        host = pathlib.Path(staging) / "Ghostype.app"
         logged_command(["ditto", "--norsrc", "--noextattr", source, host], output / "sign-copy.log")
         logged_command(["xattr", "-cr", host], output / "sign-attributes.log")
         logged_command(["codesign", "--force", "--deep", "--sign", "-", "--timestamp=none",
@@ -430,8 +430,8 @@ def sign_test_hosts(products, output):
         finally:
             # XCTest launches through launchd, outside xcodebuild's process group. Interrupting
             # that group alone can leave a blocked host (and its model) alive. Match only this
-            # disposable executable, never the installed Cotabby app or another replay.
-            executable = host / "Contents/MacOS/Cotabby"
+            # disposable executable, never the installed Ghostype app or another replay.
+            executable = host / "Contents/MacOS/Ghostype"
             subprocess.run(["pkill", "-TERM", "-f", "^" + re.escape(str(executable)) + "( |$)"],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
 
@@ -440,7 +440,7 @@ def retarget_test_host(value, host):
     """Preserve __TESTROOT__/__TESTHOST__ semantics while pointing XCTest at the signed copy."""
     count = 0
     if isinstance(value, dict):
-        if "CotabbyTests.xctest" in str(value.get("TestBundlePath", "")):
+        if "GhostypeTests.xctest" in str(value.get("TestBundlePath", "")):
             old = value["TestHostPath"]
             value["TestHostPath"] = str(host)
             value["DependentProductPaths"] = [p.replace(old, str(host)) for p in value.get("DependentProductPaths", [])]
@@ -513,10 +513,10 @@ def run(args):
                       "perCategory": args.per_category, "limit": args.limit},
     }
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
-    patch_arguments = ("diff", "HEAD", "--", "Cotabby", "CotabbyTests", "Cotabby.xcodeproj", "CotabbyInfo.plist", "Config", "project.yml", "scripts")
+    patch_arguments = ("diff", "HEAD", "--", "Ghostype", "GhostypeTests", "Ghostype.xcodeproj", "GhostypeInfo.plist", "Config", "project.yml", "scripts")
     (output / "working-tree.patch").write_text(git_output(*patch_arguments))
     print(f"Results: {output}", flush=True)
-    project = ["-workspace", args.workspace.resolve()] if args.workspace else ["-project", ROOT / "Cotabby.xcodeproj"]
+    project = ["-workspace", args.workspace.resolve()] if args.workspace else ["-project", ROOT / "Ghostype.xcodeproj"]
     build_marker = DERIVED / "phrase-eval-build.json"
     initial_git = {key: manifest[key] for key in ("gitCommit", "gitStatus")}
     prepared_inputs = prepare_build_inputs(args.workspace, project, output, skip_build=args.skip_build)
@@ -538,15 +538,15 @@ def run(args):
         raise RuntimeError("--skip-build requires a recorded successful build with unchanged source inputs; run once without it")
     if not args.skip_build:
         logged_command([
-            "xcodebuild", "build-for-testing", *project, "-scheme", "Cotabby", "-configuration", "Release",
+            "xcodebuild", "build-for-testing", *project, "-scheme", "Ghostype", "-configuration", "Release",
             "-destination", "platform=macOS", "-derivedDataPath", DERIVED,
             "CODE_SIGNING_ALLOWED=NO", "ENABLE_TESTABILITY=YES", "ONLY_ACTIVE_ARCH=YES",
             "SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) RUN_LLAMA_EVAL", "-skipPackageUpdates",
         ], output / "build.log")
     products = DERIVED / "Build/Products"
-    candidates = [p for p in products.glob("Cotabby_*.xctestrun") if "phrase-eval-" not in p.name]
+    candidates = [p for p in products.glob("Ghostype_*.xctestrun") if "phrase-eval-" not in p.name]
     if not candidates:
-        raise RuntimeError("Build produced no Cotabby xctestrun file")
+        raise RuntimeError("Build produced no Ghostype xctestrun file")
     source = max(candidates, key=lambda p: p.stat().st_mtime_ns)
     product_fingerprint = build_product_fingerprint(source)
     if args.skip_build and prior_build.get("productSHA256") != product_fingerprint:
@@ -564,7 +564,7 @@ def run(args):
     with sign_test_hosts(products, output) as host:
         configuration = plistlib.loads(source.read_bytes())
         if retarget_test_host(configuration, host) != 1:
-            raise RuntimeError("Expected exactly one app-hosted CotabbyTests target")
+            raise RuntimeError("Expected exactly one app-hosted GhostypeTests target")
         if build_product_fingerprint(source) != product_fingerprint:
             raise RuntimeError("App/test binaries changed while staging the test host")
         environment = {
@@ -602,15 +602,15 @@ def run(args):
         if inject_environment(configuration, environment) != 1:
             raise RuntimeError("Expected exactly one CotabbyTests target in xctestrun")
         # __TESTROOT__ is relative to the plist, so keep the temporary copy beside the original.
-        prepared = products / f"Cotabby_phrase-eval-{uuid.uuid4().hex}.xctestrun"
+        prepared = products / f"Ghostype_phrase-eval-{uuid.uuid4().hex}.xctestrun"
         prepared.write_bytes(plistlib.dumps(configuration))
         try:
             logged_command([
                 "xcodebuild", "test-without-building", "-xctestrun", prepared,
                 "-destination", "platform=macOS", "-derivedDataPath", DERIVED,
-                "-only-testing:CotabbyTests/PhrasePredictionEvalTests/testReplayCorpus",
-                *(["-only-testing:CotabbyTests/LlamaRuntimeCoreIntegrationTests",
-                   "-only-testing:CotabbyTests/LlamaTypingSessionEvalTests"] if getattr(args, "runtime_checks", False) else []),
+                "-only-testing:GhostypeTests/PhrasePredictionEvalTests/testReplayCorpus",
+                *(["-only-testing:GhostypeTests/LlamaRuntimeCoreIntegrationTests",
+                   "-only-testing:GhostypeTests/LlamaTypingSessionEvalTests"] if getattr(args, "runtime_checks", False) else []),
                 "-parallel-testing-enabled", "NO", "-test-timeouts-enabled", "NO",
             ], output / "test.log", ReplayProgress(output, sum(checkpoint_counts(phrases, args.mode, args.context).values())))
         finally:
@@ -791,7 +791,7 @@ def main():
             # The app needs the pinned, patched CotabbyInference; the bare project resolves the remote
             # package, which lacks those APIs until the pending upstream change lands.
             command.add_argument("--workspace", type=pathlib.Path,
-                                 default=ROOT / "build/cotabby-dependencies/Cotabby.xcworkspace",
+                                 default=ROOT / "build/cotabby-dependencies/Ghostype.xcworkspace",
                                  help="Workspace with the matching CotabbyInference checkout "
                                       "(default: the one scripts/prepare_cotabby_workspace.sh creates)")
             command.add_argument("--output", type=pathlib.Path, help="New results directory; never overwrites a previous run")
