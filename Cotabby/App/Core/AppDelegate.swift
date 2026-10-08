@@ -252,6 +252,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         suggestionCoordinator.stop()
         // Write the field being typed in now; the debounced background save may not have run yet.
         environment.typingHistoryStore.flush()
+        // Same for suggestion memory: the debounced batch may still be pending.
+        environment.memoryRecorder.flush()
         inlineCommandCoordinator.stop()
         inputMonitor.stop()
         focusModel.stop()

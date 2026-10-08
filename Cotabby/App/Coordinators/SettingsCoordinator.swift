@@ -26,6 +26,8 @@ final class SettingsCoordinator: NSObject, NSWindowDelegate {
     private let onShowWelcome: () -> Void
     private let clearEmojiHistory: () -> Void
     private let typingHistoryStore: TypingHistoryStore
+    /// Drives the Suggestion Memory section of the Context pane.
+    private let memoryRecorder: MemoryRecorder
 
     private var settingsWindowController: NSWindowController?
 
@@ -51,7 +53,8 @@ final class SettingsCoordinator: NSObject, NSWindowDelegate {
         systemMetricsStore: SystemMetricsStore,
         onShowWelcome: @escaping () -> Void,
         clearEmojiHistory: @escaping () -> Void,
-        typingHistoryStore: TypingHistoryStore
+        typingHistoryStore: TypingHistoryStore,
+        memoryRecorder: MemoryRecorder
     ) {
         self.appUpdateManager = appUpdateManager
         self.permissionManager = permissionManager
@@ -68,6 +71,7 @@ final class SettingsCoordinator: NSObject, NSWindowDelegate {
         self.onShowWelcome = onShowWelcome
         self.clearEmojiHistory = clearEmojiHistory
         self.typingHistoryStore = typingHistoryStore
+        self.memoryRecorder = memoryRecorder
     }
 
     /// Shows the settings window, reusing the existing instance if it is already open.
@@ -98,6 +102,7 @@ final class SettingsCoordinator: NSObject, NSWindowDelegate {
                     onShowWelcome: onShowWelcome,
                     clearEmojiHistory: clearEmojiHistory,
                     typingHistoryStore: typingHistoryStore,
+                    memoryRecorder: memoryRecorder,
                     onQuit: { NSApplication.shared.terminate(nil) }
                 )
             )
