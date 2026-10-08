@@ -46,7 +46,8 @@ enum SuggestionRequestFactory {
         configuration: SuggestionConfiguration,
         clipboardContext: String? = nil,
         visualContextSummary: String? = nil,
-        historyExamples: [String] = []
+        historyExamples: [String] = [],
+        learnedVocabulary: [String] = []
     ) -> SuggestionRequestBuildResult {
         let prefixText = truncatedPromptPrefix(
             from: context.precedingText,
@@ -94,10 +95,11 @@ enum SuggestionRequestFactory {
                 fieldPlaceholder: context.fieldPlaceholder
             )
             : nil
-        // Typing history stays on this Mac. The provider already returns nothing for the endpoint
-        // engine; dropping it here as well keeps that guarantee in the one pure place every request
-        // passes through.
+        // Learned vocabulary stays on this Mac, like typing history. The provider already returns
+        // nothing for the endpoint engine; dropping it here as well keeps that guarantee in the
+        // one pure place every request passes through.
         let activeHistoryExamples = settings.selectedEngine == .openAICompatible ? [] : historyExamples
+        let activeLearnedVocabulary = settings.selectedEngine == .openAICompatible ? [] : learnedVocabulary
         let maxPredictionTokens = activeMaxPredictionTokens(
             configuration: configuration,
             wordRange: settings.effectiveWordRange,
@@ -125,6 +127,7 @@ enum SuggestionRequestFactory {
             visualContextSummary: boundedVisualContextSummary,
             surfaceContext: surfaceContext,
             historyExamples: activeHistoryExamples,
+            learnedVocabulary: activeLearnedVocabulary,
             contextBudget: settings.selectedEngine == .openAICompatible ? 2400 : BaseCompletionPromptRenderer.defaultContextBudget,
             maxScreenCharacters: settings.selectedEngine == .openAICompatible ? 500 : 4000,
             screenPriority: settings.selectedEngine == .openAICompatible ? 30 : 45,
@@ -159,6 +162,7 @@ enum SuggestionRequestFactory {
             visualContextSummary: boundedVisualContextSummary,
             surfaceContext: surfaceContext,
             historyExamples: activeHistoryExamples,
+            learnedVocabulary: activeLearnedVocabulary,
             isMultiLineEnabled: settings.isMultiLineEnabled,
             requestID: RequestID.generate(),
             wordRange: settings.effectiveWordRange

@@ -76,6 +76,10 @@ struct SuggestionRequest: Equatable, Sendable {
     /// Always empty for the endpoint engine: history never leaves this Mac, and the router refuses
     /// to send a request that carries any.
     let historyExamples: [String]
+    /// Words and phrases the user demonstrably types, learned from accepted and dismissed
+    /// suggestions (see `PersistentMemoryStore`). Same guarantee as `historyExamples`: always
+    /// empty for the endpoint engine, so memory never leaves this Mac.
+    let learnedVocabulary: [String]
     /// When enabled, the normalizer keeps multiple lines instead of truncating to the first line.
     let isMultiLineEnabled: Bool
     /// The user's word-count preset, so decoding does not stop at a sentence end before the minimum
@@ -109,6 +113,7 @@ struct SuggestionRequest: Equatable, Sendable {
         visualContextSummary: String?,
         surfaceContext: SurfaceContext? = nil,
         historyExamples: [String] = [],
+        learnedVocabulary: [String] = [],
         isMultiLineEnabled: Bool,
         requestID: String = "req_unknown",
         wordRange: SuggestionWordRange? = nil
@@ -134,6 +139,7 @@ struct SuggestionRequest: Equatable, Sendable {
         self.visualContextSummary = visualContextSummary
         self.surfaceContext = surfaceContext
         self.historyExamples = historyExamples
+        self.learnedVocabulary = learnedVocabulary
         self.isMultiLineEnabled = isMultiLineEnabled
         self.requestID = requestID
         self.wordRange = wordRange

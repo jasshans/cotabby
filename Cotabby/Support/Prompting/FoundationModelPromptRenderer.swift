@@ -147,6 +147,17 @@ enum FoundationModelPromptRenderer {
             sections.append(contentsOf: examples.map { "\"\($0)\"" })
         }
 
+        // Learned vocabulary rides the per-request prompt, not instructions, for the same reason
+        // as the history examples: it changes as the user's wording does, and instructions are the
+        // cached part of Apple's session. The request factory already drops it for endpoints, so
+        // this list only ever reaches on-device engines.
+        let vocabulary = request.learnedVocabulary.filter { !$0.isEmpty }.prefix(50)
+        if !vocabulary.isEmpty {
+            sections.append("")
+            sections.append("Words and phrases the user often types, to match their wording (do not repeat them):")
+            sections.append(vocabulary.joined(separator: ", "))
+        }
+
         if let clipboardContext = request.clipboardContext,
            !clipboardContext.isEmpty {
             sections.append("")

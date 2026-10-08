@@ -31,6 +31,7 @@ enum BaseCompletionPromptRenderer {
         visualContextSummary: String? = nil,
         surfaceContext: SurfaceContext? = nil,
         historyExamples: [String] = [],
+        learnedVocabulary: [String] = [],
         usesCompactSurfaceContext: Bool = false,
         contextBudget: Int = defaultContextBudget,
         maxScreenCharacters: Int = 4000,
@@ -65,6 +66,9 @@ enum BaseCompletionPromptRenderer {
         }
         if let history = Self.historySection(historyExamples) {
             sections.append(history)
+        }
+        if let vocabulary = Self.learnedVocabularySection(learnedVocabulary) {
+            sections.append(vocabulary)
         }
         if let clip = Self.nonEmpty(clipboardContext) {
             sections.append(Self.contextSection("clipboard", "On the clipboard: \(clip)", priority: 35, maxChars: 400))
@@ -173,6 +177,37 @@ enum BaseCompletionPromptRenderer {
     }
 
     private static let historyMaxCharacters = 760
+
+    /// Words and phrases the user demonstrably reaches for, learned from accepted and dismissed
+    /// suggestions (see `PersistentMemoryStore`). A base model conditions on description, so a
+    /// compact comma-joined list of the user's own wording nudges completions toward their diction
+    /// without issuing instructions. Sits right after the history examples: both teach the model
+    /// the user's wording, and both change slowly enough to keep the prompt head reusable.
+    ///
+    /// All or nothing, like the history section: a budget-trimmed vocabulary could end mid-phrase
+    /// and teach the model a broken word. Phrases are dropped whole until the section fits its cap.
+    private static func learnedVocabularySection(_ phrases: [String]) -> PromptSection? {
+        let heading = "Words and phrases the writer often uses:"
+        var content = heading
+        for phrase in phrases {
+            let trimmed = phrase.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            let piece = (content == heading ? " " : ", ") + trimmed
+            guard content.count + piece.count <= learnedVocabularyMaxCharacters else { break }
+            content += piece
+        }
+        guard content.count > heading.count else { return nil }
+        return PromptSection(
+            name: "learned-vocabulary",
+            content: content,
+            priority: 37,
+            minChars: content.count,
+            maxChars: content.count,
+            truncation: .preserveStart
+        )
+    }
+
+    private static let learnedVocabularyMaxCharacters = 480
 
     private static func contextSection(
         _ name: String,
