@@ -115,6 +115,24 @@ protocol SuggestionHistoryProviding: AnyObject {
 }
 
 @MainActor
+protocol SuggestionMemoryRecording: AnyObject {
+    /// Records an accepted suggestion chunk. `isSecure` is re-checked by the recorder: this is the
+    /// last boundary before text hits the encrypted database.
+    func recordAccepted(_ text: String, bundleIdentifier: String, isSecure: Bool)
+    /// Records a dismissed suggestion (Esc) so its wording can be down-ranked.
+    func recordRejected(_ text: String, bundleIdentifier: String, isSecure: Bool)
+    /// Writes any pending events immediately (termination flush).
+    func flush()
+}
+
+@MainActor
+protocol SuggestionMemoryContextProviding: AnyObject {
+    /// The cached learned vocabulary for prompt conditioning, best first. Returns [] for the
+    /// endpoint engine (memory never leaves the Mac) and while the feature is off.
+    func vocabularyForPrompt(engine: SuggestionEngineKind) -> [String]
+}
+
+@MainActor
 protocol SuggestionGenerating: AnyObject {
     func generateSuggestion(for request: SuggestionRequest) async throws -> SuggestionResult
     /// Streaming variant: `onPartial` receives cumulative, already-normalized partial results on
