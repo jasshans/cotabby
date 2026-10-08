@@ -224,7 +224,8 @@ extension SuggestionCoordinator {
                 context: prewarmContext,
                 settings: settings,
                 configuration: configuration,
-                historyExamples: self.historyExamples(for: prewarmContext)
+                historyExamples: self.historyExamples(for: prewarmContext),
+                learnedVocabulary: self.learnedVocabulary(for: prewarmContext)
             ).request
             await suggestionEngine.prewarm(for: request)
         }
@@ -285,6 +286,15 @@ extension SuggestionCoordinator {
             dismissalMemory.record(identityKey: context.suggestionSessionIdentityKey,
                                    precedingText: context.precedingText, trailingText: context.trailingText,
                                    completion: session.remainingText, at: ProcessInfo.processInfo.systemUptime)
+            // A dismissed suggestion is negative evidence for its wording — but not for
+            // corrections: dismissing a typo fix says nothing against the corrected word.
+            if !session.kind.isCorrection {
+                memoryRecorder?.recordRejected(
+                    session.remainingText,
+                    bundleIdentifier: raw.bundleIdentifier,
+                    isSecure: raw.isSecure
+                )
+            }
         }
 
         if event.kind == .acceptance {

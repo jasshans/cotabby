@@ -213,6 +213,14 @@ extension SuggestionCoordinator {
         deferAcceptanceBookkeeping { [weak self] in
             self?.recordAcceptedWords(from: acceptedChunk)
             self?.recordSuggestionAcceptedIfFirstChunk(of: sessionForAcceptance)
+            // Persistent memory learns from every accepted chunk, on both the exhausted and the
+            // advanced paths. Secure fields are refused again inside the recorder: this is the
+            // last boundary before text reaches the encrypted database.
+            self?.memoryRecorder?.recordAccepted(
+                acceptedChunk,
+                bundleIdentifier: liveContext.bundleIdentifier,
+                isSecure: liveContext.isSecure
+            )
         }
 
         // The insert just made every geometry cache built from pre-insert reads stale: child-run

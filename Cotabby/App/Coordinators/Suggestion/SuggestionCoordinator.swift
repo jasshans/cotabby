@@ -185,12 +185,28 @@ final class SuggestionCoordinator: ObservableObject {
     /// The user's typing history, when the app has one. Optional so test rigs and previews run
     /// without it; the provider itself returns nothing while history is turned off.
     let historyProvider: (any SuggestionHistoryProviding)?
+    /// The persistent suggestion memory (accept/reject learning), when the app has one. Optional
+    /// for the same reason as the history provider; the recorder gates on its own enable toggle.
+    let memoryRecorder: (any SuggestionMemoryRecording)?
+    /// The cached learned vocabulary for prompt conditioning. Optional so test rigs run without
+    /// it; the provider itself returns nothing while memory is off or for the endpoint engine.
+    let memoryContext: (any SuggestionMemoryContextProviding)?
 
     /// Examples of the user's past writing for this field, for every request built from it.
     /// Every request kind (ordinary, speculative, continuation, prewarm) passes the same examples so
     /// their prompts share one head and the llama KV cache stays reusable between them.
     func historyExamples(for context: FocusedInputContext) -> [String] {
         historyProvider?.historyExamples(for: context, engine: settingsSnapshot.selectedEngine) ?? []
+    }
+
+    /// Learned vocabulary for this request, for every request built from it. Like the history
+    /// examples, every request kind passes the same words so their prompts share one head. The
+    /// provider owns the endpoint-engine and feature-off gates, so callers never branch.
+    func learnedVocabulary(for context: FocusedInputContext) -> [String] {
+        // `context` is unused today; it keeps the signature parallel with `historyExamples(for:)`
+        // for the day vocabulary becomes field-aware. The underscore marks that intent.
+        _ = context
+        return memoryContext?.vocabularyForPrompt(engine: settingsSnapshot.selectedEngine) ?? []
     }
 
     init(
@@ -213,6 +229,8 @@ final class SuggestionCoordinator: ObservableObject {
         spellingLanguageResolver: SpellingLanguageResolver = SpellingLanguageResolver(),
         qualityMetricsStore: SuggestionQualityMetricsStore,
         historyProvider: (any SuggestionHistoryProviding)? = nil,
+        memoryRecorder: (any SuggestionMemoryRecording)? = nil,
+        memoryContext: (any SuggestionMemoryContextProviding)? = nil,
         userDefaults: UserDefaults = .standard
     ) {
         let storedTotalTabAcceptedWordCount = userDefaults.integer(
@@ -237,6 +255,8 @@ final class SuggestionCoordinator: ObservableObject {
         self.spellingLanguageResolver = spellingLanguageResolver
         self.qualityMetricsStore = qualityMetricsStore
         self.historyProvider = historyProvider
+        self.memoryRecorder = memoryRecorder
+        self.memoryContext = memoryContext
         self.userDefaults = userDefaults
         settingsSnapshot = suggestionSettings.snapshot
         // These collaborators isolate "how overlay/logging works" from "when the coordinator
