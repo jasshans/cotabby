@@ -70,9 +70,9 @@ struct MemorySectionView: View {
     private var summaryText: String {
         switch recorder.status {
         case .loading:
-            "Loading…"
+            return "Loading…"
         case .unavailable(let message):
-            "Unavailable: \(message)"
+            return "Unavailable: \(message)"
         case .ready:
             let phrases = recorder.phraseCount
             let events = recorder.eventCount
