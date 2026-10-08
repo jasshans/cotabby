@@ -99,7 +99,7 @@ nonisolated struct KeychainMemoryKeyStore: MemoryKeyStore {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: Self.account,
+            kSecAttrAccount as String: Self.account
         ]
     }
 

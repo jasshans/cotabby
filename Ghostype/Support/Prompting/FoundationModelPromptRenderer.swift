@@ -151,12 +151,7 @@ enum FoundationModelPromptRenderer {
         // as the history examples: it changes as the user's wording does, and instructions are the
         // cached part of Apple's session. The request factory already drops it for endpoints, so
         // this list only ever reaches on-device engines.
-        let vocabulary = request.learnedVocabulary.filter { !$0.isEmpty }.prefix(50)
-        if !vocabulary.isEmpty {
-            sections.append("")
-            sections.append("Words and phrases the user often types, to match their wording (do not repeat them):")
-            sections.append(vocabulary.joined(separator: ", "))
-        }
+        Self.appendLearnedVocabulary(request.learnedVocabulary, to: &sections)
 
         if let clipboardContext = request.clipboardContext,
            !clipboardContext.isEmpty {
@@ -200,6 +195,16 @@ enum FoundationModelPromptRenderer {
     /// Maps the focused app's surface class to a one-line tone cue or nil if no rule matches.
     /// Classification lives in the shared `AppSurfaceClassifier` so the Apple and llama prompt
     /// paths agree about what kind of app the user is in. Terminal emulators and unrecognized apps get no hint: a shell
+    /// Appends the learned-vocabulary block when the user has one. Split out so the
+    /// prompt-composition function stays under the cyclomatic-complexity budget.
+    private static func appendLearnedVocabulary(_ vocabulary: [String], to sections: inout [String]) {
+        let words = vocabulary.filter { !$0.isEmpty }.prefix(50)
+        guard !words.isEmpty else { return }
+        sections.append("")
+        sections.append("Words and phrases the user often types, to match their wording (do not repeat them):")
+        sections.append(words.joined(separator: ", "))
+    }
+
     /// prompt, log pager, or `git commit` buffer is mostly prose, not code, so the no-hint default
     /// is safer than a guessed cue.
     private static func appToneHint(forBundleIdentifier identifier: String) -> String? {
