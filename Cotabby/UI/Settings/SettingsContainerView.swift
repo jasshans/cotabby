@@ -30,6 +30,8 @@ struct SettingsContainerView: View {
     let clearEmojiHistory: () -> Void
     /// Owned by `CotabbyAppEnvironment`; the Context pane observes it for the Typing History section.
     let typingHistoryStore: TypingHistoryStore
+    /// Owned by `CotabbyAppEnvironment`; the Context pane observes it for the Suggestion Memory section.
+    let memoryRecorder: MemoryRecorder
     let onQuit: () -> Void
 
     @AppStorage("cotabbySettingsSelectedCategoryV2")
@@ -145,7 +147,11 @@ struct SettingsContainerView: View {
         case .writing:
             WritingPaneView(suggestionSettings: suggestionSettings)
         case .context:
-            ContextPaneView(suggestionSettings: suggestionSettings, typingHistory: typingHistoryStore)
+            ContextPaneView(
+                suggestionSettings: suggestionSettings,
+                typingHistory: typingHistoryStore,
+                memory: memoryRecorder
+            )
         case .shortcuts:
             ShortcutsPaneView(suggestionSettings: suggestionSettings)
         case .apps:

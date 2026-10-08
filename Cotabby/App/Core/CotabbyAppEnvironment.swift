@@ -41,6 +41,9 @@ final class CotabbyAppEnvironment {
     let performanceMetricsStore: PerformanceMetricsStore
     let qualityMetricsStore: SuggestionQualityMetricsStore
     let typingHistoryStore: TypingHistoryStore
+    /// Encrypted on-device accept/reject learning (see `MemoryRecorder`). Owned here so settings
+    /// and the termination flush share one instance with the suggestion coordinator.
+    let memoryRecorder: MemoryRecorder
     let settingsCoordinator: SettingsCoordinator
     let activationIndicatorController: ActivationIndicatorController
     let focusDebugOverlayController: FocusDebugOverlayController?
@@ -228,6 +231,20 @@ final class CotabbyAppEnvironment {
         // never opens the real archive or Keychain item, so tests cannot read or overwrite it.
         let isTestHost = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
         let typingHistoryStore = TypingHistoryStore(loadsArchive: !isTestHost)
+        // Persistent suggestion memory: encrypted SQLite accept/reject learning that survives
+        // restarts (issue #446). Like typing history, the test host never opens the real database
+        // or Keychain item, so tests cannot read or overwrite the user's memory.
+        let persistentMemoryStore = PersistentMemoryStore()
+        let memoryRecorder = MemoryRecorder(store: persistentMemoryStore, loadsMemory: !isTestHost)
+        let memoryContextProvider = MemoryContextProvider(
+            store: persistentMemoryStore,
+            isEnabled: { [weak memoryRecorder] in memoryRecorder?.isEnabled ?? false }
+        )
+        // After every persist batch (and the launch load), reload the cached vocabulary the prompt
+        // builders read from, so prompts trail learning by at most the recorder's debounce window.
+        memoryRecorder.onDidPersist = { [weak memoryContextProvider] in
+            Task { await memoryContextProvider?.refresh() }
+        }
         // Phrase shortcuts answer from history before the router runs. The live engine kind is
         // read per request so a power-source switch to the endpoint stops shortcuts immediately.
         let historyAwareEngine = TypingHistoryPhraseEngine(
@@ -260,7 +277,8 @@ final class CotabbyAppEnvironment {
                 welcomeCoordinator?.showWelcome()
             },
             clearEmojiHistory: { emojiUsageStore.clear() },
-            typingHistoryStore: typingHistoryStore
+            typingHistoryStore: typingHistoryStore,
+            memoryRecorder: memoryRecorder
         )
 
         let interactionState = SuggestionInteractionState()
@@ -296,7 +314,9 @@ final class CotabbyAppEnvironment {
             symSpellCorrector: symSpellCorrector,
             spellingLanguageResolver: SpellingLanguageResolver(),
             qualityMetricsStore: qualityMetricsStore,
-            historyProvider: typingHistoryStore
+            historyProvider: typingHistoryStore,
+            memoryRecorder: memoryRecorder,
+            memoryContext: memoryContextProvider
         )
 
         // The emoji picker is a sibling to the suggestion coordinator. It reuses the input monitor,
@@ -367,6 +387,7 @@ final class CotabbyAppEnvironment {
         self.performanceMetricsStore = performanceMetricsStore
         self.qualityMetricsStore = qualityMetricsStore
         self.typingHistoryStore = typingHistoryStore
+        self.memoryRecorder = memoryRecorder
         self.settingsCoordinator = settingsCoordinator
         self.activationIndicatorController = activationIndicatorController
         self.focusDebugOverlayController = CotabbyDebugOptions.areOverlaysAvailable

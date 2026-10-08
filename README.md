@@ -77,7 +77,13 @@ Privacy is the whole point, so Cotabby's default engines keep generation on your
 - The optional OpenAI-compatible engine sends a bounded request only to the endpoint you configure;
   that endpoint can be loopback, on your local network, or a public HTTPS service.
 - No analytics, no telemetry, no crash reporting.
-- A normal install never writes what you type to disk.
+- A normal install never writes what you type to disk, except for the encrypted suggestion-memory
+  database described below.
+- Suggestion memory (Settings → Context, on by default) learns words and phrases from accepted
+  and dismissed suggestions into an AES-encrypted SQLite database in your Application Support
+  folder; the key lives in your Keychain and never leaves the Mac. Password fields are never
+  recorded, the learned vocabulary is never sent to an endpoint, and "Clear memory…" deletes the
+  database and rotates the key so it can never be decrypted again.
 - Apart from a configured endpoint, the network is used for model downloads and update checks, not
   suggestion generation.
 

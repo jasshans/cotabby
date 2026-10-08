@@ -60,6 +60,7 @@ enum SettingsItem: String, CaseIterable, Identifiable {
     // Context
     case extendedContext
     case typingHistory
+    case suggestionMemory
     case contextLivePreview
     // Engine & Model
     case engine
@@ -154,6 +155,7 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .automaticallyFixTypos: return "Automatically Fix Typos"
         case .extendedContext: return "Extended Context"
         case .typingHistory: return "Typing History"
+        case .suggestionMemory: return "Suggestion Memory"
         case .contextLivePreview: return "Live Preview"
         case .engine: return "Engine"
         case .appleIntelligenceAvailability: return "Apple Intelligence Availability"
@@ -242,6 +244,7 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .automaticallyFixTypos: return "checkmark.circle"
         case .extendedContext: return "doc.text"
         case .typingHistory: return "clock.arrow.circlepath"
+        case .suggestionMemory: return "brain"
         case .contextLivePreview: return "text.cursor"
         case .engine: return "cpu"
         case .appleIntelligenceAvailability: return "apple.logo"
@@ -374,6 +377,7 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .automaticallyFixTypos: return "Replace a misspelled word right after you press Space."
         case .extendedContext: return "A glossary or notes sent with every suggestion."
         case .typingHistory: return "Learn from what you type, and import Cotypist history."
+        case .suggestionMemory: return "Learn words and phrases from accepted and dismissed suggestions."
         case .contextLivePreview: return "A real field that exercises the full pipeline."
         case .engine: return "Apple Intelligence, bundled Open Source, or a local endpoint."
         case .appleIntelligenceAvailability: return "Whether this Mac can run Apple Intelligence."
@@ -549,6 +553,9 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .typingHistory:
             return ["history", "typing history", "personalize", "personalization", "learn", "record",
                     "cotypist", "import", "phrases", "my writing", "privacy", "delete"]
+        case .suggestionMemory:
+            return ["memory", "suggestion memory", "learn", "vocabulary", "phrases", "words",
+                    "personalize", "personalization", "remember", "privacy", "clear", "delete"]
         case .contextLivePreview:
             return ["live", "preview", "test", "ghost", "try", "playground", "sandbox",
                     "demo", "try it", "test field"]

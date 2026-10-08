@@ -27,6 +27,8 @@ struct ContextPaneView: View {
     @ObservedObject var suggestionSettings: SuggestionSettingsModel
     /// Owned by `CotabbyAppEnvironment`; drives the Typing History section.
     @ObservedObject var typingHistory: TypingHistoryStore
+    /// Owned by `CotabbyAppEnvironment`; drives the Suggestion Memory section.
+    @ObservedObject var memory: MemoryRecorder
 
     private static let previewEditorMinHeight: CGFloat = 132
     private static let extendedContextEditorMinHeight: CGFloat = 220
@@ -37,6 +39,7 @@ struct ContextPaneView: View {
             extendedContextSection
             howThisIsUsedSection
             TypingHistorySectionView(store: typingHistory)
+            MemorySectionView(recorder: memory)
         }
     }
 
