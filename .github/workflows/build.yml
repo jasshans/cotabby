@@ -41,6 +41,19 @@ jobs:
         with:
           xcode-version: latest-stable
 
+      - name: Install XcodeGen
+        run: |
+          if ! command -v xcodegen >/dev/null; then
+            brew install xcodegen
+          fi
+          xcodegen --version
+
+      - name: Regenerate Xcode project
+        run: xcodegen generate
+
+      # Must run after `xcodegen generate`: create-inference-workspace.py
+      # requires Ghostype.xcodeproj to exist (it references it in the
+      # generated workspace), and the .xcodeproj is not committed.
       - name: Prepare matching inference dependency
         run: scripts/prepare_cotabby_workspace.sh
 
