@@ -1,6 +1,6 @@
 # 1337 benchmark improvement experiments
 
-This is the working checklist and decision record for improving Cotabby's local autocomplete.
+This is the working checklist and decision record for improving Ghostype's local autocomplete.
 The benchmark runner owns replay and scoring; this document records hypotheses, evidence,
 and decisions so experiments do not silently become product defaults.
 

@@ -10,7 +10,7 @@ The first release under the **CoHamster** name, September 24, 2026.
 ## Install
 
 Download **CoHamster-0.6.3-arm64.dmg**, open it, and drag **CoHamster.app** into Applications.
-Quit Cotabby McHamster or any other copy before opening CoHamster. Requires an Apple Silicon Mac
+Quit Ghostype McHamster or any other copy before opening CoHamster. Requires an Apple Silicon Mac
 running macOS 14 or later; Apple Intelligence requires macOS 26 and supported hardware.
 The app is Developer ID signed and notarized by Apple. This is a prerelease.
 

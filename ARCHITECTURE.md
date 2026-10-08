@@ -1,12 +1,12 @@
-# Cotabby Architecture
+# Ghostype Architecture
 
-This is the ten-minute maintainer map for Cotabby. It explains the product loop, ownership
+This is the ten-minute maintainer map for Ghostype. It explains the product loop, ownership
 boundaries, reliability rules, and the best files to read before changing behavior. It is intentionally
 a roadmap rather than an encyclopedia.
 
-## What Cotabby Is
+## What Ghostype Is
 
-Cotabby is a macOS menu bar agent that provides inline autocomplete in other applications:
+Ghostype is a macOS menu bar agent that provides inline autocomplete in other applications:
 
 1. Find the focused editable field through macOS Accessibility.
 2. Observe global keyboard input without taking focus.
@@ -33,7 +33,7 @@ These rules explain most of the structure:
   acquisition has a current secure-field caveat described under privacy below.
 - User text and optional context are bounded before generation.
 - On-device work stays local unless the user explicitly selects an endpoint engine.
-- Global input is observed in a fail-open way; Cotabby consumes only events it successfully handles.
+- Global input is observed in a fail-open way; Ghostype consumes only events it successfully handles.
 - MainActor owns UI, published state, AppKit, and most AX access. OCR, downloads, and generation do
   not block it.
 - Mutable native llama state is explicitly serialized and released before process teardown.
@@ -41,16 +41,16 @@ These rules explain most of the structure:
 
 ## Repository Map
 
-- [Cotabby/App](Cotabby/App): application entry point, composition root, lifecycle, and coordinators.
-- [Cotabby/UI](Cotabby/UI): SwiftUI and AppKit-facing presentation for settings, onboarding, menus,
+- [Ghostype/App](Ghostype/App): application entry point, composition root, lifecycle, and coordinators.
+- [Ghostype/UI](Ghostype/UI): SwiftUI and AppKit-facing presentation for settings, onboarding, menus,
   previews, and user surfaces.
-- [Cotabby/Services](Cotabby/Services): side-effectful boundaries for AX, event taps, insertion,
+- [Ghostype/Services](Ghostype/Services): side-effectful boundaries for AX, event taps, insertion,
   capture/OCR, generation, downloads, permissions, updates, and AppKit panels.
-- [Cotabby/Models](Cotabby/Models): shared values, settings, states, configuration, and protocol
+- [Ghostype/Models](Ghostype/Models): shared values, settings, states, configuration, and protocol
   contracts.
-- [Cotabby/Support](Cotabby/Support): deterministic rules, prompt rendering, normalization,
+- [Ghostype/Support](Ghostype/Support): deterministic rules, prompt rendering, normalization,
   reconciliation, layout, and low-level bridging helpers.
-- [CotabbyTests](CotabbyTests): unit tests and microbenchmarks, with emphasis on pure Support and
+- [GhostypeTests](GhostypeTests): unit tests and microbenchmarks, with emphasis on pure Support and
   Models behavior.
 - CotabbyInference: the llama.cpp Swift wrapper consumed from an external SwiftPM package; native
   code is not vendored here. The mid-word anchoring needs a required-prefix constraint that is not in
@@ -61,8 +61,8 @@ These rules explain most of the structure:
 layout. Child folders name stable responsibilities inside a subsystem; they do not create Swift
 namespaces or additional build targets.
 
-Folder names describe the dominant responsibility, not the UI framework. Cotabby/UI contains
-SwiftUI views, while AppKit panel/window controllers live mostly under Cotabby/Services/Presentation or app
+Folder names describe the dominant responsibility, not the UI framework. Ghostype/UI contains
+SwiftUI views, while AppKit panel/window controllers live mostly under Ghostype/Services/Presentation or app
 coordinators because they own process-level presentation behavior.
 
 ## End-to-End Data Flow
@@ -95,9 +95,9 @@ content signatures, settings continuity, and session state.
 
 Read these first:
 
-1. [CotabbyApp.swift](Cotabby/App/Core/CotabbyApp.swift)
-2. [AppDelegate.swift](Cotabby/App/Core/AppDelegate.swift)
-3. [CotabbyAppEnvironment.swift](Cotabby/App/Core/CotabbyAppEnvironment.swift)
+1. [CotabbyApp.swift](Ghostype/App/Core/CotabbyApp.swift)
+2. [AppDelegate.swift](Ghostype/App/Core/AppDelegate.swift)
+3. [CotabbyAppEnvironment.swift](Ghostype/App/Core/CotabbyAppEnvironment.swift)
 
 | Owner | Responsibility | Lifetime |
 | --- | --- | --- |
@@ -118,51 +118,51 @@ power-profile application, engine/model selection, and endpoint connection inval
 owns permission reactions, engine runtime start/stop, overlays, model-directory refresh, and
 process-lifecycle behavior. Both retain subscriptions because both own different relationships.
 
-[SuggestionSettingsModel.swift](Cotabby/Models/Settings/SuggestionSettingsModel.swift) is the
+[SuggestionSettingsModel.swift](Ghostype/Models/Settings/SuggestionSettingsModel.swift) is the
 individually published UI-facing source of app behavior. Its
-[SuggestionSettingsData.swift](Cotabby/Models/Settings/SuggestionSettingsData.swift) projection groups
+[SuggestionSettingsData.swift](Ghostype/Models/Settings/SuggestionSettingsData.swift) projection groups
 the same values by product domain without replacing the existing API. The immutable snapshot used by
-the pipeline is derived from those domains. [SuggestionSettingsStore.swift](Cotabby/Support/Settings/SuggestionSettingsStore.swift)
+the pipeline is derived from those domains. [SuggestionSettingsStore.swift](Ghostype/Support/Settings/SuggestionSettingsStore.swift)
 keeps the established flat UserDefaults keys stable; endpoint credentials live in Keychain.
 
 ## Suggestion State Machine
 
 Read the coordinator in this order:
 
-1. [SuggestionCoordinator.swift](Cotabby/App/Coordinators/Suggestion/SuggestionCoordinator.swift)
-2. [SuggestionCoordinator+Lifecycle.swift](Cotabby/App/Coordinators/Suggestion/SuggestionCoordinator+Lifecycle.swift)
-3. [SuggestionCoordinator+Input.swift](Cotabby/App/Coordinators/Suggestion/SuggestionCoordinator+Input.swift)
-4. [SuggestionCoordinator+Prediction.swift](Cotabby/App/Coordinators/Suggestion/SuggestionCoordinator+Prediction.swift)
-5. [SuggestionCoordinator+Acceptance.swift](Cotabby/App/Coordinators/Suggestion/SuggestionCoordinator+Acceptance.swift)
+1. [SuggestionCoordinator.swift](Ghostype/App/Coordinators/Suggestion/SuggestionCoordinator.swift)
+2. [SuggestionCoordinator+Lifecycle.swift](Ghostype/App/Coordinators/Suggestion/SuggestionCoordinator+Lifecycle.swift)
+3. [SuggestionCoordinator+Input.swift](Ghostype/App/Coordinators/Suggestion/SuggestionCoordinator+Input.swift)
+4. [SuggestionCoordinator+Prediction.swift](Ghostype/App/Coordinators/Suggestion/SuggestionCoordinator+Prediction.swift)
+5. [SuggestionCoordinator+Acceptance.swift](Ghostype/App/Coordinators/Suggestion/SuggestionCoordinator+Acceptance.swift)
 
 The coordinator owns orchestration plus active suggestion and presentation state. It delegates rules
 and cohesive mutable sub-state to smaller boundaries:
 
-- [SuggestionAvailabilityEvaluator.swift](Cotabby/Support/Suggestion/Request/SuggestionAvailabilityEvaluator.swift):
+- [SuggestionAvailabilityEvaluator.swift](Ghostype/Support/Suggestion/Request/SuggestionAvailabilityEvaluator.swift):
   pure permission, settings, focus, and runtime gates.
-- [SuggestionRequestFactory.swift](Cotabby/Support/Suggestion/Request/SuggestionRequestFactory.swift): pure bounded
+- [SuggestionRequestFactory.swift](Ghostype/Support/Suggestion/Request/SuggestionRequestFactory.swift): pure bounded
   request construction and the selected backend's developer-debug prompt payload. Nothing is generated
-  with the caret inside a token ([CaretTokenPosition.swift](Cotabby/Support/Suggestion/Request/CaretTokenPosition.swift)),
+  with the caret inside a token ([CaretTokenPosition.swift](Ghostype/Support/Suggestion/Request/CaretTokenPosition.swift)),
   and on the llama path a request made mid-word is anchored at the word boundary
-  ([WordBoundaryAnchorPolicy.swift](Cotabby/Support/Suggestion/Request/WordBoundaryAnchorPolicy.swift)): the partial
+  ([WordBoundaryAnchorPolicy.swift](Ghostype/Support/Suggestion/Request/WordBoundaryAnchorPolicy.swift)): the partial
   word leaves the prompt (so its last token is a whole word) and the engine is handed the boundary whitespace plus the
   typed letters as a required prefix it masks every inconsistent token against, so the model finishes the word the
   user started; the normalizer shows only the untyped remainder. The word-count preset also bounds the result
-  ([SuggestionLengthPolicy.swift](Cotabby/Support/Suggestion/Output/SuggestionLengthPolicy.swift) trims to the
+  ([SuggestionLengthPolicy.swift](Ghostype/Support/Suggestion/Output/SuggestionLengthPolicy.swift) trims to the
   preset's upper bound at a clause boundary; the decoder's sentence stop waits for its lower bound).
-- [SuggestionWorkController.swift](Cotabby/Services/Suggestion/State/SuggestionWorkController.swift):
+- [SuggestionWorkController.swift](Ghostype/Services/Suggestion/State/SuggestionWorkController.swift):
   debounce/generation tasks and monotonically increasing work IDs.
-- [SuggestionInteractionState.swift](Cotabby/Services/Suggestion/State/SuggestionInteractionState.swift):
+- [SuggestionInteractionState.swift](Ghostype/Services/Suggestion/State/SuggestionInteractionState.swift):
   active session, materialized context, consumed prefix, and known post-insertion AX lag.
-- [SuggestionStreamingState.swift](Cotabby/Support/Suggestion/Streaming/SuggestionStreamingState.swift): latest-wins
+- [SuggestionStreamingState.swift](Ghostype/Support/Suggestion/Streaming/SuggestionStreamingState.swift): latest-wins
   partial coalescing, one scheduled drain, and monotonic rendered-text state.
-- [PostExhaustionAcceptanceState.swift](Cotabby/Support/Suggestion/Session/PostExhaustionAcceptanceState.swift):
+- [PostExhaustionAcceptanceState.swift](Ghostype/Support/Suggestion/Session/PostExhaustionAcceptanceState.swift):
   pure state for the bounded Tab-ownership window while an exhausted tail regenerates.
-- [SuggestionSessionReconciler.swift](Cotabby/Support/Suggestion/Session/SuggestionSessionReconciler.swift): type-through,
+- [SuggestionSessionReconciler.swift](Ghostype/Support/Suggestion/Session/SuggestionSessionReconciler.swift): type-through,
   acceptance, and live-host reconciliation.
-- [SuggestionTextNormalizer.swift](Cotabby/Support/Suggestion/Output/SuggestionTextNormalizer.swift): backend-independent
+- [SuggestionTextNormalizer.swift](Ghostype/Support/Suggestion/Output/SuggestionTextNormalizer.swift): backend-independent
   cleanup, echo removal, whitespace policy, trailing-text deduplication, word-boundary reconciliation, and
-  unsafe-output rejection. [CompletionContentPolicy.swift](Cotabby/Support/Suggestion/Output/CompletionContentPolicy.swift)
+  unsafe-output rejection. [CompletionContentPolicy.swift](Ghostype/Support/Suggestion/Output/CompletionContentPolicy.swift)
   then drops punctuation-only output, closing punctuation after a typed space, forum/chat scaffolding or
   meta-responses about the prompt, a word sequence looping back to back, and text lifted verbatim from what the
   user just wrote.
@@ -188,11 +188,11 @@ acceptance.
 
 Read:
 
-1. [FocusTracker.swift](Cotabby/Services/Focus/FocusTracker.swift)
-2. [FocusSnapshotResolver.swift](Cotabby/Services/Focus/Resolution/FocusSnapshotResolver.swift)
-3. [FocusModels.swift](Cotabby/Models/Focus/FocusModels.swift)
-4. [AXTextGeometryResolver.swift](Cotabby/Services/Focus/Resolution/AXTextGeometryResolver.swift)
-5. [AXHelper.swift](Cotabby/Support/Accessibility/AXHelper.swift)
+1. [FocusTracker.swift](Ghostype/Services/Focus/FocusTracker.swift)
+2. [FocusSnapshotResolver.swift](Ghostype/Services/Focus/Resolution/FocusSnapshotResolver.swift)
+3. [FocusModels.swift](Ghostype/Models/Focus/FocusModels.swift)
+4. [AXTextGeometryResolver.swift](Ghostype/Services/Focus/Resolution/AXTextGeometryResolver.swift)
+5. [AXHelper.swift](Ghostype/Support/Accessibility/AXHelper.swift)
 
 FocusTracker uses timer polling as the authoritative source because AX notifications are inconsistent
 across AppKit, browsers, Electron, and custom editors. Activity resets the cadence; idle unchanged
@@ -200,9 +200,9 @@ state backs it off. Input and acceptance paths may request an explicit fresh cap
 event payloads as complete field state.
 
 FocusSnapshotResolver finds a usable editable candidate, blocks secure/unsupported surfaces (and
-Mail's compose header rows, [MailHeaderFieldDetector.swift](Cotabby/Support/Accessibility/MailHeaderFieldDetector.swift):
+Mail's compose header rows, [MailHeaderFieldDetector.swift](Ghostype/Support/Accessibility/MailHeaderFieldDetector.swift):
 Tab is the way from To to Subject to body there, not an accept; and single-line sign-in and
-verification fields, [CredentialFieldDetector.swift](Cotabby/Support/Accessibility/CredentialFieldDetector.swift):
+verification fields, [CredentialFieldDetector.swift](Ghostype/Support/Accessibility/CredentialFieldDetector.swift):
 a completion there is a guess at the user's identity), bounds
 text on both sides of the caret, resolves the focused process, and publishes stable domain values.
 Chromium/Electron require accessibility priming, cursor hit-test recovery, and out-of-process iframe
@@ -220,7 +220,7 @@ alone.
 
 ## Global Input and Insertion
 
-[InputMonitor.swift](Cotabby/Services/Input/InputMonitor.swift) owns three event-tap responsibilities:
+[InputMonitor.swift](Ghostype/Services/Input/InputMonitor.swift) owns three event-tap responsibilities:
 
 - A steady listen-only observer for typing, deletion, navigation, and pointer activity.
 - A conditional consuming tap while a suggestion or inline-command capture needs interception.
@@ -230,10 +230,10 @@ The conditional tap consumes a matching key only after the owning coordinator su
 missing overlays, rejected sessions, and revoked permission fail open so the host receives the key.
 Word/phrase and full-tail acceptance have independent configurable key/modifier bindings.
 
-[InputSuppressionController.swift](Cotabby/Services/Input/InputSuppressionController.swift) marks and
-counts Cotabby-generated events so insertion does not re-enter the typing pipeline.
+[InputSuppressionController.swift](Ghostype/Services/Input/InputSuppressionController.swift) marks and
+counts Ghostype-generated events so insertion does not re-enter the typing pipeline.
 
-[SuggestionInserter.swift](Cotabby/Services/Suggestion/SuggestionInserter.swift) normally posts short
+[SuggestionInserter.swift](Ghostype/Services/Suggestion/SuggestionInserter.swift) normally posts short
 Unicode key events without touching the clipboard. Active IME composition uses a clipboard paste
 commit. A default-off policy can also paste long or multiline chunks. Paste tries the target app's
 Accessibility Paste menu item before synthetic Command-V and restores every pasteboard representation
@@ -244,16 +244,16 @@ text. Posting events is not treated as proof of success; the later AX snapshot i
 
 ## Engines and Prompting
 
-[SuggestionEngineRouter.swift](Cotabby/Services/Runtime/SuggestionEngineRouter.swift) selects one of:
+[SuggestionEngineRouter.swift](Ghostype/Services/Runtime/SuggestionEngineRouter.swift) selects one of:
 
-- [FoundationModelSuggestionEngine.swift](Cotabby/Services/Runtime/AppleIntelligence/FoundationModelSuggestionEngine.swift)
+- [FoundationModelSuggestionEngine.swift](Ghostype/Services/Runtime/AppleIntelligence/FoundationModelSuggestionEngine.swift)
   for Apple Intelligence. It uses the framework's instructions channel, streams cumulative partials,
   and keeps a one-use compatible prewarmed session. Unsupported language/locale can fall back to llama.
-- [LlamaSuggestionEngine.swift](Cotabby/Services/Runtime/Llama/LlamaSuggestionEngine.swift) for an in-process
-  GGUF base model through CotabbyInference. [LlamaRuntimeManager.swift](Cotabby/Services/Runtime/Llama/LlamaRuntimeManager.swift)
-  publishes state; [LlamaRuntimeCore.swift](Cotabby/Services/Runtime/Llama/LlamaRuntimeCore.swift) owns native
+- [LlamaSuggestionEngine.swift](Ghostype/Services/Runtime/Llama/LlamaSuggestionEngine.swift) for an in-process
+  GGUF base model through CotabbyInference. [LlamaRuntimeManager.swift](Ghostype/Services/Runtime/Llama/LlamaRuntimeManager.swift)
+  publishes state; [LlamaRuntimeCore.swift](Ghostype/Services/Runtime/Llama/LlamaRuntimeCore.swift) owns native
   pointers, tokenization, KV-cache reuse, prefill, sampling, abort, and shutdown.
-- [OpenAICompatibleSuggestionEngine.swift](Cotabby/Services/Runtime/OpenAICompatible/OpenAICompatibleSuggestionEngine.swift)
+- [OpenAICompatibleSuggestionEngine.swift](Ghostype/Services/Runtime/OpenAICompatible/OpenAICompatibleSuggestionEngine.swift)
   for completion/chat APIs and SSE streams. The default is loopback Ollama at
   http://127.0.0.1:11434/v1; LAN and public HTTPS endpoints are supported, while insecure public HTTP
   is rejected.
@@ -269,7 +269,7 @@ generation loop remains the single owner of the output-token budget.
 Autocomplete heals the final prompt token when its printable bytes exactly match the text at the
 caret. The native sampler replays those bytes under a vocabulary-prefix constraint, allowing a
 longer token to finish an unfinished word without forcing every complete word to continue.
-[TokenHealingBuffer.swift](Cotabby/Support/Runtime/TokenHealingBuffer.swift) removes replay bytes and
+[TokenHealingBuffer.swift](Ghostype/Support/Runtime/TokenHealingBuffer.swift) removes replay bytes and
 holds incomplete UTF-8 until it can publish lossless cumulative text. The extra replay allowance is
 bounded separately from visible generation. Special tokens and oversized pieces take the ordinary
 continuation path; no model weights or tokenizer files are modified.
@@ -285,13 +285,13 @@ restoration avoids replaying the same tail both after generation and again on th
 Cancellation targets a request identity as well as the native sequence, preventing a late
 cancel from aborting a later request that reused the same sequence.
 
-[BaseCompletionPromptRenderer.swift](Cotabby/Support/Prompting/BaseCompletionPromptRenderer.swift) renders a
+[BaseCompletionPromptRenderer.swift](Ghostype/Support/Prompting/BaseCompletionPromptRenderer.swift) renders a
 base-model text continuation with optional budgeted context and the caret prefix last. It does not
 wrap a base GGUF in an instruction conversation. The writer's name enters that preface only when
-the caret follows a valediction ([SignOffCue.swift](Cotabby/Support/Prompting/SignOffCue.swift)):
+the caret follows a valediction ([SignOffCue.swift](Ghostype/Support/Prompting/SignOffCue.swift)):
 named in every prompt, a base model introduced the writer at openings ("Hi, I'm Jacob"), addressed
 them as the recipient, and copied the preface wording into the ghost; at a sign-off the name is the
-one token wanted. The first-launch name is the Mac account's full name, never a placeholder. [FoundationModelPromptRenderer.swift](Cotabby/Support/Prompting/FoundationModelPromptRenderer.swift)
+one token wanted. The first-launch name is the Mac account's full name, never a placeholder. [FoundationModelPromptRenderer.swift](Ghostype/Support/Prompting/FoundationModelPromptRenderer.swift)
 keeps Apple's instruction-shaped prompt separate.
 
 The llama context window is 4096 tokens. `SuggestionConfiguration.derivedLlamaPromptTokenBudget`
@@ -315,7 +315,7 @@ or endpoint mode so mapped weights and Metal buffers do not stay resident unnece
 Two measurements happen at presentation time rather than in the focus resolver, because they read
 the host's pixels (Screen Recording) and are asynchronous:
 
-- [HostBaselineCalibrator.swift](Cotabby/Services/Presentation/HostBaselineCalibrator.swift) finds
+- [HostBaselineCalibrator.swift](Ghostype/Services/Presentation/HostBaselineCalibrator.swift) finds
   the painted baseline on the caret's line. A reading is accepted only if the letter bodies it was
   read from are the right size to be a line of this font (`describesPlausibleBodies`: body rows
   within 0.45x-1.35x the font's ascent) and the answer sits within the policy window; otherwise the
@@ -324,7 +324,7 @@ the host's pixels (Screen Recording) and are asynchronous:
   three points high. The gate is on the measurement, not a vote across lines: an earlier attempt to
   let one line's reading speak for the whole field adopted a bad first reading and made every line
   wrong instead of one.
-- [PixelCaretLocator.swift](Cotabby/Services/Presentation/PixelCaretLocator.swift) places the caret
+- [PixelCaretLocator.swift](Ghostype/Services/Presentation/PixelCaretLocator.swift) places the caret
   inside a paragraph the host exposes only as one union-framed run with no answer to any bounds
   query (Obsidian's CodeMirror), and in a single-line field whose caret Accessibility could only
   estimate (Chrome's address bar answers every bounds query with a zero rect): there the field's
@@ -332,12 +332,12 @@ the host's pixels (Screen Recording) and are asynchronous:
   card. A single-line paragraph run gets the same treatment, read in its own line box widened to
   where its text now ends: its proportional caret landed 3pt off in Obsidian, and the full
   padding read its neighbours' ink as lines of its own. A capture cannot see the run under
-  Cotabby's own ghost (the excluded window
+  Ghostype's own ghost (the excluded window
   comes back black), so while the ghost is up a re-anchor for text typed since the run's last
   capture carries that caret forward by the typed advance (`extrapolatedMeasurement`), and
   anything else takes the ghost down for the read; re-anchoring to the Accessibility estimate
   instead put the ghost four lines up on every other keystroke.
-  [InkCaretAnalyzer.swift](Cotabby/Support/Presentation/Geometry/InkCaretAnalyzer.swift)
+  [InkCaretAnalyzer.swift](Ghostype/Support/Presentation/Geometry/InkCaretAnalyzer.swift)
   finds the inked lines in a capture of the run's frame; the caret is the end of the last line, the
   pitch is the distance between line tops, and the line box is the frame height less the pitch per
   extra line. Only a caret at the end of its paragraph is measured; a caret inside one keeps the
@@ -346,7 +346,7 @@ the host's pixels (Screen Recording) and are asynchronous:
 
 ## Context, Privacy, and Permissions
 
-[PermissionManager.swift](Cotabby/Services/Permission/PermissionManager.swift) tracks:
+[PermissionManager.swift](Ghostype/Services/Permission/PermissionManager.swift) tracks:
 
 - Accessibility: required for focus, text, capability, geometry, and insertion validation.
 - Input Monitoring: required for global keyboard observation and acceptance interception.
@@ -354,15 +354,15 @@ the host's pixels (Screen Recording) and are asynchronous:
 
 Context sources are independently enabled and bounded: recent AX prefix/trailing text, surface
 metadata, user rules/extended context, relevant clipboard content, visual OCR, language, and settings.
-[PromptContextSanitizer.swift](Cotabby/Support/Context/PromptContextSanitizer.swift) sanitizes optional text,
+[PromptContextSanitizer.swift](Ghostype/Support/Context/PromptContextSanitizer.swift) sanitizes optional text,
 and prompt renderers apply per-section budgets.
 
 Whether any of that context survives into the completion is measured, not assumed:
-`CotabbyTests/Fixtures/llama-recall-cases.json` hides a fact in each context source (same-field text,
+`GhostypeTests/Fixtures/llama-recall-cases.json` hides a fact in each context source (same-field text,
 screen OCR, clipboard) and requires the completion to reproduce it. It is reported separately from the
 continuation suite because averaging the two lets fluent prose hide a total failure to use context.
 
-[ClipboardContextProvider.swift](Cotabby/Services/Context/ClipboardContextProvider.swift) reads a
+[ClipboardContextProvider.swift](Ghostype/Services/Context/ClipboardContextProvider.swift) reads a
 fresh bounded value at request time rather than recording clipboard history. Relevance and distillation
 policies drop unrelated or excessive content.
 
@@ -400,7 +400,7 @@ request; its privacy scope must remain visible in settings and documentation.
 
 Typing history (Settings → Context → Typing History) is the one store of the user's writing that
 outlives its field. Both of its switches are off by default. When recording is on,
-`TypingHistoryStore` keeps the text of fields where Cotabby is active (the same
+`TypingHistoryStore` keeps the text of fields where Ghostype is active (the same
 `SuggestionAvailabilityEvaluator` rule as suggestions; never secure fields, terminals, or excluded
 apps), one record per piece of writing (a chat composer that clears after sending yields one record
 per message), scrubs secret-like tokens and card numbers (`TypingHistoryScrubber`), and seals the
@@ -416,8 +416,8 @@ request that still carries them.
 
 ## Presentation and Sibling Features
 
-[SuggestionOverlayPresenter.swift](Cotabby/Services/Suggestion/SuggestionOverlayPresenter.swift)
-decides presentation actions. [OverlayController.swift](Cotabby/Services/Presentation/OverlayController.swift)
+[SuggestionOverlayPresenter.swift](Ghostype/Services/Suggestion/SuggestionOverlayPresenter.swift)
+decides presentation actions. [OverlayController.swift](Ghostype/Services/Presentation/OverlayController.swift)
 owns a reusable borderless non-activating NSPanel and SwiftUI-hosted content.
 
 Automatic presentation uses inline ghost text for exact/derived caret geometry and a mirror card for
@@ -427,14 +427,14 @@ show an acceptance hint, and advance a partial tail without waiting for noisy AX
 
 Inline ghost text is built to occupy the pixels the accepted text will occupy:
 
-- [GhostFontResolver.swift](Cotabby/Support/Presentation/Style/GhostFontResolver.swift) picks the
+- [GhostFontResolver.swift](Ghostype/Support/Presentation/Style/GhostFontResolver.swift) picks the
   host's face and size from the field's reported style, from a measured width sample
-  ([HostTextMetricsProbe.swift](Cotabby/Services/Focus/Resolution/HostTextMetricsProbe.swift); a host
+  ([HostTextMetricsProbe.swift](Ghostype/Services/Focus/Resolution/HostTextMetricsProbe.swift); a host
   that answers no width query gets one from how far its caret moves as the user types,
-  [CaretAdvanceSampler.swift](Cotabby/Support/Focus/CaretAdvanceSampler.swift), because a Chromium
+  [CaretAdvanceSampler.swift](Ghostype/Support/Focus/CaretAdvanceSampler.swift), because a Chromium
   size is CSS pixels that know nothing of page or Electron zoom: the Claude composer reported 14
   and painted 15.4), or from the host's own pixels
-  ([TypefaceMatcher.swift](Cotabby/Support/Presentation/Style/TypefaceMatcher.swift))
+  ([TypefaceMatcher.swift](Ghostype/Support/Presentation/Style/TypefaceMatcher.swift))
   when the host names no face. Every capture is snapped to whole device pixels first: a fractional
   edge makes ScreenCaptureKit resample the image and the blurred glyphs correlate with nothing. The pixel match searches size as well as face (a caret-box size is
   a guess: Obsidian's 16px body arrived as 17 and 20, and a face matched at the wrong size is
@@ -446,33 +446,33 @@ Inline ghost text is built to occupy the pixels the accepted text will occupy:
   stretched about the caret (`advanceFitted`): shape scoring picked Chrome's 18px Georgia at
   18.054, a ghost two device pixels long by a line's end, while the positions put it at 18. An
   Electron host's own bundled faces join the candidates
-  ([HostBundledFontRegistry.swift](Cotabby/Services/Presentation/HostBundledFontRegistry.swift)
+  ([HostBundledFontRegistry.swift](Ghostype/Services/Presentation/HostBundledFontRegistry.swift)
   registers its TrueType/OpenType files for this process alone), which is how Claude's composer
   can be drawn in Anthropic Sans rather than a stand-in. The calibrator
   keeps one record per field, replaced only when a later strip's winner beats the recorded face on
   that same strip; scores from different strips are not comparable. A reported size stands when the
   caret box is shorter than its glyphs (VS Code's hidden textarea reports 8.5pt boxes for 14pt text).
-- [GhostBaselinePolicy.swift](Cotabby/Support/Presentation/Geometry/GhostBaselinePolicy.swift) places
+- [GhostBaselinePolicy.swift](Ghostype/Support/Presentation/Geometry/GhostBaselinePolicy.swift) places
   the baseline the way TextKit or Blink/WebKit would inside the caret box;
-  [HostBaselineCalibrator.swift](Cotabby/Services/Presentation/HostBaselineCalibrator.swift) measures a
+  [HostBaselineCalibrator.swift](Ghostype/Services/Presentation/HostBaselineCalibrator.swift) measures a
   web host's painted baseline from a small screen capture (Screen Recording permitting) to recover
   the sub-point line position Accessibility rounds away.
-- [GhostTextLayout.swift](Cotabby/Support/Presentation/Geometry/GhostTextLayout.swift) lays rows out
+- [GhostTextLayout.swift](Ghostype/Support/Presentation/Geometry/GhostTextLayout.swift) lays rows out
   from the caret with CTTypesetter inside the band
-  [GhostWrapBandPolicy.swift](Cotabby/Support/Presentation/Geometry/GhostWrapBandPolicy.swift) derives
+  [GhostWrapBandPolicy.swift](Ghostype/Support/Presentation/Geometry/GhostWrapBandPolicy.swift) derives
   from the element's real frame, one row per host line at the measured line pitch (the probe scans
   single-character bounds for the nearest other line when a host's line APIs give none, as Chromium's
   do; sibling text runs give it for CodeMirror; the caret box height stands in until a field has a
   second line). A row is never placed over the host's own text: with the host's lines below the
   caret the ghost keeps to the caret row and reveals the rest as it is accepted, and a caret with
   characters after it on its line gets the card under the caret from
-  [CompletionRenderModePolicy.swift](Cotabby/Support/Presentation/Policy/CompletionRenderModePolicy.swift)
+  [CompletionRenderModePolicy.swift](Ghostype/Support/Presentation/Policy/CompletionRenderModePolicy.swift)
   (an opaque band in the field's background color was tried and read as the suggestion overwriting
   the user's text). Accepted or typed-through text only advances a consumed offset, so remaining
-  glyphs never move. [GhostTextPanelView.swift](Cotabby/Services/Presentation/GhostTextPanelView.swift)
+  glyphs never move. [GhostTextPanelView.swift](Ghostype/Services/Presentation/GhostTextPanelView.swift)
   draws the rows with CoreText on a whole-point panel origin.
 - While the host shows uncommitted text of its own (macOS inline predictive text, an IME
-  composition; [HostMarkedTextPolicy.swift](Cotabby/Support/Input/HostMarkedTextPolicy.swift)) the
+  composition; [HostMarkedTextPolicy.swift](Ghostype/Support/Input/HostMarkedTextPolicy.swift)) the
   coordinator holds: no generation, no ghost, session kept. Chromium's address bar completes inline
   and leaves the completion selected; the resolver strips that selection from the text and treats
   the completion as the host's marked text, so the hold covers it too and its ink is never read as
@@ -480,26 +480,26 @@ Inline ghost text is built to occupy the pixels the accepted text will occupy:
 - Editors that expose a whole wrapped paragraph as one text run (CodeMirror in Obsidian) get their
   caret from a layout of that paragraph inside the run's own frame at the sibling runs' pitch
   (`WrappedRunAnchor`, laid out by
-  [TextLayoutCaretEstimator.swift](Cotabby/Support/Presentation/Geometry/TextLayoutCaretEstimator.swift)
+  [TextLayoutCaretEstimator.swift](Ghostype/Support/Presentation/Geometry/TextLayoutCaretEstimator.swift)
   in the coordinator's repair step); whitespace-only spacer runs never anchor the caret mapping.
 
-[ActivationIndicatorController.swift](Cotabby/Services/Presentation/ActivationIndicatorController.swift) owns
-the optional field/caret indicator. [FocusDebugOverlayController.swift](Cotabby/Services/Presentation/FocusDebugOverlayController.swift)
-is developer-only and gated by -cotabby-debug.
+[ActivationIndicatorController.swift](Ghostype/Services/Presentation/ActivationIndicatorController.swift) owns
+the optional field/caret indicator. [FocusDebugOverlayController.swift](Ghostype/Services/Presentation/FocusDebugOverlayController.swift)
+is developer-only and gated by -ghostype-debug.
 
-[InlineCommandCoordinator.swift](Cotabby/App/Coordinators/InlineFeatures/InlineCommandCoordinator.swift) arbitrates
+[InlineCommandCoordinator.swift](Ghostype/App/Coordinators/InlineFeatures/InlineCommandCoordinator.swift) arbitrates
 the single input-capture slot between:
 
-- [EmojiPickerController.swift](Cotabby/App/Coordinators/InlineFeatures/EmojiPickerController.swift): colon query,
+- [EmojiPickerController.swift](Ghostype/App/Coordinators/InlineFeatures/EmojiPickerController.swift): colon query,
   lazy catalog/matcher, non-activating picker, recency/frequency ranking, and literal-run replacement.
-- [MacroController.swift](Cotabby/App/Coordinators/InlineFeatures/MacroController.swift): slash query and deterministic
+- [MacroController.swift](Ghostype/App/Coordinators/InlineFeatures/MacroController.swift): slash query and deterministic
   date, random, unit, currency, and arithmetic evaluation through MacroEngine.
 
 Both use pure trigger state machines, stay pinned to one supported focus sequence, and cancel on
 focus change or incompatible input. They do not call a language model.
 
-[SettingsCoordinator.swift](Cotabby/App/Coordinators/SettingsCoordinator.swift) and
-[WelcomeCoordinator.swift](Cotabby/App/Coordinators/WelcomeCoordinator.swift) own app-lifetime AppKit
+[SettingsCoordinator.swift](Ghostype/App/Coordinators/SettingsCoordinator.swift) and
+[WelcomeCoordinator.swift](Ghostype/App/Coordinators/WelcomeCoordinator.swift) own app-lifetime AppKit
 windows hosting SwiftUI content. Settings and onboarding observe the shared graph. Hiding the menu bar
 icon retains a recovery path to Settings.
 
@@ -530,11 +530,11 @@ SuggestionCoordinator just because that is where its symptom becomes visible.
 
 ## Debugging and Validation
 
-Development schemes launch with -cotabby-debug. That enables local privacy-sensitive diagnostics in
+Development schemes launch with -ghostype-debug. That enables local privacy-sensitive diagnostics in
 addition to unified logging:
 
-- ~/Library/Logs/Cotabby/cotabby.jsonl: structured event stream.
-- ~/Library/Logs/Cotabby/llm-io.jsonl: full prompt/completion records.
+- ~/Library/Logs/Ghostype/cotabby.jsonl: structured event stream.
+- ~/Library/Logs/Ghostype/llm-io.jsonl: full prompt/completion records.
 - ~/Desktop/cotabby-ax-dump.txt: most recent Chrome focus AX tree.
 - ~/Desktop/cotabby-debug-screenshots/: retained visual-context capture/OCR pairs.
 
@@ -543,21 +543,21 @@ with category focus for field/geometry failures, suggestion for state/acceptance
 model failures, and app for permissions/lifecycle.
 
 [project.yml](project.yml) is the Xcode project source of truth. XcodeGen produces the committed
-[Cotabby.xcodeproj](Cotabby.xcodeproj); CI regenerates it and fails when the checked-in project differs.
-Debug and Release build the same Cotabby app identity, preference domain, icon, and model storage.
+[Ghostype.xcodeproj](Ghostype.xcodeproj); CI regenerates it and fails when the checked-in project differs.
+Debug and Release build the same Ghostype app identity, preference domain, icon, and model storage.
 The Debug configuration exposes General > Development > Show Development Debug Overlays (off by
 default); AppDelegate forwards that live preference to the presentation controller and polling
-diagnostics. The `-cotabby-debug` launch argument controls local diagnostic logging independently.
+diagnostics. The `-ghostype-debug` launch argument controls local diagnostic logging independently.
 Keep the signing identity consistent across builds to preserve macOS permission grants.
 Swift default actor isolation is MainActor.
 
 Use the narrowest relevant tests first, then broaden. The standard build boundary is:
 
 ~~~bash
-xcodebuild -project Cotabby.xcodeproj -scheme Cotabby -destination 'platform=macOS' build \
+xcodebuild -project Ghostype.xcodeproj -scheme Ghostype -destination 'platform=macOS' build \
   -derivedDataPath build/DerivedData
 
-xcodebuild -project Cotabby.xcodeproj -scheme Cotabby -destination 'platform=macOS' build-for-testing \
+xcodebuild -project Ghostype.xcodeproj -scheme Ghostype -destination 'platform=macOS' build-for-testing \
   -derivedDataPath build/DerivedData
 ~~~
 

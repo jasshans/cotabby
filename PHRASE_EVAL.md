@@ -15,7 +15,7 @@ reference sentence. Facts and individual answer words can naturally occur on scr
 is the behavior being measured.
 
 These are **synthetic screen-text fixtures**, not screenshots or captured user data. They exercise
-Cotabby's production OCR cleanup, excerpt selection, request construction, prompt budgets, local
+Ghostype's production OCR cleanup, excerpt selection, request construction, prompt budgets, local
 llama generation, normalization, and final display guard. They do not exercise screenshot capture,
 Vision recognition, Accessibility, actual keyboard events, overlay rendering, or typing latency.
 
@@ -64,7 +64,7 @@ new results directory. Existing directories are rejected to protect previous run
 Omit `--model` to use the app runtime's model selection. Nothing is downloaded automatically.
 This currently evaluates the local llama backend, with a fixed sampling seed of 42 and otherwise
 product generation defaults. It requires macOS, Xcode, and the project's usual dependencies.
-By default the CLI builds `build/cotabby-dependencies/Cotabby.xcworkspace`, which
+By default the CLI builds `build/cotabby-dependencies/Ghostype.xcworkspace`, which
 `scripts/prepare_cotabby_workspace.sh` creates. To test a different local CotabbyInference
 checkout, pass `--workspace build/CotabbyDevelopment.xcworkspace` after creating that workspace
 through the repository's existing setup tooling.
@@ -96,7 +96,7 @@ git commit -m "Record phrase prediction baseline v1"
 git push
 ```
 
-After tweaking Cotabby, run the same command with a new label and directory:
+After tweaking Ghostype, run the same command with a new label and directory:
 
 ```sh
 python3 scripts/phrase_eval.py run \
@@ -333,11 +333,11 @@ The model-free Swift tests validate scoring and pass **all 1,337 scenarios** thr
 construction to check that context reaches the prompt without the complete future answer.
 
 ```sh
-xcodebuild test -project Cotabby.xcodeproj -scheme Cotabby -destination 'platform=macOS' \
+xcodebuild test -project Ghostype.xcodeproj -scheme Ghostype -destination 'platform=macOS' \
   -derivedDataPath build/DerivedData -only-testing:CotabbyTests/PhrasePredictionScoringTests \
   -only-testing:CotabbyTests/PhrasePredictionScreenContextTests CODE_SIGNING_ALLOWED=NO
 python3 -m unittest discover -s scripts/tests -p 'test_phrase_eval.py'
 ```
 
-Cotabby builds require the patched native package. Run `scripts/prepare_cotabby_workspace.sh`
-first; benchmark build commands use `build/cotabby-dependencies/Cotabby.xcworkspace` by default. The package's pinned revision and patch are shared with release packaging.
+Ghostype builds require the patched native package. Run `scripts/prepare_cotabby_workspace.sh`
+first; benchmark build commands use `build/cotabby-dependencies/Ghostype.xcworkspace` by default. The package's pinned revision and patch are shared with release packaging.

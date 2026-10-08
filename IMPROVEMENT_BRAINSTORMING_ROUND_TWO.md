@@ -1,4 +1,4 @@
-# Cotabby 1337 improvement experiments — round two
+# Ghostype 1337 improvement experiments — round two
 
 This is round two's working checklist, hypothesis register, and decision record. The benchmark
 runner owns replay and scoring; this document connects those measurements to a bounded decision.
@@ -312,7 +312,7 @@ reserve. These robustness checks cannot change the frozen finalist or authorize 
 
 - 08:18 PDT: The first old150/category attempt also ended incomplete shortly after launch.
   Its stack again shows menu Quit → `NSApplication.terminate` → exit-time Metal cleanup
-  assertion. Preserve this failed attempt without scoring. Asked whether another Cotabby task
+  assertion. Preserve this failed attempt without scoring. Asked whether another Ghostype task
   or manual testing is closing the shared test host; the input's origin is unknown. The frozen
   benchmark code and selection are unchanged, and remaining independent analysis continues.
 

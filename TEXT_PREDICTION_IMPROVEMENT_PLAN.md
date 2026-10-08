@@ -58,10 +58,10 @@ it a single-change result. No extra parameter grid, replacement hypothesis, or a
 
 ### Implementation boundary
 
-- `Cotabby/Support/Context/SurfaceContextComposer.swift` owns sanitized facts and stable field
+- `Ghostype/Support/Context/SurfaceContextComposer.swift` owns sanitized facts and stable field
   formatting. Add explicit formatting options with defaults that preserve the existing output;
   do not change `SurfaceContext` data or remove facts upstream.
-- `Cotabby/Support/Prompting/BaseCompletionPromptRenderer.swift` owns the conditional choice
+- `Ghostype/Support/Prompting/BaseCompletionPromptRenderer.swift` owns the conditional choice
   because it knows what context actually survived allocation. `SuggestionRequestFactory`
   supplies its inputs. Keep the renderer pure; do not read settings, focus services, or the runtime here.
 - Keep all other backend contracts and callers' default behavior intact. No coordinator, UI,
