@@ -306,7 +306,7 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .length, .acceptPunctuation, .addSpaceAfterAccept, .name, .languages, .customRules,
              .hideSuggestionsOnTypo, .offerTypoCorrections, .spellingDictionaries, .automaticallyFixTypos:
             return .writing
-        case .extendedContext, .contextLivePreview, .typingHistory:
+        case .extendedContext, .contextLivePreview, .typingHistory, .suggestionMemory:
             return .context
         case .engine, .appleIntelligenceAvailability, .appleLanguageFallback, .keepFallbackModelLoaded,
              .appleLanguageFallbackModel, .modelStatus, .selectedModel, .lowPowerModeAutoDisable,

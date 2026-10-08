@@ -115,7 +115,7 @@ struct MenuBarView: View {
             Group {
                 if suggestionSettings.isTemporarilyPaused || !suggestionSettings.isGloballyEnabled {
                     Button {
-                        suggestionSettings.enableCotabby()
+                        suggestionSettings.enableGhostype()
                     } label: {
                         Label("Enable Ghostype", systemImage: "play.fill")
                             .frame(maxWidth: .infinity, alignment: .leading)
