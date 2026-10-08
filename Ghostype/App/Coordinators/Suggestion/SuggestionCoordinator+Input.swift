@@ -247,6 +247,19 @@ extension SuggestionCoordinator {
         }
     }
 
+    /// Records a dismissed suggestion as negative evidence for the memory model.
+    /// Split out so `handleInputEvent` stays under the cyclomatic-complexity budget.
+    /// A dismissed suggestion is negative evidence for its wording — but not for
+    /// corrections: dismissing a typo fix says nothing against the corrected word.
+    private func recordRejectionEvidence(session: ActiveSuggestionSession, raw: FocusedInputSnapshot) {
+        guard !session.kind.isCorrection else { return }
+        memoryRecorder?.recordRejected(
+            session.remainingText,
+            bundleIdentifier: raw.bundleIdentifier,
+            isSecure: raw.isSecure
+        )
+    }
+
     func handleInputEvent(_ event: CapturedInputEvent) -> Bool {
         recordInputPresentationTiming(event)
         // Give the emoji picker first look at every keystroke so it can drive its trigger state
@@ -286,15 +299,7 @@ extension SuggestionCoordinator {
             dismissalMemory.record(identityKey: context.suggestionSessionIdentityKey,
                                    precedingText: context.precedingText, trailingText: context.trailingText,
                                    completion: session.remainingText, at: ProcessInfo.processInfo.systemUptime)
-            // A dismissed suggestion is negative evidence for its wording — but not for
-            // corrections: dismissing a typo fix says nothing against the corrected word.
-            if !session.kind.isCorrection {
-                memoryRecorder?.recordRejected(
-                    session.remainingText,
-                    bundleIdentifier: raw.bundleIdentifier,
-                    isSecure: raw.isSecure
-                )
-            }
+            recordRejectionEvidence(session: session, raw: raw)
         }
 
         if event.kind == .acceptance {

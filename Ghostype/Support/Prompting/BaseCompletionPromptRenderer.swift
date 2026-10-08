@@ -67,9 +67,7 @@ enum BaseCompletionPromptRenderer {
         if let history = Self.historySection(historyExamples) {
             sections.append(history)
         }
-        if let vocabulary = Self.learnedVocabularySection(learnedVocabulary) {
-            sections.append(vocabulary)
-        }
+        Self.appendLearnedVocabularySection(learnedVocabulary, to: &sections)
         if let clip = Self.nonEmpty(clipboardContext) {
             sections.append(Self.contextSection("clipboard", "On the clipboard: \(clip)", priority: 35, maxChars: 400))
         }
@@ -186,6 +184,13 @@ enum BaseCompletionPromptRenderer {
     ///
     /// All or nothing, like the history section: a budget-trimmed vocabulary could end mid-phrase
     /// and teach the model a broken word. Phrases are dropped whole until the section fits its cap.
+    /// Appends the learned-vocabulary section when the user has one. Split out so the
+    /// prompt-composition function stays under the cyclomatic-complexity budget.
+    private static func appendLearnedVocabularySection(_ phrases: [String], to sections: inout [PromptSection]) {
+        guard let section = learnedVocabularySection(phrases) else { return }
+        sections.append(section)
+    }
+
     private static func learnedVocabularySection(_ phrases: [String]) -> PromptSection? {
         let heading = "Words and phrases the writer often uses:"
         var content = heading
