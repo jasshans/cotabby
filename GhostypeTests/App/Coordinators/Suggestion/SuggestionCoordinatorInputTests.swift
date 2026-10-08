@@ -1,0 +1,488 @@
+import Foundation
+import XCTest
+@testable import Ghostype
+
+/// Locks the coordinator's keyboard and environment entry points: which keystrokes route into
+/// acceptance, which tear the session down, which reschedule generation, and how focus and
+/// permission changes start or stop the pipeline. These paths decide whether typing feels
+/// instant or haunted, so every branch asserts the user-visible cleanup it leaves behind.
+final class SuggestionCoordinatorInputTests: SuggestionCoordinatorRigTestCase {
+    // MARK: - Key routing
+
+    func test_acceptanceEventRoutesIntoAcceptance() {
+        let rig = retained(makeCoordinatorRig())
+        startVisibleSession(in: rig)
+
+        let consumed = rig.coordinator.handleInputEvent(CotabbyTestFixtures.inputEvent(kind: .acceptance))
+
+        XCTAssertTrue(consumed, "Tab with a live session must be consumed")
+        XCTAssertEqual(rig.inserter.insertedChunks, [" world"])
+    }
+
+    func test_fullAcceptanceEventCommitsTheWholeSuggestion() {
+        let rig = retained(makeCoordinatorRig())
+        startVisibleSession(in: rig, fullText: " world again")
+
+        let consumed = rig.coordinator.handleInputEvent(CotabbyTestFixtures.inputEvent(kind: .fullAcceptance))
+
+        XCTAssertTrue(consumed)
+        XCTAssertEqual(rig.inserter.insertedChunks, [" world again"])
+    }
+
+    func test_disabledEnvironmentSwallowsNothingAndDisablesPipeline() {
+        let rig = retained(makeCoordinatorRig(
+            settingsSnapshot: CotabbyTestFixtures.settingsSnapshot(isGloballyEnabled: false)
+        ))
+
+        let consumed = rig.coordinator.handleInputEvent(CotabbyTestFixtures.inputEvent(kind: .textMutation, characters: "a"))
+
+        XCTAssertFalse(consumed)
+        XCTAssertEqual(rig.coordinator.state, .disabled("Ghostype is turned off."))
+    }
+
+    func test_otherKeysWithoutASessionLeavePendingWorkAlone() {
+        let rig = retained(makeCoordinatorRig())
+        rig.coordinator.schedulePrediction()
+        let workID = rig.coordinator.currentWorkID
+
+        let consumed = rig.coordinator.handleInputEvent(CotabbyTestFixtures.inputEvent(kind: .other))
+
+        XCTAssertFalse(consumed)
+        XCTAssertEqual(rig.coordinator.currentWorkID, workID, "A modifier or inert key must not cancel the debounce")
+        XCTAssertEqual(rig.coordinator.state, .debouncing)
+    }
+
+    // MARK: - Emoji picker priority
+
+    func test_emojiCaptureStandsTheSuggestionPipelineDown() {
+        let rig = retained(makeCoordinatorRig())
+        startVisibleSession(in: rig)
+        rig.coordinator.emojiInputObserver = { _ in true }
+
+        let consumed = rig.coordinator.handleInputEvent(CotabbyTestFixtures.inputEvent(kind: .textMutation, characters: ":"))
+
+        XCTAssertFalse(consumed, "Consumption is the tap's job; the coordinator only stands down")
+        XCTAssertNil(rig.interactionState.activeSession)
+        XCTAssertFalse(rig.coordinator.overlayState.isVisible)
+        XCTAssertEqual(rig.overlayController.hideReasons.last, "Overlay hidden because the emoji picker is active.")
+    }
+
+    // MARK: - Typing against a live session
+
+    func test_typingTheExpectedCharactersAdvancesTheSession() {
+        let rig = retained(makeCoordinatorRig())
+        startVisibleSession(in: rig, fullText: " world")
+
+        let consumed = rig.coordinator.handleInputEvent(
+            CotabbyTestFixtures.inputEvent(kind: .textMutation, characters: " "),
+            with: rig.interactionState.activeSession!
+        )
+
+        XCTAssertFalse(consumed)
+        XCTAssertEqual(
+            rig.interactionState.activeSession?.remainingText,
+            "world",
+            "A matching keystroke advances, never kills"
+        )
+        XCTAssertEqual(rig.coordinator.state, .ready(text: "world", latency: 0.05))
+    }
+
+    func test_divergentTypingInvalidatesAndReschedules() async {
+        let rig = retained(makeCoordinatorRig())
+        startVisibleSession(in: rig, fullText: " world")
+
+        let consumed = rig.coordinator.handleInputEvent(
+            CotabbyTestFixtures.inputEvent(kind: .textMutation, characters: "x"),
+            with: rig.interactionState.activeSession!
+        )
+
+        XCTAssertFalse(consumed)
+        XCTAssertNil(rig.interactionState.activeSession)
+        XCTAssertFalse(rig.coordinator.overlayState.isVisible)
+
+        // The reschedule waits for the host to publish the keystroke; simulate the publish by
+        // changing the live preceding text so the poll's change gate fires.
+        setFocusedInput(CotabbyTestFixtures.focusedInputSnapshot(precedingText: "Hellox"), in: rig)
+        await waitUntil("Divergent typing never rescheduled generation") {
+            rig.coordinator.state == .debouncing || rig.engine.requests.count == 1
+        }
+    }
+
+    func test_navigationDismissesTheSessionWithoutRescheduling() {
+        let rig = retained(makeCoordinatorRig())
+        startVisibleSession(in: rig)
+
+        _ = rig.coordinator.handleInputEvent(
+            CotabbyTestFixtures.inputEvent(kind: .navigation),
+            with: rig.interactionState.activeSession!
+        )
+
+        XCTAssertNil(rig.interactionState.activeSession)
+        XCTAssertEqual(rig.coordinator.state, .idle)
+        XCTAssertFalse(rig.coordinator.overlayState.isVisible)
+        XCTAssertEqual(
+            rig.overlayController.hideReasons.last,
+            "Overlay hidden because caret navigation invalidated the current suggestion."
+        )
+    }
+
+    func test_shortcutMutationInvalidatesTheSession() {
+        let rig = retained(makeCoordinatorRig())
+        startVisibleSession(in: rig)
+
+        _ = rig.coordinator.handleInputEvent(
+            CotabbyTestFixtures.inputEvent(kind: .shortcutMutation, characters: "z"),
+            with: rig.interactionState.activeSession!
+        )
+
+        XCTAssertNil(rig.interactionState.activeSession)
+        XCTAssertFalse(rig.coordinator.overlayState.isVisible)
+        XCTAssertEqual(
+            rig.overlayController.hideReasons.last,
+            "Overlay hidden because a shortcut changed the text and invalidated the current suggestion."
+        )
+    }
+
+    func test_invalidatedTailIsRememberedForBackspaceRollback() {
+        let rig = retained(makeCoordinatorRig())
+        let session = startVisibleSession(in: rig)
+
+        _ = rig.coordinator.handleInputEvent(
+            CotabbyTestFixtures.inputEvent(kind: .textMutation, characters: "x"),
+            with: session
+        )
+
+        XCTAssertEqual(
+            rig.coordinator.suggestionAnchorCache.remainder(
+                identityKey: session.baseContext.suggestionSessionIdentityKey,
+                precedingText: "Hello"
+            ),
+            " world",
+            "Deleting the divergent character should be able to restore the dying tail without a model run"
+        )
+    }
+
+    func test_invalidatedCorrectionIsNotRememberedForRollback() {
+        let rig = retained(makeCoordinatorRig(
+            snapshot: CotabbyTestFixtures.focusedInputSnapshot(precedingText: "Please recieve ")
+        ))
+        let context = rig.interactionState.materializeContext(from: rig.focusProvider.snapshot.context!)
+        let correction = rig.interactionState.startSession(
+            fullText: "receive", liveContext: context, latency: 0, kind: .correction(typoWord: "recieve")
+        )
+
+        rig.coordinator.invalidateActiveSuggestion(reason: "test")
+
+        XCTAssertNil(rig.interactionState.activeSession)
+        XCTAssertNil(
+            rig.coordinator.suggestionAnchorCache.remainder(
+                identityKey: correction.baseContext.suggestionSessionIdentityKey,
+                precedingText: "Please recieve "
+            ),
+            "A correction replaces text; restoring it as a continuation would append the fixed word"
+        )
+    }
+
+    func test_otherEventsLeaveTheSessionAlone() {
+        let rig = retained(makeCoordinatorRig())
+        startVisibleSession(in: rig)
+
+        _ = rig.coordinator.handleInputEvent(
+            CotabbyTestFixtures.inputEvent(kind: .other),
+            with: rig.interactionState.activeSession!
+        )
+
+        XCTAssertNotNil(rig.interactionState.activeSession)
+        XCTAssertTrue(rig.coordinator.overlayState.isVisible)
+    }
+
+    // MARK: - Typing with no session
+
+    func test_typingWithoutASessionClearsStaleUIAndReschedules() async {
+        let rig = retained(makeCoordinatorRig())
+        rig.overlayController.showSuggestion(" stale", geometry: CotabbyTestFixtures.overlayGeometry())
+
+        let consumed = rig.coordinator.handleInputEvent(
+            CotabbyTestFixtures.inputEvent(kind: .textMutation, characters: "a")
+        )
+
+        XCTAssertFalse(consumed)
+        XCTAssertFalse(rig.coordinator.overlayState.isVisible)
+
+        setFocusedInput(CotabbyTestFixtures.focusedInputSnapshot(precedingText: "Helloa"), in: rig)
+        await waitUntil("Keystroke never rescheduled generation") {
+            rig.coordinator.state == .debouncing || !rig.engine.requests.isEmpty
+        }
+    }
+
+    func test_dismissalWithoutASessionEndsIdleWithoutRescheduling() async {
+        let rig = retained(makeCoordinatorRig())
+        rig.overlayController.showSuggestion(" stale", geometry: CotabbyTestFixtures.overlayGeometry())
+
+        _ = rig.coordinator.handleInputEvent(CotabbyTestFixtures.inputEvent(kind: .dismissal))
+
+        XCTAssertEqual(rig.coordinator.state, .idle)
+        XCTAssertFalse(rig.coordinator.overlayState.isVisible)
+        // Escape must not trigger a fresh generation.
+        try? await Task.sleep(nanoseconds: 80_000_000)
+        XCTAssertTrue(rig.engine.requests.isEmpty)
+    }
+
+    func test_navigationWithoutASessionReleasesAHeldPostExhaustionTab() {
+        let rig = retained(makeCoordinatorRig())
+        rig.coordinator.armPostExhaustionAcceptance()
+
+        _ = rig.coordinator.handleInputEvent(CotabbyTestFixtures.inputEvent(kind: .navigation))
+
+        // Moving the caret means a held Tab no longer refers to the text it was pressed against.
+        XCTAssertFalse(rig.coordinator.postExhaustionAcceptanceState.isArmed)
+        XCTAssertEqual(rig.inputMonitor.acceptInterceptionRequests, [true, false])
+        XCTAssertEqual(rig.coordinator.state, .idle)
+    }
+
+    // MARK: - Focus snapshot changes
+
+    func test_focusChangeToSupportedFieldStartsVisualContextCapture() {
+        let rig = retained(makeCoordinatorRig())
+
+        rig.coordinator.handleFocusSnapshotChange(rig.focusProvider.snapshot)
+
+        XCTAssertEqual(rig.visualContext.startedSessions.count, 2, "Both gate sites start the OCR session")
+    }
+
+    func test_focusChangeInFastModeSkipsVisualContextCapture() {
+        let rig = retained(makeCoordinatorRig(
+            settingsSnapshot: CotabbyTestFixtures.settingsSnapshot(debounceMilliseconds: 1, isFastModeEnabled: true)
+        ))
+
+        rig.coordinator.handleFocusSnapshotChange(rig.focusProvider.snapshot)
+
+        XCTAssertTrue(rig.visualContext.startedSessions.isEmpty, "Fast mode skips screenshot/OCR work entirely")
+    }
+
+    func test_focusChangeToDisabledAppPreservesVisualContextSession() {
+        let rig = retained(makeCoordinatorRig(
+            settingsSnapshot: CotabbyTestFixtures.settingsSnapshot(
+                disabledAppBundleIdentifiers: ["com.example.TestApp"],
+                debounceMilliseconds: 1
+            )
+        ))
+
+        rig.coordinator.handleFocusSnapshotChange(rig.focusProvider.snapshot)
+
+        XCTAssertEqual(rig.coordinator.state, .disabled("Ghostype is disabled in TestApp."))
+        XCTAssertTrue(rig.visualContext.cancelCalls.isEmpty, "Focus-level disables are transient; keep the OCR session")
+    }
+
+    func test_handleSupportedSnapshot_recoversFromDisabledAndClearsOnFieldChange() async {
+        let rig = retained(makeCoordinatorRig())
+        // Anchor the interaction state to the current app so a different pid below reads as a
+        // genuine field switch (a fresh state treats the first observation as unchanged).
+        _ = rig.interactionState.materializeContext(from: rig.focusProvider.snapshot.context!)
+        rig.coordinator.state = .disabled("old reason")
+
+        let otherApp = CotabbyTestFixtures.focusedInputSnapshot(
+            processIdentifier: 456,
+            precedingText: "Hi"
+        )
+        let otherFocus = FocusSnapshot(
+            applicationName: otherApp.applicationName,
+            bundleIdentifier: otherApp.bundleIdentifier,
+            capability: .supported,
+            context: otherApp
+        )
+        rig.coordinator.handleSupportedSnapshot(otherFocus)
+
+        XCTAssertEqual(rig.coordinator.state, .idle)
+        XCTAssertEqual(rig.overlayController.hideReasons.last, "Overlay hidden because the focused field changed.")
+
+        // The field switch also prewarms the routed engine for the new surface, with the sentinel
+        // generation that can never trip the stale-result drop logic.
+        await waitUntil("Engine was never prewarmed for the new field") {
+            !rig.engine.prewarmedRequests.isEmpty
+        }
+        XCTAssertEqual(rig.engine.prewarmedRequests.first?.generation, 0)
+    }
+
+    func test_handleSupportedSnapshot_withoutContextDisablesOutright() {
+        let rig = retained(makeCoordinatorRig())
+        let bareSnapshot = FocusSnapshot(
+            applicationName: "TestApp",
+            bundleIdentifier: "com.example.TestApp",
+            capability: .unsupported("No focused text input"),
+            context: nil
+        )
+
+        rig.coordinator.handleSupportedSnapshot(bareSnapshot)
+
+        XCTAssertEqual(rig.coordinator.state, .disabled("No focused text input."))
+        XCTAssertEqual(rig.visualContext.cancelCalls, [true])
+    }
+
+    func test_handleSupportedSnapshot_withActiveSessionReconcilesInsteadOfClearing() {
+        let rig = retained(makeCoordinatorRig())
+        startVisibleSession(in: rig)
+
+        rig.coordinator.handleSupportedSnapshot(rig.focusProvider.snapshot)
+
+        XCTAssertEqual(
+            rig.interactionState.activeSession?.remainingText,
+            " world",
+            "An unchanged field must keep the live session"
+        )
+        XCTAssertTrue(rig.coordinator.overlayState.isVisible)
+    }
+
+    func test_handleSupportedSnapshot_hidesAStaleOverlayWhenNoSessionRemains() {
+        let rig = retained(makeCoordinatorRig())
+        rig.overlayController.showSuggestion(" stale", geometry: CotabbyTestFixtures.overlayGeometry())
+
+        rig.coordinator.handleSupportedSnapshot(rig.focusProvider.snapshot)
+
+        XCTAssertFalse(rig.coordinator.overlayState.isVisible)
+        XCTAssertEqual(rig.overlayController.hideReasons.last, "Overlay hidden because no ready suggestion remains.")
+    }
+
+    // MARK: - Permission changes
+
+    func test_inputMonitoringPublisher_disablesOnRevokeAndRecoversOnGrant() {
+        let rig = retained(makeCoordinatorRig())
+
+        rig.permissionProvider.inputMonitoringGranted = false
+        rig.permissionProvider.inputSubject.send(false)
+
+        XCTAssertEqual(
+            rig.coordinator.state,
+            .disabled("Input Monitoring permission is required before Ghostype can react to typing.")
+        )
+        XCTAssertEqual(rig.visualContext.cancelCalls, [true])
+
+        rig.permissionProvider.inputMonitoringGranted = true
+        rig.permissionProvider.inputSubject.send(true)
+
+        XCTAssertEqual(rig.coordinator.state, .idle)
+        XCTAssertEqual(rig.visualContext.startedSessions.count, 1, "Granting restarts capture for the focused field")
+    }
+
+    func test_permissionChange_revokedScreenRecordingCancelsVisualContext() {
+        let rig = retained(makeCoordinatorRig())
+        rig.permissionProvider.screenRecordingGranted = false
+
+        rig.coordinator.handlePermissionChange()
+
+        XCTAssertEqual(rig.visualContext.cancelCalls, [true])
+    }
+
+    // MARK: - Low Power Mode changes
+
+    func test_lowPowerModePublisher_disablesPipelineWhenActiveAndAutoDisableEnabled() {
+        let rig = retained(makeCoordinatorRig())
+
+        rig.lowPowerModeProvider.setLowPowerModeEnabled(true)
+
+        XCTAssertEqual(rig.coordinator.state, .disabled("Ghostype is paused because Low Power Mode is on."))
+        XCTAssertEqual(rig.visualContext.cancelCalls, [true])
+    }
+
+    func test_lowPowerModePublisher_leavesPipelineRunningWhenAutoDisableOptedOut() {
+        let rig = retained(makeCoordinatorRig(
+            settingsSnapshot: CotabbyTestFixtures.settingsSnapshot(isLowPowerModeAutoDisableEnabled: false)
+        ))
+
+        rig.lowPowerModeProvider.setLowPowerModeEnabled(true)
+
+        XCTAssertEqual(rig.coordinator.state, .idle)
+    }
+
+    func test_lowPowerModePublisher_reenablesPipelineWhenModeTurnsOff() {
+        let rig = retained(makeCoordinatorRig())
+        rig.lowPowerModeProvider.setLowPowerModeEnabled(true)
+
+        rig.lowPowerModeProvider.setLowPowerModeEnabled(false)
+
+        XCTAssertEqual(rig.coordinator.state, .idle)
+        XCTAssertEqual(rig.visualContext.startedSessions.count, 1, "Leaving Low Power Mode restarts visual context")
+    }
+
+    func test_suppressedSyntheticInputLeavesTheLiveSessionUntouched() {
+        let rig = retained(makeCoordinatorRig())
+        startVisibleSession(in: rig)
+        rig.coordinator.state = .ready(text: " world", latency: 0.05)
+        let workID = rig.coordinator.currentWorkID
+
+        // Ghostype's own synthetic keystrokes echo through the monitor; they are observed, never
+        // treated as user typing that would invalidate the tail.
+        rig.inputMonitor.onSuppressedSyntheticInput?()
+
+        XCTAssertEqual(rig.coordinator.state, .ready(text: " world", latency: 0.05))
+        XCTAssertEqual(rig.interactionState.activeSession?.remainingText, " world")
+        XCTAssertTrue(rig.coordinator.overlayState.isVisible)
+        XCTAssertEqual(rig.coordinator.currentWorkID, workID)
+    }
+
+    private func snapshot(markedLength: Int, precedingText: String = "Hello") -> FocusSnapshot {
+        let marked = markedLength > 0
+            ? NSRange(location: (precedingText as NSString).length, length: markedLength)
+            : nil
+        let context = CotabbyTestFixtures.focusedInputSnapshot(
+            precedingText: precedingText,
+            hostMarkedTextRange: marked
+        )
+        return FocusSnapshot(
+            applicationName: context.applicationName,
+            bundleIdentifier: context.bundleIdentifier,
+            capability: .supported,
+            context: context
+        )
+    }
+
+    func test_hostMarkedText_hidesTheGhostButKeepsTheSessionThenRestoresIt() {
+        let rig = retained(makeCoordinatorRig())
+        startVisibleSession(in: rig)
+        let shownBefore = rig.overlayController.shownTexts.count
+
+        rig.coordinator.handleSupportedSnapshot(snapshot(markedLength: 3))
+
+        XCTAssertTrue(rig.coordinator.isHoldingForHostMarkedText)
+        XCTAssertNotNil(rig.interactionState.activeSession, "The host's own prediction must not kill the session")
+        XCTAssertEqual(rig.overlayController.hideReasons.last, SuggestionCoordinator.hostMarkedTextHoldReason)
+        XCTAssertFalse(rig.overlayController.state.isVisible)
+
+        rig.coordinator.handleSupportedSnapshot(snapshot(markedLength: 0))
+
+        XCTAssertFalse(rig.coordinator.isHoldingForHostMarkedText)
+        XCTAssertNotNil(rig.interactionState.activeSession)
+        XCTAssertEqual(rig.overlayController.shownTexts.count, shownBefore + 1, "The same tail re-presents once the host span clears")
+        XCTAssertEqual(rig.overlayController.shownTexts.last, " world")
+    }
+
+    func test_hostMarkedText_typedMatchAdvancesTheSessionWithoutPaintingOverTheHostPrediction() {
+        let rig = retained(makeCoordinatorRig())
+        startVisibleSession(in: rig)
+        rig.coordinator.handleSupportedSnapshot(snapshot(markedLength: 3))
+        let shownBefore = rig.overlayController.shownTexts.count
+
+        _ = rig.coordinator.handleInputEvent(
+            CotabbyTestFixtures.inputEvent(kind: .textMutation, characters: " ")
+        )
+
+        XCTAssertEqual(rig.interactionState.activeSession?.remainingText, "world")
+        XCTAssertEqual(rig.overlayController.shownTexts.count, shownBefore, "Nothing may be painted while the hold is on")
+        XCTAssertTrue(rig.overlayController.advanceInlineCalls.isEmpty)
+        XCTAssertFalse(rig.overlayController.state.isVisible)
+
+        rig.coordinator.handleSupportedSnapshot(snapshot(markedLength: 0, precedingText: "Hello "))
+
+        XCTAssertEqual(rig.overlayController.shownTexts.last, "world")
+    }
+
+    func test_hostMarkedText_withoutASessionJustHolds() {
+        let rig = retained(makeCoordinatorRig())
+
+        rig.coordinator.handleSupportedSnapshot(snapshot(markedLength: 2))
+
+        XCTAssertTrue(rig.coordinator.isHoldingForHostMarkedText)
+        XCTAssertEqual(rig.coordinator.state, .idle)
+        XCTAssertNil(rig.interactionState.activeSession)
+    }
+}
