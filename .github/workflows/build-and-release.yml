@@ -88,9 +88,6 @@ jobs:
         with:
           xcode-version: latest-stable
 
-      - name: Prepare matching inference dependency
-        run: scripts/prepare_cotabby_workspace.sh
-
       - name: Install XcodeGen
         run: |
           if ! command -v xcodegen >/dev/null; then
@@ -100,6 +97,12 @@ jobs:
 
       - name: Regenerate Xcode project
         run: xcodegen generate
+
+      # Must run after `xcodegen generate`: create-inference-workspace.py
+      # requires Ghostype.xcodeproj to exist (it references it in the
+      # generated workspace), and the .xcodeproj is not committed.
+      - name: Prepare matching inference dependency
+        run: scripts/prepare_cotabby_workspace.sh
 
       - name: Build Release (ad-hoc signed)
         run: |
