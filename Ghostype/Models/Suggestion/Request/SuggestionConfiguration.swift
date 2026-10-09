@@ -151,8 +151,15 @@ struct SuggestionConfiguration: Equatable, Sendable {
         // token); the hybrid/SWA catalog models reject partial trims and re-prefill per request,
         // so there the wider window costs prefill only in long-document sessions, which is
         // exactly where it buys quality.
-        maxPrefixWords: 2400,
-        maxPrefixCharacters: 14000,
+        //
+        // 2026-10-09: narrowed for latency. The catalog models re-prefill the whole prefix on
+        // every keystroke, so a 14k window costs ~2s per suggestion on the nano model and more
+        // on larger ones. For autocomplete the current + previous paragraphs carry the signal;
+        // 4k chars (≈1000 tokens) prefills ~3x faster while keeping the relevant context. The
+        // personalization sections (vocabulary, history, instructions) matter more than raw
+        // prefix length for "magic" completions.
+        maxPrefixWords: 700,
+        maxPrefixCharacters: 4000,
         // Apple's on-device model has a 4096-token shared context. Even with instructions plus
         // visual/clipboard context, there is room to send ~3x the llama window before crowding
         // the prompt, and the extra surrounding sentences materially help mid-thought completions.
