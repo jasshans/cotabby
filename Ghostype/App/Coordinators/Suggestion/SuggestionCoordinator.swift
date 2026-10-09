@@ -53,6 +53,9 @@ final class SuggestionCoordinator: ObservableObject {
     /// Always-on quality counters (shown / suppressed / accepted). The router counts generation
     /// outcomes; the coordinator owns the display-time and acceptance events only it can see.
     let qualityMetricsStore: SuggestionQualityMetricsStore
+    /// Per-day accepted word counts. The coordinator notifies it from the same place it bumps
+    /// the all-time total, so the two can never disagree.
+    let dailyCompletionStats: DailyCompletionStats
     /// Frequency-ranked correction source (SymSpell). Used first for the correction word, with
     /// `spellChecker` as the fallback while its index is still loading or when it has no suggestion.
     let symSpellCorrector: SymSpellCorrector
@@ -228,6 +231,7 @@ final class SuggestionCoordinator: ObservableObject {
         symSpellCorrector: SymSpellCorrector,
         spellingLanguageResolver: SpellingLanguageResolver = SpellingLanguageResolver(),
         qualityMetricsStore: SuggestionQualityMetricsStore,
+        dailyCompletionStats: DailyCompletionStats,
         historyProvider: (any SuggestionHistoryProviding)? = nil,
         memoryRecorder: (any SuggestionMemoryRecording)? = nil,
         memoryContext: (any SuggestionMemoryContextProviding)? = nil,
@@ -254,6 +258,7 @@ final class SuggestionCoordinator: ObservableObject {
         self.symSpellCorrector = symSpellCorrector
         self.spellingLanguageResolver = spellingLanguageResolver
         self.qualityMetricsStore = qualityMetricsStore
+        self.dailyCompletionStats = dailyCompletionStats
         self.historyProvider = historyProvider
         self.memoryRecorder = memoryRecorder
         self.memoryContext = memoryContext

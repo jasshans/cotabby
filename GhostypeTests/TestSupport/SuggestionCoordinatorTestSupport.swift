@@ -336,6 +336,9 @@ func makeCoordinatorRig(
         qualityMetricsStore: SuggestionQualityMetricsStore(
             userDefaults: UserDefaults(suiteName: "CotabbyTests.rig.quality.\(UUID().uuidString)") ?? .standard
         ),
+        dailyCompletionStats: DailyCompletionStats(
+            userDefaults: UserDefaults(suiteName: "CotabbyTests.rig.dailystats.\(UUID().uuidString)") ?? .standard
+        ),
         userDefaults: UserDefaults(suiteName: "CotabbyTests.rig.\(UUID().uuidString)") ?? .standard
     )
     let rig = CoordinatorRig(

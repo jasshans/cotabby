@@ -5,10 +5,10 @@ import SwiftUI
 /// the larger menu content so the menu-bar extra can stay minimal even as the panel layout evolves.
 ///
 /// This label lives in its own view because `MenuBarExtra` does not automatically observe
-/// plain properties hanging off `AppDelegate`. By observing the coordinator directly here,
-/// SwiftUI knows when to redraw the menu bar item as the accepted word count changes.
+/// plain properties hanging off `AppDelegate`. By observing the stats store directly here,
+/// SwiftUI knows when to redraw the menu bar item as today's word count changes.
 struct MenuBarStatusLabelView: View {
-    @ObservedObject var suggestionCoordinator: SuggestionCoordinator
+    @ObservedObject var dailyCompletionStats: DailyCompletionStats
     @ObservedObject var suggestionSettings: SuggestionSettingsModel
 
     var body: some View {
@@ -27,10 +27,11 @@ struct MenuBarStatusLabelView: View {
 
             if suggestionSettings.isMenuBarWordCountVisible,
                let label = WordCountFormatter.compactLabel(
-                   for: suggestionCoordinator.totalTabAcceptedWordCount
+                   for: dailyCompletionStats.todayCount
                ) {
                 Text(label)
                     .font(.system(size: 10, weight: .medium).monospacedDigit())
+                    .accessibilityLabel("\(dailyCompletionStats.todayCount) words completed today")
             }
         }
     }

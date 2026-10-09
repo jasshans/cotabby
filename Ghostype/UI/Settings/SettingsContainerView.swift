@@ -24,6 +24,7 @@ struct SettingsContainerView: View {
     @ObservedObject var huggingFaceSearchService: HuggingFaceSearchService
     @ObservedObject var performanceMetricsStore: PerformanceMetricsStore
     @ObservedObject var qualityMetricsStore: SuggestionQualityMetricsStore
+    @ObservedObject var dailyCompletionStats: DailyCompletionStats
     @ObservedObject var systemMetricsStore: SystemMetricsStore
 
     let onShowWelcome: () -> Void
@@ -129,7 +130,10 @@ struct SettingsContainerView: View {
                 onShowWelcome: onShowWelcome
             )
         case .appearance:
-            AppearancePaneView(suggestionSettings: suggestionSettings)
+            AppearancePaneView(
+                suggestionSettings: suggestionSettings,
+                dailyCompletionStats: dailyCompletionStats
+            )
         case .emoji:
             EmojiPaneView(
                 suggestionSettings: suggestionSettings,
