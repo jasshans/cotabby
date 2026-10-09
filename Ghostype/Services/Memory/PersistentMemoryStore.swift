@@ -33,7 +33,7 @@ nonisolated final class PersistentMemoryStore: @unchecked Sendable {
     }
 
     /// Bump when the schema changes and add the `ALTER TABLE` steps to `runMigrations()`.
-    static let schemaVersion = 1
+    static let schemaVersion = 2
     /// The event log is an audit trail; phrase_stats carries the durable learning.
     static let maximumEvents = 20_000
     static let maximumPhrases = 5_000
@@ -250,6 +250,12 @@ nonisolated final class PersistentMemoryStore: @unchecked Sendable {
             )
         }
         // v0 -> v1: initial schema, already applied by applySchema().
+        // v1 -> v2: phrase hashes are now HMAC-SHA256 under a per-database salt (the old
+        // unsalted SHA-256 was dictionary-confirmable). phrase_stats is derived data, so
+        // drop it; it rebuilds from new accept/dismiss events.
+        if version < 2 {
+            try exec("DELETE FROM phrase_stats;")
+        }
         try setUserVersion(Self.schemaVersion)
     }
 
@@ -280,6 +286,36 @@ nonisolated final class PersistentMemoryStore: @unchecked Sendable {
         guard !hasRow else { throw StoreError.stepFailed("INSERT returned a row.") }
     }
 
+    /// Per-database salt for phrase hashes (see `MemoryPhraseExtractor.phraseHash`). Generated
+    /// once, sealed with the database key, and kept in `kv_store`. A salt unique to this
+    /// database means a precomputed dictionary of common phrases can't confirm what the
+    /// user types, even with the database file in hand.
+    private func phraseHashSalt() throws -> Data {
+        _ = try openIfNeeded(create: true)
+        if let sealed = try kvGet("phrase_hash_salt") {
+            return try crypto.open(sealed)
+        }
+        let salt = Data((0..<32).map { _ in UInt8.random(in: 0...255) })
+        try kvSet("phrase_hash_salt", value: try crypto.seal(salt))
+        return salt
+    }
+
+    private func kvGet(_ key: String) throws -> Data? {
+        let stmt = try prepare("SELECT value_enc FROM kv_store WHERE key = ?;")
+        defer { _ = sqlite3_finalize(stmt) }
+        try bindText(stmt, 1, key)
+        guard try step(stmt) else { return nil }
+        return columnBlob(stmt, 0)
+    }
+
+    private func kvSet(_ key: String, value: Data) throws {
+        let stmt = try prepare("INSERT INTO kv_store(key, value_enc) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value_enc = excluded.value_enc;")
+        defer { _ = sqlite3_finalize(stmt) }
+        try bindText(stmt, 1, key)
+        try bindBlob(stmt, 2, value)
+        _ = try step(stmt)
+    }
+
     private func upsertPhrase(_ phrase: String, kind: MemoryEventKind, date: Date) throws {
         let (accepts, rejects): (Int64, Int64)
         switch kind {
@@ -299,7 +335,7 @@ nonisolated final class PersistentMemoryStore: @unchecked Sendable {
             """
         )
         defer { _ = sqlite3_finalize(stmt) }
-        try bindText(stmt, 1, MemoryPhraseExtractor.phraseHash(phrase))
+        try bindText(stmt, 1, MemoryPhraseExtractor.phraseHash(phrase, salt: try phraseHashSalt()))
         try bindBlob(stmt, 2, try crypto.seal(phrase))
         try bindInt64(stmt, 3, accepts)
         try bindInt64(stmt, 4, rejects)
