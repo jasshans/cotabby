@@ -333,7 +333,7 @@ enum SettingsItem: String, CaseIterable, Identifiable {
     var summary: String {
         switch self {
         case .enableGlobally: return "Turn Ghostype on or off everywhere without quitting."
-        case .useScreenContext: return "Help suggestions understand surrounding text using screenshots of the focused window."
+        case .useScreenContext: return "Help suggestions understand surrounding text using screenshots of the focused window. Screenshots are processed on your Mac and are never stored or sent anywhere."
         case .openAtLogin: return "Start Ghostype automatically when you log in."
         case .includeClipboardContext: return "Let suggestions reference what you last copied."
         case .includeAppContext: return "Tell the model which app and window you are typing in."
