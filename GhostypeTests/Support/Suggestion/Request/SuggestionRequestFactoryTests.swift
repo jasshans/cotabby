@@ -35,26 +35,35 @@ final class SuggestionRequestFactoryTests: XCTestCase {
         )
     }
 
-    func test_localScreenContextExceedsOldCapButEndpointKeepsLegacyPrompt() {
+    func test_localScreenContextUsesFullBudget() {
         let screen = String(repeating: "Project discussion and meeting agenda. ", count: 120)
-        for engine in [SuggestionEngineKind.llamaOpenSource, .appleIntelligence, .openAICompatible] {
+        for engine in [SuggestionEngineKind.llamaOpenSource, .appleIntelligence] {
             let result = SuggestionRequestFactory.buildRequest(
                 context: CotabbyTestFixtures.focusedInputContext(precedingText: "Please send "),
                 settings: CotabbyTestFixtures.settingsSnapshot(selectedEngine: engine),
                 configuration: .standard, visualContextSummary: screen
             )
-            let limit = engine == .openAICompatible ? 1500 : 4000
-            XCTAssertLessThanOrEqual(result.request.visualContextSummary?.count ?? 0, limit)
-            if engine == .openAICompatible {
-                XCTAssertLessThan(result.request.prompt.count, 800)
-                XCTAssertFalse(VisualContextConfiguration.forEngine(engine).capturesEntireWindow)
-            } else {
-                XCTAssertGreaterThan(result.request.visualContextSummary?.count ?? 0, 1500)
-                XCTAssertGreaterThan(result.request.prompt.count, 1000)
-                XCTAssertTrue(VisualContextConfiguration.forEngine(engine).capturesEntireWindow)
-            }
+            XCTAssertLessThanOrEqual(result.request.visualContextSummary?.count ?? 0, 4000)
+            XCTAssertGreaterThan(result.request.visualContextSummary?.count ?? 0, 1500)
+            XCTAssertGreaterThan(result.request.prompt.count, 1000)
+            XCTAssertTrue(VisualContextConfiguration.forEngine(engine).capturesEntireWindow)
             XCTAssertTrue(result.request.prompt.hasSuffix("Please send "))
         }
+    }
+
+    /// Screen contents never leave the Mac: the OpenAI-compatible engine may point at a
+    /// network URL, so the factory drops the visual-context excerpt for it entirely —
+    /// the same guarantee learned vocabulary and typing history already carry.
+    func test_endpointEngineDropsScreenContextEntirely() {
+        let screen = String(repeating: "Project discussion and meeting agenda. ", count: 120)
+        let result = SuggestionRequestFactory.buildRequest(
+            context: CotabbyTestFixtures.focusedInputContext(precedingText: "Please send "),
+            settings: CotabbyTestFixtures.settingsSnapshot(selectedEngine: .openAICompatible),
+            configuration: .standard, visualContextSummary: screen
+        )
+        XCTAssertNil(result.request.visualContextSummary)
+        XCTAssertFalse(result.request.prompt.contains("Project discussion"))
+        XCTAssertTrue(result.request.prompt.hasSuffix("Please send "))
     }
 
     func test_denseUnicodeScreenTextLeavesRoomForLocalInstructionsAndCaret() {

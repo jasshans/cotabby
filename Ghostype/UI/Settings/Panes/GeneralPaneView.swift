@@ -231,7 +231,8 @@ struct GeneralPaneView: View {
             return "Unavailable while Screen Recording is off. Grant permission to help suggestions " +
                 "understand surrounding text."
         }
-        return "Help suggestions understand surrounding text using screenshots of the focused window."
+        return "Help suggestions understand surrounding text using screenshots of the focused window. " +
+            "Screenshots are processed on your Mac and are never stored or sent anywhere."
     }
 
     private var multiLineEnabledBinding: Binding<Bool> {
