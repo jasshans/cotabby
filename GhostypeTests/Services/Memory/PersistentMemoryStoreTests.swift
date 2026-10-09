@@ -125,7 +125,6 @@ final class PersistentMemoryStoreTests: XCTestCase {
         let phrases = store.topPhrases(limit: 50).map(\.phrase)
         XCTAssertTrue(phrases.contains("best regards"))
     }
-    }
 
     func test_rejectionDownRanksPhrase() {
         let accepted = MemoryEvent(
