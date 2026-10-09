@@ -153,8 +153,8 @@ struct OSLogHandler: LogHandler {
     /// is what lets swift-log skip per-keystroke `.debug`/`.trace` calls before they allocate.
     init(label: String, logLevel: Logging.Logger.Level = CotabbyDebugOptions.minimumLogLevel) {
         self.logLevel = logLevel
-        let parts = label.split(separator: ".", maxSplits: 2)
-        let category = parts.count > 2 ? String(parts[2]) : label
+        let parts = label.split(separator: ".", maxSplits: 3)
+        let category = parts.count > 3 ? String(parts[3]) : label
         osLogger = os.Logger(subsystem: Self.subsystem, category: category)
     }
 

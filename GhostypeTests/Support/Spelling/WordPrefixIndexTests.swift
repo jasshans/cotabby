@@ -64,10 +64,10 @@ final class WordPrefixIndexTests: XCTestCase {
     }
 
     func testReferenceVocabularySupportsNamesButNotAmbiguousGuesses() {
-        let words = WordCompletionFallback.referenceWords(precedingText: "Ghostype helps. Use Cota", trailingText: "", glossary: "")
-        XCTAssertFalse(words.contains("Cota"))
-        XCTAssertEqual(WordCompletionFallback.suffix(for: "Cota", references: words, dictionaryCandidates: []), "bby")
-        XCTAssertNil(WordCompletionFallback.suffix(for: "Cota", references: ["Ghostype", "Cotangent"], dictionaryCandidates: []))
+        let words = WordCompletionFallback.referenceWords(precedingText: "Ghostype helps. Use Ghost", trailingText: "", glossary: "")
+        XCTAssertFalse(words.contains("Ghost"))
+        XCTAssertEqual(WordCompletionFallback.suffix(for: "Ghost", references: words, dictionaryCandidates: []), "ype")
+        XCTAssertNil(WordCompletionFallback.suffix(for: "Ghost", references: ["Ghostype", "Ghostwriter"], dictionaryCandidates: []))
         XCTAssertNil(WordCompletionFallback.suffix(for: "schedu", references: [], dictionaryCandidates: []))
     }
 }

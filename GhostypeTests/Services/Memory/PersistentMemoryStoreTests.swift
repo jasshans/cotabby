@@ -96,7 +96,8 @@ final class PersistentMemoryStoreTests: XCTestCase {
         XCTAssertEqual(phrase?.acceptCount, 2)
         XCTAssertEqual(phrase?.rejectCount, 1)
         // Net evidence is 1: still positive, but weaker than a twice-accepted phrase would be.
-        XCTAssertEqual(phrase?.score ?? 0, 1.0, accuracy: 1e-9)
+        // Tolerance covers microseconds of recency decay between event creation and scoring.
+        XCTAssertEqual(phrase?.score ?? 0, 1.0, accuracy: 1e-6)
     }
 
     func test_fullyRejectedPhraseNeverReachesVocabulary() {
