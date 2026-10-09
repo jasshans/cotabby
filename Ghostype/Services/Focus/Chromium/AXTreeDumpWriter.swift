@@ -15,9 +15,14 @@ import Logging
 enum AXTreeDumpWriter {
     /// Bundle identifier we automatically dump the AX tree for when `-ghostype-debug` is on.
     /// Chrome's contenteditable surfaces are the source of most caret-placement and host-AX-publish
-    /// reports, so the dump exists primarily for triaging those — extend the gate (or replace the
-    /// constant) once another bundle needs the same treatment.
-    private static let dumpAXBundleIdentifier = "com.google.Chrome"
+    /// reports, so the dump defaults to Chrome — override per-app without a rebuild via
+    /// `defaults write com.jasshans.ghostype ghostypeAXDumpBundleIdentifier -string <bundle-id>`
+    /// (e.g. `com.meta.endo`), then focus the app's text field on a `-ghostype-debug` launch and
+    /// read `~/Desktop/ghostype-ax-dump.txt`.
+    private static let dumpAXBundleIdentifierDefaultsKey = "ghostypeAXDumpBundleIdentifier"
+    private static var dumpAXBundleIdentifier: String {
+        UserDefaults.standard.string(forKey: dumpAXBundleIdentifierDefaultsKey) ?? "com.google.Chrome"
+    }
     /// Last focused-element identifier we wrote to disk. The dump only runs when this changes, so
     /// rapid focus events inside the same field don't repeatedly overwrite the file mid-inspection.
     private static var lastDumpedElementID: String?

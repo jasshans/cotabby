@@ -67,6 +67,8 @@ final class ChromiumAccessibilityEnabler {
             CotabbyLogger.focus.debug(
                 "CHROME-PRIME enabled web accessibility for \(application.localizedName ?? "?")")
         case .attributeUnsupported:
+            CotabbyLogger.focus.debug(
+                "CHROME-PRIME AXManualAccessibility unsupported for \(application.localizedName ?? "?")")
             // `AXManualAccessibility` is an Electron addition; Chrome itself rejects it. Chrome's
             // full accessibility mode (the one that computes inline text boxes, so character bounds
             // and font attributes exist) is switched on by the VoiceOver signal instead. Without it
@@ -84,8 +86,12 @@ final class ChromiumAccessibilityEnabler {
             }
             // Codex embeds Chromium in a native shell that rejects AXManualAccessibility.
             // Its native AXEnhancedUserInterface switch exposes the composed web tree instead.
-            // Keep this fallback specific to Codex: changing it globally can affect window managers.
-            if application.bundleIdentifier?.lowercased() == "com.openai.codex" {
+            // Meta's Muse desktop app needs the same treatment: without it the composer stays
+            // a bare AXGroup with no text value and no suggestions ever resolve there.
+            // Keep this fallback specific to these bundles: changing it globally can affect
+            // window managers.
+            let lowercasedID = application.bundleIdentifier?.lowercased()
+            if lowercasedID == "com.openai.codex" || lowercasedID == "com.meta.endo" {
                 let root = AXUIElementCreateApplication(pid)
                 AXUIElementSetMessagingTimeout(root, 0.05)
                 _ = AXUIElementSetAttributeValue(root, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
