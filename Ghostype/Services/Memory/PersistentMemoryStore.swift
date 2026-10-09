@@ -412,12 +412,15 @@ nonisolated final class PersistentMemoryStore: @unchecked Sendable {
         // Each kind feeds its own counter; the score weights them (see MemoryPhraseExtractor).
         // Typed text is the cold-start fix: it is the user's own production, not a suggestion
         // they accepted, so it earns its own counter rather than inflating accept_count.
-        let (accepts, typed, rejects, softRejects): (Int64, Int64, Int64, Int64)
+        var accepts: Int64 = 0
+        var typed: Int64 = 0
+        var rejects: Int64 = 0
+        var softRejects: Int64 = 0
         switch kind {
-        case .accepted: (accepts, typed, rejects, softRejects) = (1, 0, 0, 0)
-        case .typed: (accepts, typed, rejects, softRejects) = (0, 1, 0, 0)
-        case .rejected: (accepts, typed, rejects, softRejects) = (0, 0, 1, 0)
-        case .softRejected: (accepts, typed, rejects, softRejects) = (0, 0, 0, 1)
+        case .accepted: accepts = 1
+        case .typed: typed = 1
+        case .rejected: rejects = 1
+        case .softRejected: softRejects = 1
         }
         let hash = MemoryPhraseExtractor.phraseHash(phrase, salt: salt)
         let sealed = try crypto.seal(phrase)

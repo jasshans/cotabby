@@ -121,6 +121,11 @@ protocol SuggestionMemoryRecording: AnyObject {
     func recordAccepted(_ text: String, bundleIdentifier: String, isSecure: Bool)
     /// Records a dismissed suggestion (Esc) so its wording can be down-ranked.
     func recordRejected(_ text: String, bundleIdentifier: String, isSecure: Bool)
+    /// Records a suggestion the user typed over without accepting: weaker negative evidence
+    /// than an explicit dismissal.
+    func recordSoftRejected(_ text: String, bundleIdentifier: String, isSecure: Bool)
+    /// Records text the user produced by typing (from typing-history recordings).
+    func recordTyped(_ text: String, bundleIdentifier: String, isSecure: Bool)
     /// Writes any pending events immediately (termination flush).
     func flush()
 }
