@@ -314,7 +314,10 @@ enum GhostFontResolver {
             // Measured 2026-10-09: Google Chat's compose box handed down a ~2x caret box, and the
             // width sample pulled the ghost back from ~28pt to the host's size.
             if scale < maximumCaretBoxScale.lowerBound {
-                return Resolution(font: calibrated, provenance: .caretDerivedCalibrated, widthAgreement: widthAgreement(of: calibrated, input))
+                return Resolution(
+                    font: calibrated,
+                    provenance: .caretDerivedCalibrated,
+                    widthAgreement: widthAgreement(of: calibrated, input))
             }
             return Resolution(font: derived, provenance: .caretDerived, widthAgreement: widthAgreement(of: derived, input))
         }
