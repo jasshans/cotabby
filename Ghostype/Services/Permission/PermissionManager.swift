@@ -19,6 +19,12 @@ final class PermissionManager: ObservableObject {
     private var pollTimer: Timer?
     private var activationObserver: NSObjectProtocol?
 
+    /// Completes when the first permission read finishes. The three TCC queries are XPC
+    /// round-trips to tccd, so the initial read happens off the main thread instead of on the
+    /// launch critical path. Launch code that must decide on permission state (the
+    /// permission-reminder check) awaits this rather than blocking on TCC.
+    let initialRefresh: Task<Void, Never>
+
     /// Keeps UI state aligned with permission changes the user makes in System Settings.
     ///
     /// A permission can only change while the user is in System Settings, i.e. while Ghostype is
@@ -44,8 +50,15 @@ final class PermissionManager: ObservableObject {
             }
         }
         // `refresh()` also (re)configures polling for the current grant state, so a process that
-        // launches with every permission already granted never arms the timer at all.
-        refresh()
+        // launches with every permission already granted never arms the timer at all. The first
+        // read runs off the main thread (see `initialRefresh`); polling config rides along with
+        // its completion.
+        initialRefresh = Task.detached { [weak self] in
+            let state = Self.querySystemState()
+            await MainActor.run { [weak self] in
+                self?.applyRefresh(state)
+            }
+        }
     }
 
     deinit {
@@ -56,26 +69,41 @@ final class PermissionManager: ObservableObject {
     }
 
     /// Re-reads the current system permission state and republishes any changes to observers.
+    /// Synchronous: used by the activation observer and surfaces where the caller is already on
+    /// the main thread and wants fresh state now. Launch uses the async `initialRefresh` instead.
     func refresh() {
-        let latestAccessibilityGranted = AXIsProcessTrusted()
-        let latestInputMonitoringGranted = CGPreflightListenEventAccess()
-        let latestScreenRecordingGranted = CGPreflightScreenCaptureAccess()
+        applyRefresh(Self.querySystemState())
+    }
 
+    /// The three TCC queries. Read-only and thread-safe, so the launch path can run them off
+    /// the main thread.
+    private nonisolated static func querySystemState() -> (
+        accessibility: Bool, inputMonitoring: Bool, screenRecording: Bool
+    ) {
+        (
+            AXIsProcessTrusted(),
+            CGPreflightListenEventAccess(),
+            CGPreflightScreenCaptureAccess()
+        )
+    }
+
+    /// Compares a queried state against the published one and republishes changes.
+    private func applyRefresh(_ state: (accessibility: Bool, inputMonitoring: Bool, screenRecording: Bool)) {
         // `@Published` notifies on assignment, even when the value is unchanged. Compare first so
         // the 2-second poll does not redraw SwiftUI surfaces that already have the right state.
-        if accessibilityGranted != latestAccessibilityGranted {
-            CotabbyLogger.app.info("Accessibility permission changed: \(latestAccessibilityGranted)")
-            accessibilityGranted = latestAccessibilityGranted
+        if accessibilityGranted != state.accessibility {
+            CotabbyLogger.app.info("Accessibility permission changed: \(state.accessibility)")
+            accessibilityGranted = state.accessibility
         }
 
-        if inputMonitoringGranted != latestInputMonitoringGranted {
-            CotabbyLogger.app.info("Input Monitoring permission changed: \(latestInputMonitoringGranted)")
-            inputMonitoringGranted = latestInputMonitoringGranted
+        if inputMonitoringGranted != state.inputMonitoring {
+            CotabbyLogger.app.info("Input Monitoring permission changed: \(state.inputMonitoring)")
+            inputMonitoringGranted = state.inputMonitoring
         }
 
-        if screenRecordingGranted != latestScreenRecordingGranted {
-            CotabbyLogger.app.info("Screen Recording permission changed: \(latestScreenRecordingGranted)")
-            screenRecordingGranted = latestScreenRecordingGranted
+        if screenRecordingGranted != state.screenRecording {
+            CotabbyLogger.app.info("Screen Recording permission changed: \(state.screenRecording)")
+            screenRecordingGranted = state.screenRecording
         }
 
         updatePollingForCurrentState()

@@ -52,6 +52,14 @@ struct FocusSnapshotResolver {
     /// relabelled in place (a reused input whose aria-label turns it into a code box) changes none
     /// of those, so a reading is also refreshed after `credentialLabelRefreshInterval`.
     private let credentialLabelCache = FocusSessionScopedCache<CredentialFieldLabelReading>()
+    /// Memoized climb depth for the page-URL lookup: the ancestor level carrying AXURL is
+    /// stable within a focus session, so per tick we walk exactly that many parents and read
+    /// once instead of probing every level (see `memoizedWebURL`).
+    private let webURLDepthCache = FocusSessionScopedCache<Int>()
+    /// The containing window element, stable within a focus session. Caching it saves one
+    /// kAXWindowAttribute round-trip per tick; the title itself is still re-read every tick
+    /// (it's in the polling signature for navigation detection).
+    private let windowElementCache = FocusSessionScopedCache<AXUIElement?>()
     /// How long a credential label reading is trusted within one focus session. One second bounds
     /// how long an in-place relabel goes unnoticed, while the reads run about a dozen times less
     /// often than the 80 ms active poll.
@@ -279,11 +287,11 @@ struct FocusSnapshotResolver {
             PerDomainDisableSettings.isEnabled() || isWebContentField
                 || BrowserAppDetector.isBrowser(bundleIdentifier: bundleIdentifier)
         )
-        let windowTitle = resolvedCandidate.isSecure ? nil : AXHelper.windowTitle(near: focusedElement)
+        let windowTitle = resolvedCandidate.isSecure ? nil : memoizedWindowTitle(near: focusedElement, focusChangeSequence: focusChangeSequence)
         let fieldPlaceholder = resolvedCandidate.isSecure ? nil : AXHelper.stringValue(
             for: kAXPlaceholderValueAttribute as CFString, on: resolvedCandidate.element
         )
-        let focusedURLString = wantsURL ? AXHelper.webURL(near: resolvedCandidate.element) : nil
+        let focusedURLString = wantsURL ? memoizedWebURL(near: resolvedCandidate.element, focusChangeSequence: focusChangeSequence) : nil
         // Gmail writes its Smart Compose suggestion and a "tab" hint into the compose body right after
         // the caret: the host's own prediction, held like the address bar's completion (see
         // `HostMarkedTextPolicy.smartComposeSuggestionRange`).
@@ -375,6 +383,53 @@ struct FocusSnapshotResolver {
             capability: .supported,
             context: context
         )
+    }
+
+    /// Page-URL lookup with a memoized climb depth. Browsers expose AXURL on an ancestor of
+    /// the focused field; that ancestor level is stable within a focus session, so per tick we
+    /// walk exactly that many parents and read once instead of probing every level (up to 12
+    /// AX round trips per keystroke otherwise). On a miss (DOM restructured mid-session) it
+    /// falls back to the full climb and re-memoizes. Session-scoped: a field switch drops it.
+    private func memoizedWebURL(near element: AXUIElement, focusChangeSequence: UInt64) -> String? {
+        let cacheKey = "web-url-depth"
+        if let depth = webURLDepthCache.cachedValue(forKey: cacheKey, focusChangeSequence: focusChangeSequence) {
+            var current = element
+            for _ in 0..<depth {
+                guard let parent = AXHelper.parentElement(of: current) else { break }
+                current = parent
+            }
+            if let url = AXHelper.urlString(on: current) {
+                return url
+            }
+            // Miss: fall through to the full climb below.
+        }
+        var current = element
+        for depth in 0...6 {
+            if let url = AXHelper.urlString(on: current) {
+                webURLDepthCache.store(depth, forKey: cacheKey, focusChangeSequence: focusChangeSequence)
+                return url
+            }
+            guard let parent = AXHelper.parentElement(of: current) else { break }
+            current = parent
+        }
+        return nil
+    }
+
+    /// Window-title lookup with a memoized window element. The containing window is stable
+    /// within a focus session, so per tick we re-read only the title (which is in the polling
+    /// signature for navigation detection) instead of re-resolving the window first.
+    /// Session-scoped: a field switch drops it.
+    private func memoizedWindowTitle(near element: AXUIElement, focusChangeSequence: UInt64) -> String? {
+        let cacheKey = "window-element"
+        let window: AXUIElement?
+        if let cached = windowElementCache.cachedValue(forKey: cacheKey, focusChangeSequence: focusChangeSequence) {
+            window = cached
+        } else {
+            window = AXHelper.windowElement(near: element)
+            windowElementCache.store(window, forKey: cacheKey, focusChangeSequence: focusChangeSequence)
+        }
+        guard let window else { return nil }
+        return AXHelper.stringValue(for: kAXTitleAttribute as CFString, on: window)
     }
 
     /// Why a field Ghostype can read is still one it must not complete in, or nil when it may: a
@@ -548,13 +603,18 @@ struct FocusSnapshotResolver {
     ) -> CaretAdvanceSampler.Sample? {
         let nsText = text as NSString
         let offset = min(max(selection.location, 0), nsText.length)
+        // The sampler's math only inspects bounded tails (continuity window, max step), so pass
+        // just the last 64 units instead of copying the whole ≤8KB prefix per tick. The
+        // Observation type documents this as "possibly a bounded tail".
+        let tailStart = max(0, offset - 64)
+        let tailText = nsText.substring(with: NSRange(location: tailStart, length: offset - tailStart))
         return caretAdvanceSamples.sample(
             forKey: "\(processIdentifier):\(candidate.elementIdentifier)",
             observation: CaretAdvanceSampler.Observation(
                 caretX: caret.rect.minX,
                 lineY: caret.rect.maxY,
                 documentCaret: candidate.documentCaretLocation ?? offset,
-                precedingText: nsText.substring(to: offset),
+                precedingText: tailText,
                 isPositioned: Self.caretMeasuresGlyphs(quality: caret.quality, sourceDetail: caret.sourceDetail)
             )
         )
@@ -597,13 +657,14 @@ struct FocusSnapshotResolver {
     ) -> FocusCandidateResolution {
         var bestPartial: FocusCapabilityCandidateEvaluation?
 
-        func winner(in elements: [AXUIElement]) -> FocusCandidateResolution? {
-            for element in elements {
+        func winner(in elements: [(element: AXUIElement, knownParent: AXUIElement?)]) -> FocusCandidateResolution? {
+            for (element, knownParent) in elements {
                 let candidate = candidateSnapshot(
                     for: element,
                     bundleIdentifier: bundleIdentifier,
                     focusChangeSequence: focusChangeSequence,
-                    focusedReading: focusedReading
+                    focusedReading: focusedReading,
+                    knownParent: knownParent
                 )
                 let evaluation = FocusCapabilityResolver.evaluate(candidate.resolverCandidate)
 
@@ -657,7 +718,7 @@ struct FocusSnapshotResolver {
                 }
                 deepCandidates.append(element)
             }
-            if let resolved = winner(in: deepCandidates) {
+            if let resolved = winner(in: deepCandidates.map { ($0, nil) }) {
                 return resolved
             }
         }
@@ -706,12 +767,16 @@ struct FocusSnapshotResolver {
     /// `resolveCandidate` for the staging rationale (Chromium reports focus on a wrapper above the
     /// editable, AXWebArea → AXGroup → … → AXTextField, so the BFS exists as the fallback for the
     /// cases where this shallow neighborhood misses the real target).
+    ///
+    /// Each candidate carries its already-known parent, so `candidateSnapshot` can skip a
+    /// `parentElement` round-trip in the width optimization. Deep-BFS candidates have no known
+    /// parent and pass nil.
     private func shallowCandidateElements(
         around focusedElement: AXUIElement, seen: inout Set<String>
-    ) -> (ordered: [AXUIElement], ancestors: [AXUIElement]) {
-        var ordered: [AXUIElement] = []
+    ) -> (ordered: [(element: AXUIElement, knownParent: AXUIElement?)], ancestors: [AXUIElement]) {
+        var ordered: [(element: AXUIElement, knownParent: AXUIElement?)] = []
 
-        func append(_ element: AXUIElement?) {
+        func append(_ element: AXUIElement?, parent: AXUIElement?) {
             guard let element else {
                 return
             }
@@ -721,11 +786,10 @@ struct FocusSnapshotResolver {
                 return
             }
 
-            ordered.append(element)
+            ordered.append((element, parent))
         }
 
-        append(focusedElement)
-
+        // Discover the ancestors first so every candidate can record its known parent.
         var ancestors: [AXUIElement] = []
         var currentElement = focusedElement
         for _ in 0..<2 {
@@ -734,8 +798,12 @@ struct FocusSnapshotResolver {
             }
 
             ancestors.append(parent)
-            append(parent)
             currentElement = parent
+        }
+
+        append(focusedElement, parent: ancestors.first)
+        for (index, ancestor) in ancestors.enumerated() {
+            append(ancestor, parent: ancestors.dropFirst(index + 1).first)
         }
 
         // The heuristic search order is:
@@ -747,7 +815,7 @@ struct FocusSnapshotResolver {
         // editable text node. We do not try to walk the entire AX tree.
         for node in [focusedElement] + ancestors {
             for child in AXHelper.childElements(of: node) {
-                append(child)
+                append(child, parent: node)
             }
         }
 
@@ -941,7 +1009,8 @@ struct FocusSnapshotResolver {
         for element: AXUIElement,
         bundleIdentifier: String,
         focusChangeSequence: UInt64,
-        focusedReading: FocusedElementReading
+        focusedReading: FocusedElementReading,
+        knownParent: AXUIElement? = nil
     ) -> AXFocusCandidate {
         // `resolveSnapshot` already read the focused element's role pair for diagnostics, and the
         // focused element is the winning candidate in the common case; re-reading would repeat two
@@ -1057,7 +1126,9 @@ struct FocusSnapshotResolver {
 
             // Optimization: grab the parent container's width if the active element is narrow
             // so we capture the whole input bar context (e.g. Discord/Slack dynamically sized nodes).
-            if let parent = AXHelper.parentElement(of: element),
+            // The parent element is already known for shallow candidates (see
+            // `shallowCandidateElements`); only its frame is re-read live.
+            if let parent = knownParent ?? AXHelper.parentElement(of: element),
                let parentFrame = AXHelper.rectValue(for: "AXFrame" as CFString, on: parent) {
                 let parentCocoa = AXHelper.cocoaRect(fromAccessibilityRect: parentFrame)
                 if parentCocoa.width > finalWidth {
