@@ -205,11 +205,13 @@ final class SuggestionCoordinator: ObservableObject {
     /// Learned vocabulary for this request, for every request built from it. Like the history
     /// examples, every request kind passes the same words so their prompts share one head. The
     /// provider owns the endpoint-engine and feature-off gates, so callers never branch.
+    /// The vocabulary is per-app: the focused field's bundle identifier selects that app's
+    /// learned phrases, with the global aggregate as fallback.
     func learnedVocabulary(for context: FocusedInputContext) -> [String] {
-        // `context` is unused today; it keeps the signature parallel with `historyExamples(for:)`
-        // for the day vocabulary becomes field-aware. The underscore marks that intent.
-        _ = context
-        return memoryContext?.vocabularyForPrompt(engine: settingsSnapshot.selectedEngine) ?? []
+        memoryContext?.vocabularyForPrompt(
+            engine: settingsSnapshot.selectedEngine,
+            bundleIdentifier: context.bundleIdentifier
+        ) ?? []
     }
 
     init(
