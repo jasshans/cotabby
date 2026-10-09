@@ -260,6 +260,28 @@ extension SuggestionCoordinator {
         )
     }
 
+    /// Records a suggestion the user typed over as soft negative evidence. Only the first few
+    /// words are implicated — the user diverged at the first character, so the immediate
+    /// prediction was wrong, not necessarily the whole tail. Corrections are excluded like the
+    /// hard path, and deletions don't count (backspacing isn't choosing a different wording).
+    /// The session's base context proves the field was non-secure (secure fields never produce
+    /// sessions), and the recorder re-checks anyway.
+    private func recordSoftRejectionEvidence(
+        session: ActiveSuggestionSession, typed characters: String
+    ) {
+        guard !session.kind.isCorrection, !characters.isEmpty else { return }
+        let immediatePrediction = session.remainingText
+            .split(separator: " ", maxSplits: 3, omittingEmptySubsequences: true)
+            .prefix(3)
+            .joined(separator: " ")
+        guard !immediatePrediction.isEmpty else { return }
+        memoryRecorder?.recordSoftRejected(
+            String(immediatePrediction),
+            bundleIdentifier: session.baseContext.bundleIdentifier,
+            isSecure: session.baseContext.isSecure
+        )
+    }
+
     func handleInputEvent(_ event: CapturedInputEvent) -> Bool {
         recordInputPresentationTiming(event)
         // Give the emoji picker first look at every keystroke so it can drive its trigger state
@@ -556,6 +578,10 @@ extension SuggestionCoordinator {
                     "consumed": .stringConvertible(session.consumedCharacterCount)
                 ]
             )
+            // The user saw the ghost and chose a different continuation: soft negative evidence
+            // for the shown wording. This is the common "saw it, didn't take it" case that used
+            // to teach the vocabulary nothing.
+            recordSoftRejectionEvidence(session: session, typed: event.characters)
             invalidateActiveSuggestion(
                 reason: SuggestionSessionReconciler.overlayHideReason(for: event),
                 clearDiagnostics: false

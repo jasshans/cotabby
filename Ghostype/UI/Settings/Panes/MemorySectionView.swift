@@ -17,9 +17,10 @@ struct MemorySectionView: View {
             )) {
                 SettingsRowLabel(
                     title: "Remember what I type to improve suggestions",
-                    description: "Learns words and phrases from accepted and dismissed suggestions, " +
-                        "encrypted on this Mac. Only Apple Intelligence and the local model use " +
-                        "it — it is never sent to an endpoint. Password fields are never recorded.",
+                    description: "Learns words and phrases from what you type and from accepted " +
+                        "and dismissed suggestions, encrypted on this Mac. Only Apple Intelligence " +
+                        "and the local model use it — it is never sent to an endpoint. " +
+                        "Password fields are never recorded.",
                     systemImage: "brain"
                 )
             }
@@ -39,6 +40,25 @@ struct MemorySectionView: View {
                 .foregroundStyle(.red)
                 .disabled(recorder.eventCount == 0 && recorder.phraseCount == 0)
             }
+            .settingsItem(.suggestionMemory)
+
+            Picker(selection: Binding(
+                get: { recorder.strength },
+                set: { recorder.setStrength($0) }
+            )) {
+                Text("Gentle").tag(PersonalizationStrength.low)
+                Text("Balanced").tag(PersonalizationStrength.medium)
+                Text("Strong").tag(PersonalizationStrength.high)
+            } label: {
+                SettingsRowLabel(
+                    title: "Personalization strength",
+                    description: "How strongly your learned wording steers suggestions. " +
+                        "Stronger suits a distinctive personal style; Gentle keeps " +
+                        "suggestions closer to neutral.",
+                    systemImage: "slider.horizontal.3"
+                )
+            }
+            .pickerStyle(.segmented)
             .settingsItem(.suggestionMemory)
 
             if let clearError = recorder.clearError {

@@ -11,15 +11,14 @@ import Foundation
 /// is the single chokepoint that keeps stored rules bounded and de-duplicated regardless of whether
 /// they came from onboarding, settings, the palette, or a future import path.
 enum CustomRulesCatalog {
-    /// Master switch for the user-facing custom-rules feature. Temporarily `false`: the Open Source
-    /// path now runs base models that cannot obey free-text instructions, and on every engine the
-    /// rule text tends to leak verbatim into the suggestion (issues #340 / #292) while no eval
-    /// measures adherence, so surfacing the feature is a net-negative promise right now. Hiding is
-    /// fully reversible: stored rules in `cotabbyCustomRules` are never deleted, the editor and
-    /// renderer code is kept, so flipping this back to `true` restores the feature once rules are
-    /// measured to actually influence output. Honored at three sites: `SuggestionRequestFactory`
-    /// (prompt injection), `WritingPaneView` (Settings surface), and `WelcomeView` (onboarding step).
-    static let isUserFacingEnabled = false
+    /// Master switch for the user-facing custom-rules feature. Enabled 2026-10-09: the base-model
+    /// renderer phrases rules as a descriptive "Writing style: ..." clause (a base model conditions
+    /// on description, it does not obey commands), which avoids the verbatim leaking that shelved
+    /// the feature (issues #340 / #292). Rules remain opt-in and empty by default, so flipping this
+    /// changes nothing until the user adds their own. Honored at three sites:
+    /// `SuggestionRequestFactory` (prompt injection), `WritingPaneView` (Settings surface), and
+    /// `WelcomeView` (onboarding step).
+    static let isUserFacingEnabled = true
 
     /// Caps protect the local model's limited context budget and guard against pasted essays.
     static let maxRules = 10
