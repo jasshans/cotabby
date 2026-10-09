@@ -378,6 +378,63 @@ final class SuggestionRequestFactoryTests: XCTestCase {
         XCTAssertFalse(result.promptPreview.contains("Copied project notes."))
     }
 
+    func test_buildRequest_dropsCredentialShapedClipboardForEndpointEngine() {
+        let context = CotabbyTestFixtures.focusedInputContext(precedingText: "Hello")
+        let password = "Tr0ub4dor&3"
+
+        let endpointResult = SuggestionRequestFactory.buildRequest(
+            context: context,
+            settings: CotabbyTestFixtures.settingsSnapshot(
+                selectedEngine: .openAICompatible,
+                isClipboardContextEnabled: true
+            ),
+            configuration: .standard,
+            clipboardContext: password
+        )
+
+        XCTAssertNil(endpointResult.request.clipboardContext)
+        XCTAssertFalse(endpointResult.promptPreview.contains("On the clipboard:"))
+        XCTAssertFalse(endpointResult.request.prompt.contains(password))
+    }
+
+    func test_buildRequest_keepsCredentialShapedClipboardForLocalEngines() {
+        let context = CotabbyTestFixtures.focusedInputContext(precedingText: "Hello")
+
+        for engine in [SuggestionEngineKind.llamaOpenSource, .appleIntelligence] {
+            let result = SuggestionRequestFactory.buildRequest(
+                context: context,
+                settings: CotabbyTestFixtures.settingsSnapshot(
+                    selectedEngine: engine,
+                    isClipboardContextEnabled: true
+                ),
+                configuration: .standard,
+                clipboardContext: "Tr0ub4dor&3"
+            )
+
+            // Sanitized (symbols become spaces) but present: on-device engines never
+            // send anything off the Mac, so the context stays useful there.
+            XCTAssertNotNil(result.request.clipboardContext)
+            XCTAssertTrue(result.promptPreview.contains("On the clipboard:"))
+        }
+    }
+
+    func test_buildRequest_keepsOrdinaryClipboardForEndpointEngine() {
+        let context = CotabbyTestFixtures.focusedInputContext(precedingText: "Hello")
+
+        let result = SuggestionRequestFactory.buildRequest(
+            context: context,
+            settings: CotabbyTestFixtures.settingsSnapshot(
+                selectedEngine: .openAICompatible,
+                isClipboardContextEnabled: true
+            ),
+            configuration: .standard,
+            clipboardContext: "Copied project notes."
+        )
+
+        XCTAssertEqual(result.request.clipboardContext, "Copied project notes.")
+        XCTAssertTrue(result.promptPreview.contains("On the clipboard:"))
+    }
+
     /// The clipboard cap is 1,200 characters including the "..." marker, and whitespace exposed
     /// by the cut is trimmed before the marker so the clip never reads as "word ...".
     func test_buildRequest_clipsClipboardContextAtItsCharacterCap() throws {

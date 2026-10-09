@@ -170,4 +170,32 @@ final class PromptContextSanitizerTests: XCTestCase {
             )
         }
     }
+
+    // MARK: - looksLikeCredential
+
+    func test_looksLikeCredential() {
+        let cases: [(text: String, expected: Bool)] = [
+            // Password-shaped: single token, 8+ chars, 3+ character classes.
+            ("Tr0ub4dor&3", true),
+            ("Kx7!mQ2#zR9p", true),
+            ("sk-live-a1B2c3D4e5", true),
+            ("  Tr0ub4dor&3\n", true), // surrounding whitespace is trimmed
+            // Not credentials: too short, has whitespace, or too few classes.
+            ("short1A!", false), // 7 chars
+            ("correct horse battery staple", false), // whitespace
+            ("https://example.com/some/path", false), // URL: two classes
+            ("user@example.com", false), // email: two classes
+            ("hello", false), // one class
+            ("DE89370400440532013000", false), // IBAN: two classes (handled by the scrubber)
+            ("Rindfleischetikettierungsüberwachungsaufgaben", false), // long single-class word
+            ("", false)
+        ]
+        for testCase in cases {
+            XCTAssertEqual(
+                PromptContextSanitizer.looksLikeCredential(testCase.text),
+                testCase.expected,
+                "text \(testCase.text.debugDescription)"
+            )
+        }
+    }
 }

@@ -235,6 +235,16 @@ enum SuggestionRequestFactory {
             return nil
         }
 
+        // Defense in depth for the network engine: a copied password or token must never
+        // reach a remote endpoint. (Password fields never build prompts at all, so this covers
+        // the remaining case — sensitive clipboard content referenced from a normal field.)
+        // Checked on the raw text: sanitization strips the symbols that mark a secret.
+        // On-device engines keep the clipboard context; it never leaves the Mac there.
+        if settings.selectedEngine == .openAICompatible,
+           PromptContextSanitizer.looksLikeCredential(rawContext) {
+            return nil
+        }
+
         let sanitizedContext = PromptContextSanitizer.sanitize(rawContext)
         guard !sanitizedContext.isEmpty,
               PromptContextSanitizer.containsAlphanumericSignal(sanitizedContext)
