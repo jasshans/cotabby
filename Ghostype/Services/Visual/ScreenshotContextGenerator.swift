@@ -291,7 +291,7 @@ final class ScreenshotContextGenerator: ScreenshotContextGenerating {
         }
 
         let appFolderURL = desktopURL
-            .appendingPathComponent("cotabby-debug-screenshots")
+            .appendingPathComponent("ghostype-debug-screenshots")
             .appendingPathComponent(name)
         try? FileManager.default.createDirectory(at: appFolderURL, withIntermediateDirectories: true)
 
