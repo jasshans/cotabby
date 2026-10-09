@@ -33,7 +33,7 @@ nonisolated final class PersistentMemoryStore: @unchecked Sendable {
     }
 
     /// Bump when the schema changes and add the `ALTER TABLE` steps to `runMigrations()`.
-    static let schemaVersion = 2
+    static let schemaVersion = 3
     /// The event log is an audit trail; phrase_stats carries the durable learning.
     static let maximumEvents = 20_000
     static let maximumPhrases = 5_000
@@ -232,6 +232,7 @@ nonisolated final class PersistentMemoryStore: @unchecked Sendable {
                 reject_count INTEGER NOT NULL DEFAULT 0,
                 last_used REAL NOT NULL
             );
+            CREATE INDEX IF NOT EXISTS idx_phrase_stats_last_used ON phrase_stats(last_used);
             CREATE TABLE IF NOT EXISTS kv_store(
                 key TEXT PRIMARY KEY,
                 value_enc BLOB NOT NULL
@@ -256,17 +257,25 @@ nonisolated final class PersistentMemoryStore: @unchecked Sendable {
         if version < 2 {
             try exec("DELETE FROM phrase_stats;")
         }
+        // v2 -> v3: index on last_used so the prune's ORDER BY ... LIMIT is served from
+        // the index instead of sorting the whole table on every persist batch.
+        if version < 3 {
+            try exec("CREATE INDEX IF NOT EXISTS idx_phrase_stats_last_used ON phrase_stats(last_used);")
+        }
         try setUserVersion(Self.schemaVersion)
     }
 
     private func persistOnQueue(_ events: [MemoryEvent]) throws {
         _ = try openIfNeeded(create: true)
+        // The salt is constant for the database's lifetime; fetch it once per batch instead
+        // of once per phrase (each fetch is a statement cycle plus an AES-GCM open).
+        let salt = try phraseHashSalt()
         try inTransaction {
             for event in events {
                 try insertEvent(event)
                 // Phrase learning is the durable part; the event log is the audit trail.
                 for phrase in MemoryPhraseExtractor.phrases(from: event.text) {
-                    try upsertPhrase(phrase, kind: event.kind, date: event.date)
+                    try upsertPhrase(phrase, kind: event.kind, date: event.date, salt: salt)
                 }
             }
             try prune()
@@ -316,7 +325,7 @@ nonisolated final class PersistentMemoryStore: @unchecked Sendable {
         _ = try step(stmt)
     }
 
-    private func upsertPhrase(_ phrase: String, kind: MemoryEventKind, date: Date) throws {
+    private func upsertPhrase(_ phrase: String, kind: MemoryEventKind, date: Date, salt: Data) throws {
         let (accepts, rejects): (Int64, Int64)
         switch kind {
         case .accepted: (accepts, rejects) = (1, 0)
@@ -335,7 +344,7 @@ nonisolated final class PersistentMemoryStore: @unchecked Sendable {
             """
         )
         defer { _ = sqlite3_finalize(stmt) }
-        try bindText(stmt, 1, MemoryPhraseExtractor.phraseHash(phrase, salt: try phraseHashSalt()))
+        try bindText(stmt, 1, MemoryPhraseExtractor.phraseHash(phrase, salt: salt))
         try bindBlob(stmt, 2, try crypto.seal(phrase))
         try bindInt64(stmt, 3, accepts)
         try bindInt64(stmt, 4, rejects)
@@ -348,10 +357,22 @@ nonisolated final class PersistentMemoryStore: @unchecked Sendable {
             "DELETE FROM memory_events WHERE id NOT IN " +
             "(SELECT id FROM memory_events ORDER BY id DESC LIMIT \(Self.maximumEvents));"
         )
-        try exec(
-            "DELETE FROM phrase_stats WHERE phrase_hash NOT IN " +
-            "(SELECT phrase_hash FROM phrase_stats ORDER BY last_used DESC LIMIT \(Self.maximumPhrases));"
-        )
+        // The ORDER BY last_used is served by idx_phrase_stats_last_used, but skip the
+        // delete entirely unless the table actually exceeds the cap — the common case
+        // is far below it, and even an index walk is wasted work then.
+        if try phraseCount() > Self.maximumPhrases {
+            try exec(
+                "DELETE FROM phrase_stats WHERE phrase_hash NOT IN " +
+                "(SELECT phrase_hash FROM phrase_stats ORDER BY last_used DESC LIMIT \(Self.maximumPhrases));"
+            )
+        }
+    }
+
+    private func phraseCount() throws -> Int {
+        let stmt = try prepare("SELECT COUNT(*) FROM phrase_stats;")
+        defer { _ = sqlite3_finalize(stmt) }
+        guard try step(stmt) else { return 0 }
+        return Int(sqlite3_column_int64(stmt, 0))
     }
 
     // MARK: - sqlite3 helpers (all assume the caller's statement lifecycle)

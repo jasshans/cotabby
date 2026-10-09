@@ -28,8 +28,18 @@ nonisolated struct MemoryCrypto: Sendable {
 
     private let keyStore: any MemoryKeyStore
 
+    /// In-process cache for the Keychain key. Every seal/open otherwise pays a
+    /// SecItemCopyMatching IPC round-trip to securityd (~0.1–1ms); a refresh or
+    /// write batch performs thousands of seal/open calls, so the IPC dominates
+    /// the actual AES-GCM work. The key is already resident in memory for the
+    /// duration of each call, so holding it for the instance lifetime changes
+    /// nothing about the security posture. Cleared by rotateKey(); shared by
+    /// all copies of this struct.
+    private let keyCache: KeyCache
+
     init(keyStore: any MemoryKeyStore) {
         self.keyStore = keyStore
+        self.keyCache = KeyCache()
     }
 
     /// The production crypto: keyed per bundle identifier so the release app and the dev build
@@ -42,7 +52,13 @@ nonisolated struct MemoryCrypto: Sendable {
     /// Seals plaintext into a single combined blob (nonce + ciphertext + tag) for one BLOB column.
     /// Creates the Keychain key on first use.
     func seal(_ plaintext: Data) throws -> Data {
-        let key = try keyStore.existingKey() ?? keyStore.createKey()
+        let key: SymmetricKey
+        if let cached = try cachedKey() {
+            key = cached
+        } else {
+            key = try keyStore.createKey()
+            keyCache.set(key)
+        }
         guard let combined = try AES.GCM.seal(plaintext, using: key).combined else {
             throw CryptoError.corruptData
         }
@@ -54,7 +70,7 @@ nonisolated struct MemoryCrypto: Sendable {
     }
 
     func open(_ sealed: Data) throws -> Data {
-        guard let key = try keyStore.existingKey() else {
+        guard let key = try cachedKey() else {
             // Sealed data without its key can never be opened again; report it instead of
             // returning empty so the caller does not overwrite it as if it were empty.
             throw CryptoError.corruptData
@@ -79,6 +95,37 @@ nonisolated struct MemoryCrypto: Sendable {
     /// Machine, a sync folder) can no longer be decrypted.
     func rotateKey() throws {
         try keyStore.deleteKey()
+        keyCache.set(nil)
+    }
+
+    /// The Keychain key, cached in-process after the first lookup. Falls through to the
+    /// Keychain on a cold cache (first use, or after rotateKey cleared it).
+    private func cachedKey() throws -> SymmetricKey? {
+        if let key = keyCache.get() { return key }
+        if let key = try keyStore.existingKey() {
+            keyCache.set(key)
+            return key
+        }
+        return nil
+    }
+}
+
+/// Lock-guarded box for the cached Keychain key. MemoryCrypto is a value type used on the
+/// store's serial queue, but Sendable is claimed, so the cache is internally synchronized.
+private final class KeyCache: @unchecked Sendable {
+    private let lock = NSLock()
+    private var key: SymmetricKey?
+
+    func get() -> SymmetricKey? {
+        lock.lock()
+        defer { lock.unlock() }
+        return key
+    }
+
+    func set(_ newKey: SymmetricKey?) {
+        lock.lock()
+        defer { lock.unlock() }
+        key = newKey
     }
 }
 
