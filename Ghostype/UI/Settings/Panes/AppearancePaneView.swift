@@ -343,7 +343,7 @@ struct AppearancePaneView: View {
         }
 
         let history = dailyCompletionStats.recentDays(limit: 14)
-        if history.allSatisfy({ $0.count == 0 }) {
+        if history.allSatisfy({ !$0.hasCompletions }) {
             Text("Accept a suggestion with \(suggestionSettings.acceptanceKeyLabel) and your daily counts will appear here.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -481,7 +481,7 @@ private struct CompletionHistoryRow: View {
 
             GeometryReader { geometry in
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(Color.accentColor.opacity(day.count == 0 ? 0.15 : 0.75))
+                    .fill(Color.accentColor.opacity(day.hasCompletions ? 0.75 : 0.15))
                     .frame(width: barWidth(available: geometry.size.width))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -507,6 +507,6 @@ private struct CompletionHistoryRow: View {
         // A hairline minimum keeps zero-count days visible as a faint track instead of
         // disappearing entirely, which would make the list look ragged.
         let fraction = CGFloat(day.count) / CGFloat(maxCount)
-        return max(available * fraction, day.count == 0 ? 2 : 4)
+        return max(available * fraction, day.hasCompletions ? 4 : 2)
     }
 }
