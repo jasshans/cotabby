@@ -77,7 +77,7 @@ final class FocusTracker {
     /// lowercase; matching is case-insensitive.
     private static let deepSearchBundleIdentifiers: Set<String> = [
         "com.openai.codex",
-        "com.meta.endo",
+        "com.meta.endo"
     ]
 
     // Last bundle identifier we logged as suppressed. Used to emit one log line per
