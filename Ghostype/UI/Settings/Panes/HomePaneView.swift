@@ -385,11 +385,11 @@ struct HomePaneView: View {
         HStack(spacing: 6) {
             Text("Free & open source")
             footerDot
-            if let repoURL = URL(string: "https://github.com/FuJacob/cotabby") {
+            if let repoURL = URL(string: "https://github.com/jasshans/cotabby") {
                 Link("GitHub", destination: repoURL)
             }
             footerDot
-            if let supportURL = URL(string: "https://github.com/FuJacob/cotabby/issues") {
+            if let supportURL = URL(string: "https://github.com/jasshans/cotabby/issues") {
                 Link(destination: supportURL) {
                     Label("Contribute", systemImage: "person.2")
                         .labelStyle(.titleAndIcon)
@@ -397,7 +397,7 @@ struct HomePaneView: View {
                 }
             }
             footerDot
-            if let wikiURL = URL(string: "https://github.com/FuJacob/cotabby/blob/main/CONTRIBUTING.md") {
+            if let wikiURL = URL(string: "https://github.com/jasshans/cotabby/blob/main/CONTRIBUTING.md") {
                 Link("Contributor Guide", destination: wikiURL)
             }
         }
