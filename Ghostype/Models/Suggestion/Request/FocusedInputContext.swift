@@ -55,6 +55,10 @@ struct FocusedInputContext: Equatable, Sendable {
     /// reintroduce the CFHash collision class this sequence is meant to avoid.
     let focusChangeSequence: UInt64
     let generation: UInt64
+    /// Content-only fingerprint — mirrors `FocusedInputSnapshot.contentSignature`.
+    /// Computed once in `init`: materialize runs several times per keystroke cycle and each
+    /// staleness check would otherwise re-join the full text window.
+    let contentSignature: String
 
     // Copying immutable snapshot values needs no UI actor; pure continuation plans use this
     // initializer to share the same field-identity rule as coordinator-held contexts.
@@ -86,6 +90,13 @@ struct FocusedInputContext: Equatable, Sendable {
         isIntegratedTerminal = snapshot.isIntegratedTerminal
         focusChangeSequence = snapshot.focusChangeSequence
         self.generation = generation
+        contentSignature = [
+            String(snapshot.selection.location),
+            String(snapshot.selection.length),
+            snapshot.precedingText,
+            snapshot.trailingText,
+            snapshot.isSecure ? "secure" : "plain"
+        ].joined(separator: "::")
     }
 
     /// True when the caret is at the end of its line (only whitespace, if anything, before the next
@@ -151,13 +162,5 @@ struct FocusedInputContext: Equatable, Sendable {
 
     /// Content-only fingerprint — mirrors `FocusedInputSnapshot.contentSignature`.
     /// See that type's doc comment for why `elementIdentifier` is excluded.
-    var contentSignature: String {
-        [
-            String(selection.location),
-            String(selection.length),
-            precedingText,
-            trailingText,
-            isSecure ? "secure" : "plain"
-        ].joined(separator: "::")
-    }
+    /// (Stored, computed once in `init`.)
 }

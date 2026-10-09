@@ -31,8 +31,13 @@ nonisolated struct TypingPredictionCandidate {
         guard !snapshot.isSecure, snapshot.selection.length == 0,
               SuggestionContinuationPlan.sameFocusedField(snapshot, context: context),
               snapshot.trailingText == context.trailingText,
-              snapshot.precedingText.hasPrefix(context.precedingText),
-              (context.precedingText + typedText).hasPrefix(snapshot.precedingText) else { return false }
+              snapshot.precedingText.hasPrefix(context.precedingText) else { return false }
+        // Equivalent to `(context.precedingText + typedText).hasPrefix(snapshot.precedingText)`
+        // given the guard above, but without allocating the concatenated string: the snapshot's
+        // prefix is the context's prefix plus the newly published tail, which the typed text
+        // must cover.
+        let newlyPublished = snapshot.precedingText.dropFirst(context.precedingText.count)
+        guard typedText.hasPrefix(newlyPublished) else { return false }
         let published = snapshot.precedingText.utf16.count - context.precedingText.utf16.count
         return snapshot.selection.location == context.selection.location + published
     }

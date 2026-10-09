@@ -22,6 +22,12 @@ final class LlamaRuntimeManager: ObservableObject {
     private var startupModelFilename: String?
     private var cachedRuntime: PreparedLlamaRuntime?
     private var selectedModelFilename: String?
+    /// Memoized filesystem resolution. `resolveSelectedRuntime()` walks the model directories,
+    /// but its result depends only on `selectedModelFilename` and the discovered model set, both
+    /// of which change solely via `refreshAvailableModels` / `configureSelectedModel` /
+    /// `selectModel`. Caching it keeps a main-actor filesystem walk off the per-keystroke path;
+    /// failures are never cached, so a failed resolve still retries the walk next time.
+    private var resolvedRuntimeCache: (filename: String?, resolved: ResolvedLlamaRuntime)?
 
     /// Read-only view of the model currently selected for autocomplete generation. Used by
     /// downstream observers (the performance metrics recorder) that want to label a recorded
@@ -53,6 +59,7 @@ final class LlamaRuntimeManager: ObservableObject {
     func refreshAvailableModels() {
         availableModels = runtimeLocator.availableModels(configuration: configuration)
         selectedModelFilename = normalizedModelFilename(selectedModelFilename)
+        resolvedRuntimeCache = nil
         CotabbyLogger.runtime.info("Discovered \(self.availableModels.count) model(s)")
     }
 
@@ -60,6 +67,7 @@ final class LlamaRuntimeManager: ObservableObject {
     /// This keeps persisted UI state separate from the runtime loading lifecycle.
     func configureSelectedModel(filename: String?) {
         selectedModelFilename = normalizedModelFilename(filename)
+        resolvedRuntimeCache = nil
         CotabbyLogger.runtime.info("Configured selected model: \(self.selectedModelFilename ?? "none")")
     }
 
@@ -80,6 +88,7 @@ final class LlamaRuntimeManager: ObservableObject {
         }
 
         selectedModelFilename = normalizedFilename
+        resolvedRuntimeCache = nil
 
         if cachedRuntime?.resolvedRuntime.modelFileURL.lastPathComponent == normalizedFilename {
             return
@@ -240,7 +249,7 @@ final class LlamaRuntimeManager: ObservableObject {
 
     /// Returns cached runtime metadata when available or performs one full preparation flow otherwise.
     private func preparedRuntime() async throws -> PreparedLlamaRuntime {
-        let resolvedRuntime = try resolveSelectedRuntime()
+        let resolvedRuntime = try cachedResolution()
         let requestedModelFilename = resolvedRuntime.modelFileURL.lastPathComponent
 
         if let cachedRuntime,
@@ -297,6 +306,16 @@ final class LlamaRuntimeManager: ObservableObject {
             state = .failed(runtimeError.localizedDescription)
             throw runtimeError
         }
+    }
+
+    /// Filesystem resolution with memoization (see `resolvedRuntimeCache`).
+    private func cachedResolution() throws -> ResolvedLlamaRuntime {
+        if let cache = resolvedRuntimeCache, cache.filename == selectedModelFilename {
+            return cache.resolved
+        }
+        let resolved = try resolveSelectedRuntime()
+        resolvedRuntimeCache = (selectedModelFilename, resolved)
+        return resolved
     }
 
     /// Validates the chosen filename against discovered local models and falls back to the first
