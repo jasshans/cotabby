@@ -33,6 +33,9 @@ final class MemoryRecorder: ObservableObject, SuggestionMemoryRecording {
     static let persistDelayNanoseconds: UInt64 = 2_000_000_000
 
     @Published private(set) var isEnabled: Bool
+    /// Personalization strength, persisted alongside the enable toggle. The provider reads it
+    /// when sizing the vocabulary; changing it refreshes the cache like a re-enable.
+    @Published private(set) var strength: PersonalizationStrength
     @Published private(set) var status: Status = .loading
     @Published private(set) var eventCount = 0
     @Published private(set) var phraseCount = 0
@@ -49,6 +52,7 @@ final class MemoryRecorder: ObservableObject, SuggestionMemoryRecording {
 
     private enum DefaultsKey {
         static let isEnabled = "cotabbySuggestionMemoryEnabled"
+        static let strength = "cotabbySuggestionMemoryStrength"
     }
 
     init(
@@ -64,6 +68,12 @@ final class MemoryRecorder: ObservableObject, SuggestionMemoryRecording {
             isEnabled = stored
         } else {
             isEnabled = MemoryPreferences.defaults.isEnabled
+        }
+        if let raw = userDefaults.string(forKey: DefaultsKey.strength),
+           let stored = PersonalizationStrength(rawValue: raw) {
+            strength = stored
+        } else {
+            strength = MemoryPreferences.defaults.strength
         }
         if loadsMemory {
             Task { [weak self] in
@@ -88,6 +98,45 @@ final class MemoryRecorder: ObservableObject, SuggestionMemoryRecording {
     /// excluded by the caller: dismissing a typo fix is not evidence against the corrected word.
     func recordRejected(_ text: String, bundleIdentifier: String, isSecure: Bool) {
         record(kind: .rejected, text: text, bundleIdentifier: bundleIdentifier, isSecure: isSecure)
+    }
+
+    /// Records a suggestion the user typed over without accepting: the ghost was visible and
+    /// the user chose a different continuation. Weaker than an explicit dismissal — the user
+    /// may simply not have needed a completion — but it is the only signal for the common
+    /// "saw it, didn't take it" case, and without it the vocabulary never unlearns wording
+    /// the user consistently avoids.
+    func recordSoftRejected(_ text: String, bundleIdentifier: String, isSecure: Bool) {
+        record(kind: .softRejected, text: text, bundleIdentifier: bundleIdentifier, isSecure: isSecure)
+    }
+
+    /// Records text the user produced by typing (from typing-history recordings). This is what
+    /// breaks the cold-start trap: the vocabulary learns the user's own wording from day one,
+    /// instead of waiting for Tab-accepts that never come while suggestions feel generic.
+    /// Long texts are chunked so the per-event phrase cap doesn't starve the tail of its
+    /// bigrams and trigrams (the extractor emits unigrams first).
+    func recordTyped(_ text: String, bundleIdentifier: String, isSecure: Bool) {
+        for chunk in Self.typedChunks(from: text) {
+            record(kind: .typed, text: chunk, bundleIdentifier: bundleIdentifier, isSecure: isSecure)
+        }
+    }
+
+    /// Splits typed text into word-boundary chunks. Each chunk becomes its own event so phrase
+    /// extraction sees the whole text, not just its first 24 unigrams.
+    private static let typedChunkCharacters = 300
+    private static func typedChunks(from text: String) -> [String] {
+        guard text.count > typedChunkCharacters else { return [text] }
+        var chunks: [String] = []
+        var current = ""
+        for word in text.split(separator: " ", omittingEmptySubsequences: true) {
+            if current.count + word.count + 1 > typedChunkCharacters, !current.isEmpty {
+                chunks.append(current)
+                current = ""
+            }
+            if !current.isEmpty { current += " " }
+            current += word
+        }
+        if !current.isEmpty { chunks.append(current) }
+        return chunks
     }
 
     private func record(kind: MemoryEventKind, text: String, bundleIdentifier: String, isSecure: Bool) {
@@ -131,6 +180,15 @@ final class MemoryRecorder: ObservableObject, SuggestionMemoryRecording {
             pending = []
             onDidPersist?()
         }
+    }
+
+    /// Sets the personalization strength. The vocabulary cache is rebuilt so the new phrase
+    /// count takes effect on the next request.
+    func setStrength(_ newStrength: PersonalizationStrength) {
+        guard strength != newStrength else { return }
+        strength = newStrength
+        userDefaults.set(newStrength.rawValue, forKey: DefaultsKey.strength)
+        onDidPersist?()
     }
 
     // MARK: - Persistence

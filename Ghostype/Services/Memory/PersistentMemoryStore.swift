@@ -33,7 +33,7 @@ nonisolated final class PersistentMemoryStore: @unchecked Sendable {
     }
 
     /// Bump when the schema changes and add the `ALTER TABLE` steps to `runMigrations()`.
-    static let schemaVersion = 3
+    static let schemaVersion = 4
     /// The event log is an audit trail; phrase_stats carries the durable learning.
     static let maximumEvents = 20_000
     static let maximumPhrases = 5_000
@@ -103,46 +103,84 @@ nonisolated final class PersistentMemoryStore: @unchecked Sendable {
     /// Highest-scoring phrases for prompt conditioning, decrypted and ranked. Never creates the
     /// database file: no file means no memory yet, which reads as empty.
     func topPhrases(limit: Int) -> [LearnedPhrase] {
+        topPhrases(limit: limit, bundleId: nil)
+    }
+
+    /// Per-app vocabulary with global fallback: the app's own top phrases first, then the
+    /// global aggregate fills whatever the app hasn't earned yet. A new app starts on the
+    /// global vocabulary and grows its own as its events land. App phrases always lead —
+    /// wording learned in this app outranks globally popular wording for this field.
+    func topPhrases(limit: Int, bundleId: String?) -> [LearnedPhrase] {
         queue.sync {
             do {
                 guard try openIfNeeded(create: false) else { return [] }
-                let stmt = try prepare(
-                    "SELECT phrase_enc, accept_count, reject_count, last_used FROM phrase_stats;"
-                )
-                defer { _ = sqlite3_finalize(stmt) }
-                let now = Date()
-                var ranked: [(LearnedPhrase, Double)] = []
-                while try step(stmt) {
-                    guard let encrypted = columnBlob(stmt, 0) else { continue }
-                    let phrase: String
-                    do {
-                        phrase = try crypto.openString(encrypted)
-                    } catch {
-                        // One undecryptable row (e.g. the key was rotated elsewhere) must not
-                        // poison the rest of the vocabulary.
-                        continue
-                    }
-                    let accepts = Int(sqlite3_column_int64(stmt, 1))
-                    let rejects = Int(sqlite3_column_int64(stmt, 2))
-                    let lastUsed = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 3))
-                    let score = MemoryPhraseExtractor.score(
-                        acceptCount: accepts, rejectCount: rejects, lastUsed: lastUsed, now: now
-                    )
-                    guard score > 0 else { continue }
-                    ranked.append((
-                        LearnedPhrase(
-                            phrase: phrase, acceptCount: accepts, rejectCount: rejects,
-                            lastUsed: lastUsed, score: score
-                        ),
-                        score
-                    ))
+                var seen = Set<String>()
+                var result: [LearnedPhrase] = []
+                if let bundleId, !bundleId.isEmpty {
+                    result = try rankedPhrases(bundleId: bundleId, limit: limit, seen: &seen)
                 }
-                return ranked.sorted { $0.1 > $1.1 }.prefix(limit).map(\.0)
+                if result.count < limit {
+                    let global = try rankedPhrases(
+                        bundleId: "", limit: limit - result.count, seen: &seen
+                    )
+                    result.append(contentsOf: global)
+                }
+                return result
             } catch {
                 CotabbyLogger.app.error("Suggestion memory ranking failed: \(error)")
                 return []
             }
         }
+    }
+
+    /// All positively-scored phrases for one bundle bucket ('': global), decrypted and scored.
+    /// `seen` carries phrase hashes already taken by a higher-priority bucket so the global
+    /// fill never duplicates the app's own phrases.
+    private func rankedPhrases(
+        bundleId: String, limit: Int, seen: inout Set<String>
+    ) throws -> [LearnedPhrase] {
+        let stmt = try prepare(
+            """
+            SELECT phrase_hash, phrase_enc, accept_count, typed_count, reject_count,
+                   soft_reject_count, last_used
+            FROM phrase_stats WHERE bundle_id = ?;
+            """
+        )
+        defer { _ = sqlite3_finalize(stmt) }
+        try bindText(stmt, 1, bundleId)
+        let now = Date()
+        var ranked: [(phrase: LearnedPhrase, score: Double)] = []
+        while try step(stmt) {
+            guard let hash = columnText(stmt, 0), seen.insert(hash).inserted else { continue }
+            guard let encrypted = columnBlob(stmt, 1) else { continue }
+            let phrase: String
+            do {
+                phrase = try crypto.openString(encrypted)
+            } catch {
+                // One undecryptable row (e.g. the key was rotated elsewhere) must not
+                // poison the rest of the vocabulary.
+                continue
+            }
+            let accepts = Int(sqlite3_column_int64(stmt, 2))
+            let typed = Int(sqlite3_column_int64(stmt, 3))
+            let rejects = Int(sqlite3_column_int64(stmt, 4))
+            let softRejects = Int(sqlite3_column_int64(stmt, 5))
+            let lastUsed = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 6))
+            let score = MemoryPhraseExtractor.score(
+                acceptCount: accepts, typedCount: typed, rejectCount: rejects,
+                softRejectCount: softRejects, lastUsed: lastUsed, now: now
+            )
+            guard score > 0 else { continue }
+            ranked.append((
+                phrase: LearnedPhrase(
+                    phrase: phrase, acceptCount: accepts, typedCount: typed,
+                    rejectCount: rejects, softRejectCount: softRejects,
+                    lastUsed: lastUsed, score: score
+                ),
+                score: score
+            ))
+        }
+        return ranked.sorted { $0.score > $1.score }.prefix(limit).map(\.phrase)
     }
 
     /// (events, phrases) for the Settings UI. Never creates the database file.
@@ -226,13 +264,21 @@ nonisolated final class PersistentMemoryStore: @unchecked Sendable {
             );
             CREATE INDEX IF NOT EXISTS idx_memory_events_created ON memory_events(created_at);
             CREATE TABLE IF NOT EXISTS phrase_stats(
-                phrase_hash TEXT PRIMARY KEY,
+                phrase_hash TEXT NOT NULL,
+                -- Owning app for per-app vocabulary. '' is the global aggregate across apps:
+                -- every event writes both its app row and the global row, so the global
+                -- vocabulary keeps working while per-app rankings grow underneath it.
+                bundle_id TEXT NOT NULL DEFAULT '',
                 phrase_enc BLOB NOT NULL,
                 accept_count INTEGER NOT NULL DEFAULT 0,
+                typed_count INTEGER NOT NULL DEFAULT 0,
                 reject_count INTEGER NOT NULL DEFAULT 0,
-                last_used REAL NOT NULL
+                soft_reject_count INTEGER NOT NULL DEFAULT 0,
+                last_used REAL NOT NULL,
+                PRIMARY KEY(phrase_hash, bundle_id)
             );
             CREATE INDEX IF NOT EXISTS idx_phrase_stats_last_used ON phrase_stats(last_used);
+            CREATE INDEX IF NOT EXISTS idx_phrase_stats_bundle ON phrase_stats(bundle_id);
             CREATE TABLE IF NOT EXISTS kv_store(
                 key TEXT PRIMARY KEY,
                 value_enc BLOB NOT NULL
@@ -262,6 +308,35 @@ nonisolated final class PersistentMemoryStore: @unchecked Sendable {
         if version < 3 {
             try exec("CREATE INDEX IF NOT EXISTS idx_phrase_stats_last_used ON phrase_stats(last_used);")
         }
+        // v3 -> v4: phrase_stats becomes per-(phrase, app). The primary key changes, so the
+        // table is rebuilt: existing rows keep their counts and become the global ('') aggregate.
+        // Two new counters arrive: typed_count (phrases the user produced by typing) and
+        // soft_reject_count (visible suggestions typed over). Both default 0, so old rows score
+        // exactly as before until new evidence lands.
+        if version < 4 {
+            try exec("""
+                CREATE TABLE phrase_stats_new(
+                    phrase_hash TEXT NOT NULL,
+                    bundle_id TEXT NOT NULL DEFAULT '',
+                    phrase_enc BLOB NOT NULL,
+                    accept_count INTEGER NOT NULL DEFAULT 0,
+                    typed_count INTEGER NOT NULL DEFAULT 0,
+                    reject_count INTEGER NOT NULL DEFAULT 0,
+                    soft_reject_count INTEGER NOT NULL DEFAULT 0,
+                    last_used REAL NOT NULL,
+                    PRIMARY KEY(phrase_hash, bundle_id)
+                );
+                INSERT INTO phrase_stats_new(
+                    phrase_hash, bundle_id, phrase_enc, accept_count, typed_count,
+                    reject_count, soft_reject_count, last_used
+                ) SELECT phrase_hash, '', phrase_enc, accept_count, 0, reject_count, 0, last_used
+                  FROM phrase_stats;
+                DROP TABLE phrase_stats;
+                ALTER TABLE phrase_stats_new RENAME TO phrase_stats;
+                CREATE INDEX idx_phrase_stats_last_used ON phrase_stats(last_used);
+                CREATE INDEX idx_phrase_stats_bundle ON phrase_stats(bundle_id);
+                """)
+        }
         try setUserVersion(Self.schemaVersion)
     }
 
@@ -275,7 +350,10 @@ nonisolated final class PersistentMemoryStore: @unchecked Sendable {
                 try insertEvent(event)
                 // Phrase learning is the durable part; the event log is the audit trail.
                 for phrase in MemoryPhraseExtractor.phrases(from: event.text) {
-                    try upsertPhrase(phrase, kind: event.kind, date: event.date, salt: salt)
+                    try upsertPhrase(
+                        phrase, kind: event.kind, bundleId: event.bundleIdentifier,
+                        date: event.date, salt: salt
+                    )
                 }
             }
             try prune()
@@ -328,31 +406,56 @@ nonisolated final class PersistentMemoryStore: @unchecked Sendable {
         _ = try step(stmt)
     }
 
-    private func upsertPhrase(_ phrase: String, kind: MemoryEventKind, date: Date, salt: Data) throws {
-        let (accepts, rejects): (Int64, Int64)
+    private func upsertPhrase(
+        _ phrase: String, kind: MemoryEventKind, bundleId: String, date: Date, salt: Data
+    ) throws {
+        // Each kind feeds its own counter; the score weights them (see MemoryPhraseExtractor).
+        // Typed text is the cold-start fix: it is the user's own production, not a suggestion
+        // they accepted, so it earns its own counter rather than inflating accept_count.
+        let (accepts, typed, rejects, softRejects): (Int64, Int64, Int64, Int64)
         switch kind {
-        case .accepted: (accepts, rejects) = (1, 0)
-        case .rejected: (accepts, rejects) = (0, 1)
-        case .typed: (accepts, rejects) = (0, 0)
+        case .accepted: (accepts, typed, rejects, softRejects) = (1, 0, 0, 0)
+        case .typed: (accepts, typed, rejects, softRejects) = (0, 1, 0, 0)
+        case .rejected: (accepts, typed, rejects, softRejects) = (0, 0, 1, 0)
+        case .softRejected: (accepts, typed, rejects, softRejects) = (0, 0, 0, 1)
         }
+        let hash = MemoryPhraseExtractor.phraseHash(phrase, salt: salt)
+        let sealed = try crypto.seal(phrase)
+        let timestamp = date.timeIntervalSince1970
         let stmt = try prepare(
             """
-            INSERT INTO phrase_stats(phrase_hash, phrase_enc, accept_count, reject_count, last_used)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(phrase_hash) DO UPDATE SET
+            INSERT INTO phrase_stats(
+                phrase_hash, bundle_id, phrase_enc, accept_count, typed_count,
+                reject_count, soft_reject_count, last_used
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(phrase_hash, bundle_id) DO UPDATE SET
                 phrase_enc = excluded.phrase_enc,
                 accept_count = phrase_stats.accept_count + excluded.accept_count,
+                typed_count = phrase_stats.typed_count + excluded.typed_count,
                 reject_count = phrase_stats.reject_count + excluded.reject_count,
+                soft_reject_count = phrase_stats.soft_reject_count + excluded.soft_reject_count,
                 last_used = excluded.last_used;
             """
         )
         defer { _ = sqlite3_finalize(stmt) }
-        try bindText(stmt, 1, MemoryPhraseExtractor.phraseHash(phrase, salt: salt))
-        try bindBlob(stmt, 2, try crypto.seal(phrase))
-        try bindInt64(stmt, 3, accepts)
-        try bindInt64(stmt, 4, rejects)
-        try bindDouble(stmt, 5, date.timeIntervalSince1970)
-        _ = try step(stmt)
+        // Every event lands twice: once in the global aggregate (bundle_id = '') and once in
+        // the event's app. The global row keeps the old behavior working; the app row grows
+        // the per-app vocabulary underneath it. When the bundle is empty there is only one row.
+        var bundleIds = [""]
+        if !bundleId.isEmpty { bundleIds.append(bundleId) }
+        for target in bundleIds {
+            try bindText(stmt, 1, hash)
+            try bindText(stmt, 2, target)
+            try bindBlob(stmt, 3, sealed)
+            try bindInt64(stmt, 4, accepts)
+            try bindInt64(stmt, 5, typed)
+            try bindInt64(stmt, 6, rejects)
+            try bindInt64(stmt, 7, softRejects)
+            try bindDouble(stmt, 8, timestamp)
+            _ = try step(stmt)
+            try reset(stmt)
+        }
     }
 
     private func prune() throws {
@@ -471,5 +574,16 @@ nonisolated final class PersistentMemoryStore: @unchecked Sendable {
         let count = Int(sqlite3_column_bytes(stmt, index))
         guard count > 0 else { return nil }
         return Data(bytes: bytes, count: count)
+    }
+
+    private func columnText(_ stmt: OpaquePointer, _ index: Int32) -> String? {
+        guard let cString = sqlite3_column_text(stmt, index) else { return nil }
+        return String(cString: cString)
+    }
+
+    /// Resets a prepared statement so it can be re-bound and re-stepped. Used when one
+    /// statement serves several rows (the global + per-app upsert pair).
+    private func reset(_ stmt: OpaquePointer) throws {
+        guard sqlite3_reset(stmt) == SQLITE_OK else { throw StoreError.stepFailed(errorMessage()) }
     }
 }

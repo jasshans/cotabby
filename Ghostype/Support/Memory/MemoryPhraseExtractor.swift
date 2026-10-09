@@ -52,16 +52,30 @@ enum MemoryPhraseExtractor {
         return phrases
     }
 
-    /// Ranks a phrase: acceptance evidence minus rejection evidence, decayed by recency with a
-    /// ~30-day half-life, so wording you stopped using fades instead of haunting prompts forever.
+    /// Ranks a phrase: evidence for minus evidence against, decayed by recency with a ~30-day
+    /// half-life, so wording you stopped using fades instead of haunting prompts forever.
     /// A phrase with no net positive evidence scores 0 and never reaches the vocabulary.
+    ///
+    /// Why the weights: an accept is the strongest signal (you chose this wording when offered
+    /// it). Typed text is genuine but high-volume — half weight keeps a phrase you type daily
+    /// above one you accepted twice, without letting boilerplate drown everything. A soft
+    /// reject (typed over) is weak negative evidence — half weight, so ignoring a suggestion
+    /// a few times doesn't erase a phrase you demonstrably use.
+    static let typedEvidenceWeight = 0.5
+    static let softRejectEvidenceWeight = 0.5
+
     static func score(
         acceptCount: Int,
+        typedCount: Int = 0,
         rejectCount: Int,
+        softRejectCount: Int = 0,
         lastUsed: Date,
         now: Date = Date()
     ) -> Double {
-        let net = Double(acceptCount - rejectCount)
+        let net = Double(acceptCount)
+            + Double(typedCount) * typedEvidenceWeight
+            - Double(rejectCount)
+            - Double(softRejectCount) * softRejectEvidenceWeight
         guard net > 0 else { return 0 }
         let days = max(0, now.timeIntervalSince(lastUsed) / 86_400)
         return net * pow(0.5, days / 30.0)
