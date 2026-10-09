@@ -57,10 +57,7 @@ struct AboutPaneView: View {
 
     @ViewBuilder
     private var supportRow: some View {
-        // Stack the support copy and the call-to-action vertically so the button sits below the
-        // paragraphs instead of competing with them on the right edge of the row. `LabeledContent`
-        // placed the value column next to the label, which made the wall of text visually compete
-        // with a small button — the natural reading order is paragraphs first, then action.
+        // Two short paragraphs stacked vertically: the belief first, then the spare-time note.
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 8) {
                 Text(
@@ -69,20 +66,11 @@ struct AboutPaneView: View {
                 )
 
                 Text(
-                    "We're building Ghostype in our spare time, one release at a time. "
-                    + "If Ghostype has helped you, your support helps us keep improving it."
+                    "We're building Ghostype in our spare time, one release at a time."
                 )
             }
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
-
-            if let supportURL = URL(string: "https://ko-fi.com/cotabby") {
-                Link(destination: supportURL) {
-                    Label("Support Ghostype", systemImage: "heart.fill")
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.blue)
-            }
         }
     }
 
@@ -90,13 +78,13 @@ struct AboutPaneView: View {
     /// search can scroll to and pulse individually.
     @ViewBuilder
     private var resourceRows: some View {
-        if let repoURL = URL(string: "https://github.com/FuJacob/Ghostype") {
+        if let repoURL = URL(string: "https://github.com/jasshans/cotabby") {
             Link(destination: repoURL) {
                 Label("GitHub Repository", systemImage: "chevron.left.forwardslash.chevron.right")
             }
             .settingsItem(.githubRepository)
         }
-        if let wikiURL = URL(string: "https://github.com/FuJacob/Ghostype/wiki") {
+        if let wikiURL = URL(string: "https://github.com/jasshans/cotabby") {
             Link(destination: wikiURL) {
                 Label("Wiki & Contributor Guide", systemImage: "book")
             }
