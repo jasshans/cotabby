@@ -144,6 +144,26 @@ final class GhostFontResolverTests: XCTestCase {
         XCTAssertEqual(GhostFontResolver.width(of: sample, font: resolution.font) / hostWidth, 1, accuracy: 0.01)
     }
 
+    /// Measured 2026-10-09 in Google Chat's compose box: the caret box came down ~2x taller than
+    /// the text's line, so the box alone solved ~28pt for 13px text and the ghost rendered huge.
+    /// A line box can be far taller than its text, but a measured width cannot be narrower than
+    /// the text that produced it — when the sample says smaller, the box is wrong and the sample
+    /// wins. (The Menlo test above covers the other direction, where the box still stands.)
+    func testASampleMuchNarrowerThanTheCaretBoxFaceShrinksToTheSample() {
+        let sample = "the quick brown fox jumps over"
+        // No style, 34pt caret box: the box alone solves a ~28pt face.
+        let boxOnly = resolve(style: nil, caretBoxHeight: 34, renderer: .webEngine)
+        XCTAssertGreaterThan(boxOnly.font.pointSize, 24)
+        // The host really rendered the sample at ~13px.
+        let hostWidth = GhostFontResolver.width(of: sample, font: NSFont.systemFont(ofSize: 13))
+        let resolution = resolve(
+            style: nil, metrics: HostTextMetrics(sampleText: sample, sampleWidth: hostWidth), caretBoxHeight: 34, renderer: .webEngine
+        )
+        XCTAssertEqual(resolution.provenance, .caretDerivedCalibrated)
+        // The sample was set in the system face, so matching it recovers ~13pt.
+        XCTAssertEqual(resolution.font.pointSize, 13, accuracy: 1.0)
+    }
+
     /// The monospaced system face names its family ".AppleSystemUIFontMonospaced"; read as a dotted
     /// system name it became the proportional face, so a field that matched it failed every later
     /// sample in it (a Menlo textarea in Chrome, 2026-09-11, then settled on SF scaled to 17.2).
