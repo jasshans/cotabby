@@ -86,7 +86,7 @@ enum AXTreeDumpWriter {
         }
         let targetURL = desktopURL.appendingPathComponent("ghostype-ax-dump.txt", isDirectory: false)
         do {
-            try out.write(to: targetURL, atomically: true, encoding: .utf8)
+            try SecureFileUtilities.secureWrite(out, to: targetURL)
             CotabbyLogger.focus.debug(
                 "Wrote AX dump",
                 metadata: [
