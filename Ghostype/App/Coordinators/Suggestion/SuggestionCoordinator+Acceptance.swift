@@ -750,6 +750,9 @@ extension SuggestionCoordinator {
 
         totalTabAcceptedWordCount += acceptedWordCount
         userDefaults.set(totalTabAcceptedWordCount, forKey: Self.totalTabAcceptedWordCountDefaultsKey)
+        // Same event feeds the per-day buckets, keeping the daily history and the all-time
+        // total consistent by construction.
+        dailyCompletionStats.recordAcceptedWords(acceptedWordCount)
     }
 
     // MARK: - Caret Prediction

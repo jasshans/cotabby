@@ -45,7 +45,7 @@ struct CotabbyApp: App {
             )
         } label: {
             MenuBarStatusLabelView(
-                suggestionCoordinator: appDelegate.suggestionCoordinator,
+                dailyCompletionStats: appDelegate.dailyCompletionStats,
                 suggestionSettings: appDelegate.suggestionSettings
             )
         }

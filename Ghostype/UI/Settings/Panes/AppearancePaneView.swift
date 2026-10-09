@@ -7,6 +7,7 @@ import SwiftUI
 /// matches the menu-bar quick control so users can connect the two.
 struct AppearancePaneView: View {
     @ObservedObject var suggestionSettings: SuggestionSettingsModel
+    @ObservedObject var dailyCompletionStats: DailyCompletionStats
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -89,7 +90,7 @@ struct AppearancePaneView: View {
                 Toggle(isOn: menuBarWordCountVisibleBinding) {
                     SettingsRowLabel(
                         title: "Show Word Count in Menu Bar",
-                        description: "Show a running count of words you've accepted next to the menu bar icon.",
+                        description: "Show how many words you've completed today next to the menu bar icon.",
                         systemImage: "number"
                     )
                 }
@@ -132,6 +133,10 @@ struct AppearancePaneView: View {
                     }
                 }
                 .settingsItem(.showKeyHint)
+            }
+
+            Section("Completion Statistics") {
+                completionStatisticsSection
             }
 
             Section("Appearance") {
@@ -321,6 +326,37 @@ struct AppearancePaneView: View {
         )
     }
 
+    // MARK: - Completion Statistics
+
+    /// Today / total / per-day accepted word counts. The store publishes `countsByDay`, so this
+    /// section redraws the moment a completion is accepted while Settings is open.
+    @ViewBuilder
+    private var completionStatisticsSection: some View {
+        LabeledContent("Today") {
+            Text("\(dailyCompletionStats.todayCount.formatted()) words")
+                .monospacedDigit()
+        }
+
+        LabeledContent("Total") {
+            Text("\(dailyCompletionStats.allTimeTotal.formatted()) words")
+                .monospacedDigit()
+        }
+
+        let history = dailyCompletionStats.recentDays(limit: 14)
+        if history.allSatisfy({ $0.count == 0 }) {
+            Text("Accept a suggestion with \(suggestionSettings.acceptanceKeyLabel) and your daily counts will appear here.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(history) { day in
+                    CompletionHistoryRow(day: day, maxCount: history.map(\.count).max() ?? 1)
+                }
+            }
+            .padding(.top, 4)
+        }
+    }
+
     private var menuBarIconVisibleBinding: Binding<Bool> {
         Binding(
             get: { suggestionSettings.isMenuBarIconVisible },
@@ -426,5 +462,51 @@ struct AppearancePaneView: View {
         }
 
         return color
+    }
+}
+
+/// One row of the Completion Statistics history: the day's label, a bar proportional to the
+/// busiest day in the visible window, and the count. Bars make streaks and quiet days visible
+/// at a glance without a charting dependency.
+private struct CompletionHistoryRow: View {
+    let day: DailyCompletionStats.DayCount
+    let maxCount: Int
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(dayLabel)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(width: 92, alignment: .leading)
+
+            GeometryReader { geometry in
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(Color.accentColor.opacity(day.count == 0 ? 0.15 : 0.75))
+                    .frame(width: barWidth(available: geometry.size.width))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(height: 8)
+
+            Text("\(day.count.formatted())")
+                .font(.caption.monospacedDigit())
+                .frame(width: 64, alignment: .trailing)
+        }
+    }
+
+    /// "Today" / "Yesterday" read faster than dates for the two most recent rows; older rows
+    /// use the locale's abbreviated weekday + month + day.
+    private var dayLabel: String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(day.date) { return "Today" }
+        if calendar.isDateInYesterday(day.date) { return "Yesterday" }
+        return day.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+    }
+
+    private func barWidth(available: CGFloat) -> CGFloat {
+        guard maxCount > 0 else { return 0 }
+        // A hairline minimum keeps zero-count days visible as a faint track instead of
+        // disappearing entirely, which would make the list look ragged.
+        let fraction = CGFloat(day.count) / CGFloat(maxCount)
+        return max(available * fraction, day.count == 0 ? 2 : 4)
     }
 }

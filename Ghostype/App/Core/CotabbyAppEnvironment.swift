@@ -40,6 +40,9 @@ final class CotabbyAppEnvironment {
     let huggingFaceSearchService: HuggingFaceSearchService
     let performanceMetricsStore: PerformanceMetricsStore
     let qualityMetricsStore: SuggestionQualityMetricsStore
+    /// Per-day accepted word counts backing the menu-bar label and the Settings statistics.
+    /// Owned here so the coordinator, menu bar, and Settings share one instance.
+    let dailyCompletionStats: DailyCompletionStats
     let typingHistoryStore: TypingHistoryStore
     /// Encrypted on-device accept/reject learning (see `MemoryRecorder`). Owned here so settings
     /// and the termination flush share one instance with the suggestion coordinator.
@@ -157,6 +160,9 @@ final class CotabbyAppEnvironment {
         // Always-on quality counters (generated / shown / suppressed-by-reason / accepted).
         // Counters only, no content, so unlike latency tracking there is no opt-in gate.
         let qualityMetricsStore = SuggestionQualityMetricsStore()
+        // Per-day accepted word counts for the menu-bar label and Settings statistics.
+        // Counts only, no content, so like the quality counters there is no opt-in gate.
+        let dailyCompletionStats = DailyCompletionStats()
         // Live CPU/RAM graph backing for the Performance pane. Holds no state until the pane asks it
         // to start sampling, so constructing it eagerly here costs nothing.
         let systemMetricsStore = SystemMetricsStore()
@@ -272,6 +278,7 @@ final class CotabbyAppEnvironment {
             huggingFaceSearchService: huggingFaceSearchService,
             performanceMetricsStore: performanceMetricsStore,
             qualityMetricsStore: qualityMetricsStore,
+            dailyCompletionStats: dailyCompletionStats,
             systemMetricsStore: systemMetricsStore,
             onShowWelcome: { [weak welcomeCoordinator] in
                 welcomeCoordinator?.showWelcome()
@@ -314,6 +321,7 @@ final class CotabbyAppEnvironment {
             symSpellCorrector: symSpellCorrector,
             spellingLanguageResolver: SpellingLanguageResolver(),
             qualityMetricsStore: qualityMetricsStore,
+            dailyCompletionStats: dailyCompletionStats,
             historyProvider: typingHistoryStore,
             memoryRecorder: memoryRecorder,
             memoryContext: memoryContextProvider
@@ -386,6 +394,7 @@ final class CotabbyAppEnvironment {
         self.huggingFaceSearchService = huggingFaceSearchService
         self.performanceMetricsStore = performanceMetricsStore
         self.qualityMetricsStore = qualityMetricsStore
+        self.dailyCompletionStats = dailyCompletionStats
         self.typingHistoryStore = typingHistoryStore
         self.memoryRecorder = memoryRecorder
         self.settingsCoordinator = settingsCoordinator

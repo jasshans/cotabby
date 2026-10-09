@@ -22,6 +22,8 @@ final class SettingsCoordinator: NSObject, NSWindowDelegate {
     private let huggingFaceSearchService: HuggingFaceSearchService
     private let performanceMetricsStore: PerformanceMetricsStore
     private let qualityMetricsStore: SuggestionQualityMetricsStore
+    /// Backs the Completion Statistics section of the Appearance pane.
+    private let dailyCompletionStats: DailyCompletionStats
     private let systemMetricsStore: SystemMetricsStore
     private let onShowWelcome: () -> Void
     private let clearEmojiHistory: () -> Void
@@ -50,6 +52,7 @@ final class SettingsCoordinator: NSObject, NSWindowDelegate {
         huggingFaceSearchService: HuggingFaceSearchService,
         performanceMetricsStore: PerformanceMetricsStore,
         qualityMetricsStore: SuggestionQualityMetricsStore,
+        dailyCompletionStats: DailyCompletionStats,
         systemMetricsStore: SystemMetricsStore,
         onShowWelcome: @escaping () -> Void,
         clearEmojiHistory: @escaping () -> Void,
@@ -67,6 +70,7 @@ final class SettingsCoordinator: NSObject, NSWindowDelegate {
         self.huggingFaceSearchService = huggingFaceSearchService
         self.performanceMetricsStore = performanceMetricsStore
         self.qualityMetricsStore = qualityMetricsStore
+        self.dailyCompletionStats = dailyCompletionStats
         self.systemMetricsStore = systemMetricsStore
         self.onShowWelcome = onShowWelcome
         self.clearEmojiHistory = clearEmojiHistory
@@ -98,6 +102,7 @@ final class SettingsCoordinator: NSObject, NSWindowDelegate {
                     huggingFaceSearchService: huggingFaceSearchService,
                     performanceMetricsStore: performanceMetricsStore,
                     qualityMetricsStore: qualityMetricsStore,
+                    dailyCompletionStats: dailyCompletionStats,
                     systemMetricsStore: systemMetricsStore,
                     onShowWelcome: onShowWelcome,
                     clearEmojiHistory: clearEmojiHistory,

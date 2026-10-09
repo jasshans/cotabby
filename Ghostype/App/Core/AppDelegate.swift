@@ -26,6 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let foundationModelAvailabilityService: FoundationModelAvailabilityService
     let powerSourceMonitor: PowerSourceMonitor
     let suggestionCoordinator: SuggestionCoordinator
+    let dailyCompletionStats: DailyCompletionStats
     let inlineCommandCoordinator: InlineCommandCoordinator
     let welcomeCoordinator: WelcomeCoordinator
     let settingsCoordinator: SettingsCoordinator
@@ -58,6 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         foundationModelAvailabilityService = environment.foundationModelAvailabilityService
         powerSourceMonitor = environment.powerSourceMonitor
         suggestionCoordinator = environment.suggestionCoordinator
+        dailyCompletionStats = environment.dailyCompletionStats
         inlineCommandCoordinator = environment.inlineCommandCoordinator
         welcomeCoordinator = environment.welcomeCoordinator
         settingsCoordinator = environment.settingsCoordinator
