@@ -75,7 +75,7 @@ struct MenuBarView: View {
             }
 
             // A plain source link keeps project information separate from the product title.
-            if let projectURL = URL(string: "https://github.com/FuJacob/cotabby") {
+            if let projectURL = URL(string: "https://github.com/jasshans/cotabby") {
                 Link("GitHub", destination: projectURL)
                     .buttonStyle(.borderless)
                     .font(.subheadline)
