@@ -77,6 +77,14 @@ final class PermissionManager: ObservableObject {
         }
     }
 
+    /// The three system permissions Ghostype depends on, read together so the launch
+    /// path can query them off the main thread in one go.
+    private struct PermissionState {
+        var accessibility: Bool
+        var inputMonitoring: Bool
+        var screenRecording: Bool
+    }
+
     /// Re-reads the current system permission state and republishes any changes to observers.
     /// Synchronous: used by the activation observer and surfaces where the caller is already on
     /// the main thread and wants fresh state now. Launch uses the async `initialRefresh` instead.
@@ -86,18 +94,16 @@ final class PermissionManager: ObservableObject {
 
     /// The three TCC queries. Read-only and thread-safe, so the launch path can run them off
     /// the main thread.
-    private nonisolated static func querySystemState() -> (
-        accessibility: Bool, inputMonitoring: Bool, screenRecording: Bool
-    ) {
-        (
-            AXIsProcessTrusted(),
-            CGPreflightListenEventAccess(),
-            CGPreflightScreenCaptureAccess()
+    private nonisolated static func querySystemState() -> PermissionState {
+        PermissionState(
+            accessibility: AXIsProcessTrusted(),
+            inputMonitoring: CGPreflightListenEventAccess(),
+            screenRecording: CGPreflightScreenCaptureAccess()
         )
     }
 
     /// Compares a queried state against the published one and republishes changes.
-    private func applyRefresh(_ state: (accessibility: Bool, inputMonitoring: Bool, screenRecording: Bool)) {
+    private func applyRefresh(_ state: PermissionState) {
         // `@Published` notifies on assignment, even when the value is unchanged. Compare first so
         // the 2-second poll does not redraw SwiftUI surfaces that already have the right state.
         if accessibilityGranted != state.accessibility {

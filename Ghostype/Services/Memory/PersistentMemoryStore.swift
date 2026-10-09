@@ -318,7 +318,10 @@ nonisolated final class PersistentMemoryStore: @unchecked Sendable {
     }
 
     private func kvSet(_ key: String, value: Data) throws {
-        let stmt = try prepare("INSERT INTO kv_store(key, value_enc) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value_enc = excluded.value_enc;")
+        let stmt = try prepare(
+            "INSERT INTO kv_store(key, value_enc) VALUES (?, ?) " +
+            "ON CONFLICT(key) DO UPDATE SET value_enc = excluded.value_enc;"
+        )
         defer { _ = sqlite3_finalize(stmt) }
         try bindText(stmt, 1, key)
         try bindBlob(stmt, 2, value)

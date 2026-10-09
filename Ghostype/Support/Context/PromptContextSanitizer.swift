@@ -17,7 +17,12 @@ nonisolated enum PromptContextSanitizer {
     /// Regex replacement through the cached compiled pattern. Falls back to the string API
     /// only if a pattern ever failed to compile (impossible for these constants, but keeps
     /// the no-force-try convention used across Support/).
-    private static func replacingMatches(of regex: NSRegularExpression?, patternFallback: String, in text: String, with template: String) -> String {
+    private static func replacingMatches(
+        of regex: NSRegularExpression?,
+        patternFallback: String,
+        in text: String,
+        with template: String
+    ) -> String {
         guard let regex else {
             return text.replacingOccurrences(of: patternFallback, with: template, options: .regularExpression)
         }
