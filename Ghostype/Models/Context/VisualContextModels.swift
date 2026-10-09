@@ -18,8 +18,10 @@ nonisolated struct VisualContextConfiguration: Equatable, Sendable {
     let maxSummaryCharacters: Int
     var capturesEntireWindow = false
 
-    /// Larger context stays on-device. The endpoint profile deliberately retains the shipped
-    /// crop and limits; choosing a network backend is not consent to send a wider screenshot.
+    /// Larger context stays on-device. The endpoint profile keeps the smaller shipped crop,
+    /// but no screen text ever reaches a network request: the request factory drops the
+    /// visual-context excerpt entirely for the OpenAI-compatible engine, which may point
+    /// at a public URL. Choosing a network backend is not consent to send screen contents.
     static let local = VisualContextConfiguration(
         snapshotDimension: 700,
         maxImageDimension: 2400,
