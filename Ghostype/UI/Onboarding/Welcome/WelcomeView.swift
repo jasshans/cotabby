@@ -280,7 +280,7 @@ extension WelcomeView {
             Spacer(minLength: 0)
 
             VStack(spacing: 24) {
-                Image("CotabbyLogo")
+                Image("GhostypeLogo")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 84, height: 84)
@@ -420,7 +420,7 @@ extension WelcomeView {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(.quaternary.opacity(0.55))
 
-                Image("MenuBarCatIcon")
+                Image("MenuBarGhostIcon")
                     .resizable()
                     .scaledToFit()
                     .frame(height: 18)
