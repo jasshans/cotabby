@@ -68,11 +68,11 @@ nonisolated enum CotabbyDebugOptions {
 /// All loggers route through `OSLogHandler` so messages appear in Console.app with the
 /// subsystem as a filterable column. When the `-ghostype-debug` launch argument is set we
 /// additionally fan out to `FileLogHandler`, which writes JSONL to
-/// `~/Library/Logs/Ghostype/cotabby.jsonl` for AI-assisted debugging without copy-paste.
+/// `~/Library/Logs/Ghostype/ghostype.jsonl` for AI-assisted debugging without copy-paste.
 nonisolated enum CotabbyLogger {
     /// Reserved label that routes only to the dedicated LLM I/O sink, never to OSLog or the main
     /// JSONL file. Kept out of OSLog because full prompts/completions can be many KB per request
-    /// and would dominate Console.app; kept out of `cotabby.jsonl` because it would drown the
+    /// and would dominate Console.app; kept out of `ghostype.jsonl` because it would drown the
     /// orchestration signal an AI debugger wants to skim.
     static let llmIOLabel = "com.jasshans.ghostype.llm-io"
 

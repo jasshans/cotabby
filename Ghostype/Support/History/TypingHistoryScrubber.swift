@@ -23,6 +23,13 @@ nonisolated enum TypingHistoryScrubber {
         pattern: "\\b(sk-[A-Za-z0-9_\\-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}"
             + "|xox[abprs]-[A-Za-z0-9\\-]{10,}|AKIA[0-9A-Z]{16})"
     )
+    /// IBANs: 2 letters + 2 check digits + up to 30 alphanumerics (15–32 chars total).
+    /// The digit-run and mixed-token rules miss short IBANs (e.g. German, 22 chars), and bank
+    /// details are typed into ordinary text fields, so they reach the recorder like any
+    /// other text. An IBAN-shaped token is never prose, so it is always redacted.
+    private static let iban = try? NSRegularExpression(
+        pattern: "\\b[A-Za-z]{2}[0-9]{2}[A-Za-z0-9]{11,28}\\b"
+    )
     /// Card-number-length digit runs (13 to 19 digits, optionally grouped by single spaces or
     /// dashes). Payment fields on websites are ordinary text fields, not secure ones, so a typed
     /// card number reaches the recorder like any other text. Phone numbers stay below 13 digits.
@@ -71,7 +78,7 @@ nonisolated enum TypingHistoryScrubber {
     /// lands in the result.
     private static func redact(_ text: String, boundary: Int) -> (text: String, boundary: Int) {
         var result = (text: text, boundary: boundary)
-        for expression in [privateKeyBlock, prefixedCredential, longDigitRun].compactMap({ $0 }) {
+        for expression in [privateKeyBlock, prefixedCredential, iban, longDigitRun].compactMap({ $0 }) {
             result = replaceMatches(of: expression, in: result.text, boundary: result.boundary) { _ in redaction }
         }
         if let longMixedToken {
