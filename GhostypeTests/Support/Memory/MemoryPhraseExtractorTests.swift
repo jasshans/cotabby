@@ -82,6 +82,40 @@ final class MemoryPhraseExtractorTests: XCTestCase {
         )
     }
 
+    func test_typedEvidenceCountsAtHalfWeight() {
+        let now = Date()
+        // Ten typed occurrences beat five accepts: typed is genuine production, just voluminous.
+        XCTAssertEqual(
+            MemoryPhraseExtractor.score(acceptCount: 0, typedCount: 10, rejectCount: 0, lastUsed: now, now: now),
+            5.0,
+            accuracy: 1e-9
+        )
+        // Typed evidence alone still needs net positive: rejects cancel it.
+        XCTAssertEqual(
+            MemoryPhraseExtractor.score(acceptCount: 0, typedCount: 2, rejectCount: 1, lastUsed: now, now: now),
+            0
+        )
+    }
+
+    func test_softRejectsWeighHalfAgainstEvidence() {
+        let now = Date()
+        // Four soft rejects (typed over) erase two accepts' worth, not four.
+        XCTAssertEqual(
+            MemoryPhraseExtractor.score(
+                acceptCount: 4, rejectCount: 0, softRejectCount: 4, lastUsed: now, now: now
+            ),
+            2.0,
+            accuracy: 1e-9
+        )
+        // Soft rejects alone can't drive a phrase negative — they only cancel positive evidence.
+        XCTAssertEqual(
+            MemoryPhraseExtractor.score(
+                acceptCount: 0, rejectCount: 0, softRejectCount: 10, lastUsed: now, now: now
+            ),
+            0
+        )
+    }
+
     // MARK: - Hashing
 
     func test_phraseHashIsStableHex() {
