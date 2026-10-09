@@ -1043,12 +1043,9 @@ enum AXHelper {
         return unsafeBitCast(value, to: AXUIElement.self)
     }
 
-    /// Best-effort, fail-safe read of the title of the window containing `element`. Most apps vend
-    /// `kAXWindowAttribute` directly on any descendant element; when that misses, nil is returned
-    /// rather than walking the tree, so the read stays a single bounded round-trip on the focus
-    /// path. Used for surface conditioning (the title carries the email subject, document name,
-    /// channel, or page title) and to detect navigation before reusing context.
-    static func windowTitle(near element: AXUIElement) -> String? {
+    /// The window containing `element`, without reading its title. Split out so the focus
+    /// resolver can cache the (session-stable) element and re-read only the title per tick.
+    static func windowElement(near element: AXUIElement) -> AXUIElement? {
         guard let value = copyAttributeValue(kAXWindowAttribute as CFString, on: element) else {
             return nil
         }
@@ -1056,8 +1053,7 @@ enum AXHelper {
             return nil
         }
         // Same Core Foundation bridging rule as `parentElement(of:)`.
-        let window = unsafeBitCast(value, to: AXUIElement.self)
-        return stringValue(for: kAXTitleAttribute as CFString, on: window)
+        return unsafeBitCast(value, to: AXUIElement.self)
     }
 
     /// Best-effort read of the page URL for local navigation identity and per-site rules.
@@ -1078,8 +1074,9 @@ enum AXHelper {
     }
 
     /// Reads `kAXURLAttribute` as a string, tolerating the value arriving as a `URL`/`NSURL` (the
-    /// usual case) or already as a string.
-    private static func urlString(on element: AXUIElement) -> String? {
+    /// usual case) or already as a string. Internal (not private) for the resolver's memoized
+    /// URL climb, which needs the single-level read without the ancestor walk.
+    static func urlString(on element: AXUIElement) -> String? {
         guard let value = copyAttributeValue(kAXURLAttribute as CFString, on: element) else {
             return nil
         }

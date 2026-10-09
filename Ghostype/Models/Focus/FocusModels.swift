@@ -361,6 +361,12 @@ nonisolated struct FocusedInputSnapshot: Equatable {
     let selection: NSRange
     let isSecure: Bool
 
+    /// Content-only fingerprint for staleness detection, computed once in `init` instead of on
+    /// every read: the pipeline materializes several contexts per keystroke cycle and each
+    /// comparison would otherwise re-join the full ~8KB text window. See the doc comment on
+    /// the former computed property (now below) for why `elementIdentifier` is excluded.
+    let contentSignature: String
+
     /// True when the resolved field is an xterm.js integrated-terminal surface (VS Code / Cursor /
     /// Windsurf terminal, or a browser-hosted web terminal). Set by `FocusSnapshotResolver` from the
     /// focused element's `AXDOMClassList`. Lets the availability gate suppress ghost text in the
@@ -474,6 +480,21 @@ nonisolated struct FocusedInputSnapshot: Equatable {
         self.hostTextMetrics = hostTextMetrics
         self.elementFrameRect = elementFrameRect
         self.hostMarkedTextRange = hostMarkedTextRange
+        self.contentSignature = Self.makeContentSignature(
+            selection: selection, precedingText: precedingText, trailingText: trailingText, isSecure: isSecure
+        )
+    }
+
+    /// Builds the content signature. A static helper so both the initializer and the doc
+    /// comment below share one definition of the format.
+    private static func makeContentSignature(selection: NSRange, precedingText: String, trailingText: String, isSecure: Bool) -> String {
+        [
+            String(selection.location),
+            String(selection.length),
+            precedingText,
+            trailingText,
+            isSecure ? "secure" : "plain"
+        ].joined(separator: "::")
     }
 
     var identity: FocusedInputIdentity {
@@ -510,15 +531,7 @@ nonisolated struct FocusedInputSnapshot: Equatable {
     /// Content-only fingerprint for staleness detection. Deliberately excludes `elementIdentifier`
     /// because Chrome recycles AX node tokens between observations, making `CFHash`-based identity unstable.
     /// Session identity is checked separately; text and selection detect edits within that session.
-    var contentSignature: String {
-        [
-            String(selection.location),
-            String(selection.length),
-            precedingText,
-            trailingText,
-            isSecure ? "secure" : "plain"
-        ].joined(separator: "::")
-    }
+    /// (Stored, computed once in `init`; see `makeContentSignature`.)
 }
 
 /// Top-level focus state that the menu can render directly.

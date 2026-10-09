@@ -9,6 +9,20 @@ import Foundation
 /// a pure `Support/` helper makes the policy deterministic, shared, and easy to test.
 nonisolated enum PromptContextSanitizer {
     private static let ansiEscapePattern = "\u{001B}\\[[0-?]*[ -/]*[@-~]"
+    /// Compiled once: Foundation's string regex API recompiles the pattern on every call,
+    /// and sanitize() runs per request on the main actor.
+    private static let ansiEscapeRegex = try? NSRegularExpression(pattern: "\u{001B}\\[[0-?]*[ -/]*[@-~]")
+    /// Compiled once: collapseInlineWhitespace runs once per line otherwise.
+    private static let whitespaceRunRegex = try? NSRegularExpression(pattern: "\\s+")
+    /// Regex replacement through the cached compiled pattern. Falls back to the string API
+    /// only if a pattern ever failed to compile (impossible for these constants, but keeps
+    /// the no-force-try convention used across Support/).
+    private static func replacingMatches(of regex: NSRegularExpression?, patternFallback: String, in text: String, with template: String) -> String {
+        guard let regex else {
+            return text.replacingOccurrences(of: patternFallback, with: template, options: .regularExpression)
+        }
+        return regex.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: template)
+    }
     private static let allowedCharacters = CharacterSet.alphanumerics
         .union(.whitespacesAndNewlines)
         .union(CharacterSet(charactersIn: "@."))
@@ -20,10 +34,11 @@ nonisolated enum PromptContextSanitizer {
     /// `raw-output` becomes `raw output`, not `rawoutput`. The final line pass collapses repeated
     /// whitespace so stripped punctuation cannot still dominate the prompt through spacing noise.
     static func sanitize(_ rawText: String, maxCharacters: Int? = nil) -> String {
-        let withoutANSIEscapes = rawText.replacingOccurrences(
-            of: ansiEscapePattern,
-            with: " ",
-            options: .regularExpression
+        let withoutANSIEscapes = Self.replacingMatches(
+            of: ansiEscapeRegex,
+            patternFallback: ansiEscapePattern,
+            in: rawText,
+            with: " "
         )
 
         let sanitizedScalars = withoutANSIEscapes.unicodeScalars.map { scalar in
@@ -294,10 +309,11 @@ nonisolated enum PromptContextSanitizer {
     }
 
     private static func collapseInlineWhitespace(in line: String) -> String {
-        let normalized = line.replacingOccurrences(
-            of: #"\s+"#,
-            with: " ",
-            options: .regularExpression
+        let normalized = Self.replacingMatches(
+            of: whitespaceRunRegex,
+            patternFallback: "\\s+",
+            in: line,
+            with: " "
         )
         return normalized.trimmingCharacters(in: .whitespacesAndNewlines)
     }

@@ -981,6 +981,20 @@ final class SuggestionSettingsModelTests: XCTestCase {
         XCTAssertEqual(snapshot.extendedContext, "context body")
     }
 
+    /// The snapshot is cached between reads (it walks ~70 fields); the cache must not
+    /// outlive a mutation. Reads a snapshot, changes a setting, and asserts the next
+    /// read reflects the change rather than the stale cached build.
+    func test_snapshotCache_invalidatedOnMutation() {
+        let model = makeModel()
+        let before = model.snapshot
+        XCTAssertTrue(before.isGloballyEnabled)
+
+        model.setGloballyEnabled(false)
+
+        let after = model.snapshot
+        XCTAssertFalse(after.isGloballyEnabled)
+    }
+
     /// `snapshotPublisher` rebuilds the snapshot from a deeply nested `CombineLatest` tuple while
     /// `snapshot` reads the properties directly. Mixed true/false values inside each tuple group mean
     /// a swapped destructuring binding produces a mismatch here instead of shipping silently.

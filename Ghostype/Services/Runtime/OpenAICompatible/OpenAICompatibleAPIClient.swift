@@ -106,7 +106,7 @@ final class OpenAICompatibleAPIClient {
         var sawEvent = false
         for try await line in bytes.lines {
             try Task.checkCancellation()
-            switch try OpenAICompatibleSSEDecoder.decode(line, mode: configuration.apiMode) {
+            switch try OpenAICompatibleSSEDecoder.decode(line, mode: configuration.apiMode, decoder: decoder) {
             case .ignore:
                 continue
             case .done:
