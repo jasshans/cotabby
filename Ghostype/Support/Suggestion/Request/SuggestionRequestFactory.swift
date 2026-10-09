@@ -76,10 +76,16 @@ enum SuggestionRequestFactory {
             settings: settings,
             prefixText: prefixText
         )
-        let boundedVisualContextSummary = activeVisualContextSummary(
-            rawSummary: visualContextSummary,
-            engine: settings.selectedEngine
-        )
+        // Screen contents never leave the Mac, like learned vocabulary and typing history.
+        // The OpenAI-compatible engine may point at a network URL, so the visual-context
+        // excerpt is dropped for it here — the one pure place every request passes through.
+        // On-device engines (Apple Intelligence, local llama) keep their budgeted excerpt.
+        let boundedVisualContextSummary = settings.selectedEngine == .openAICompatible
+            ? nil
+            : activeVisualContextSummary(
+                rawSummary: visualContextSummary,
+                engine: settings.selectedEngine
+            )
         // The composed surface description; nil when the user disabled it or the surface class
         // suppresses it (code editors, terminals, anonymous generic apps). The composer sanitizes
         // titles/placeholders and reduces the URL to a bare domain before anything reaches a prompt.
