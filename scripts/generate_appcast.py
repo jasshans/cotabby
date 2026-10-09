@@ -26,11 +26,10 @@ import sys
 
 DEFAULT_OWNER = "jasshans"
 DEFAULT_REPOSITORY = "cotabby"
-# Sparkle's <releaseNotesLink> is fetched by the update alert's embedded WKWebView.
-# GitHub's full release page pulls in a lot of chrome, but it is the honest
-# destination for this fork (there is no dedicated landing site). Override
-# per-environment via --release-notes-base-url.
-DEFAULT_RELEASE_NOTES_BASE_URL = "https://github.com/jasshans/cotabby/releases"
+# Release notes are embedded inline in the appcast's <description> element
+# (rendered by scripts/build_release_notes.py), so Sparkle's update dialog shows
+# plain release notes instead of loading a web page. The release page URL is
+# still emitted as the item <link> for anyone opening it in a browser.
 SIGNATURE_PATTERN = re.compile(r'sparkle:edSignature="([^"]+)"\s+length="([^"]+)"')
 
 
@@ -91,12 +90,20 @@ def parse_args() -> argparse.Namespace:
         help="Product name used for the appcast channel title and description",
     )
     parser.add_argument(
-        "--release-notes-base-url",
-        default=DEFAULT_RELEASE_NOTES_BASE_URL,
+        "--release-notes-file",
+        default=None,
         help=(
-            "Base URL prepended to the git tag to form sparkle:releaseNotesLink. "
-            "Defaults to the landing-site Route Handler that renders one release "
-            "as a Sparkle-friendly self-contained HTML page."
+            "Path to an HTML fragment with the release notes. It is embedded inline "
+            "in the appcast <description> (CDATA) so Sparkle shows plain release "
+            "notes instead of rendering a web page."
+        ),
+    )
+    parser.add_argument(
+        "--release-notes-base-url",
+        default="https://github.com/jasshans/cotabby/releases",
+        help=(
+            "Base URL prepended to the git tag to form the item <link> element. "
+            "No longer used for release notes (those are inline now)."
         ),
     )
     return parser.parse_args()
@@ -187,6 +194,7 @@ def render_appcast(
     build_version: str,
     archive_length: str,
     ed_signature: str,
+    release_notes_html: str,
 ) -> str:
     template = template_path.read_text(encoding="utf-8")
     pub_date = dt.datetime.now(dt.timezone.utc).strftime("%a, %d %b %Y %H:%M:%S %z")
@@ -201,6 +209,9 @@ def render_appcast(
         "{{ARCHIVE_LENGTH}}": escape_xml(archive_length),
         "{{ED_SIGNATURE}}": escape_xml(ed_signature),
         "{{PUB_DATE}}": escape_xml(pub_date),
+        # NOT escaped: the template wraps this in CDATA, and the fragment was
+        # already sanitized (no "]]>") by scripts/build_release_notes.py.
+        "{{RELEASE_NOTES}}": release_notes_html,
     }
 
     rendered = template
@@ -231,6 +242,13 @@ def main() -> int:
 
     ed_signature, archive_length = sign_archive(sign_update_tool, archive, ed_key_file)
 
+    release_notes_html = ""
+    if args.release_notes_file:
+        notes_path = Path(args.release_notes_file).expanduser().resolve()
+        if not notes_path.is_file():
+            raise SystemExit(f"Release notes file does not exist: {notes_path}")
+        release_notes_html = notes_path.read_text(encoding="utf-8").strip()
+
     repository_url = f"https://github.com/{args.github_owner}/{args.github_repository}"
     release_tag = args.release_tag or f"v{args.release_version}"
     # Strip any trailing slash from the base so the joined URL is canonical
@@ -250,6 +268,7 @@ def main() -> int:
         build_version=args.build_number,
         archive_length=archive_length,
         ed_signature=ed_signature,
+        release_notes_html=release_notes_html,
     )
 
     output_path = Path(args.output).expanduser().resolve()

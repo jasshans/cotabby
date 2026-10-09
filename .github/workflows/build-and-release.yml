@@ -62,6 +62,10 @@ jobs:
       WORKSPACE: build/cotabby-dependencies/Ghostype.xcworkspace
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history: the release-notes step reads commit subjects since the
+          # previous version-bump commit.
+          fetch-depth: 0
 
       # Fail fast: without the private key we can neither sign the archive nor
       # produce an appcast the installed app would accept. No point burning
@@ -231,6 +235,10 @@ jobs:
       - name: Generate appcast.xml
         run: |
           set -euo pipefail
+          python3 scripts/build_release_notes.py \
+            --version "${MARKETING_VERSION}" \
+            --build "${BUILD_NUMBER}" \
+            --output build/release-notes.html
           python3 scripts/generate_appcast.py \
             --release-version "${MARKETING_VERSION}" \
             --build-number "${BUILD_NUMBER}" \
@@ -242,6 +250,7 @@ jobs:
             --github-owner "jasshans" \
             --github-repository "cotabby" \
             --release-notes-base-url "https://github.com/jasshans/cotabby/releases" \
+            --release-notes-file "build/release-notes.html" \
             --sign-update-tool "${{ steps.sparkle-tools.outputs.sign-update }}" \
             --ed-key-file "build/sparkle/ed25519.key"
 

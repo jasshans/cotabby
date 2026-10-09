@@ -12,7 +12,10 @@
       <link>{{RELEASE_PAGE_URL}}</link>
       <sparkle:version>{{BUILD_VERSION}}</sparkle:version>
       <sparkle:shortVersionString>{{SHORT_VERSION}}</sparkle:shortVersionString>
-      <sparkle:releaseNotesLink>{{RELEASE_PAGE_URL}}</sparkle:releaseNotesLink>
+      <!-- Inline release notes: Sparkle renders <description> directly in the update
+           dialog instead of loading releaseNotesLink in a web view, so the notes read
+           as plain text rather than the rendered GitHub release page. -->
+      <description><![CDATA[{{RELEASE_NOTES}}]]></description>
       <pubDate>{{PUB_DATE}}</pubDate>
       <enclosure url="{{ARCHIVE_URL}}"
                  sparkle:edSignature="{{ED_SIGNATURE}}"
