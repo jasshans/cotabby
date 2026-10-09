@@ -287,7 +287,9 @@ struct FocusSnapshotResolver {
             PerDomainDisableSettings.isEnabled() || isWebContentField
                 || BrowserAppDetector.isBrowser(bundleIdentifier: bundleIdentifier)
         )
-        let windowTitle = resolvedCandidate.isSecure ? nil : memoizedWindowTitle(near: focusedElement, focusChangeSequence: focusChangeSequence)
+        let windowTitle = resolvedCandidate.isSecure
+            ? nil
+            : memoizedWindowTitle(near: focusedElement, focusChangeSequence: focusChangeSequence)
         let fieldPlaceholder = resolvedCandidate.isSecure ? nil : AXHelper.stringValue(
             for: kAXPlaceholderValueAttribute as CFString, on: resolvedCandidate.element
         )
