@@ -11,7 +11,9 @@ final class MemoryPhraseExtractorTests: XCTestCase {
 
     func test_normalizesCaseAndEdgePunctuation() {
         let phrases = MemoryPhraseExtractor.phrases(from: "Hello, hello! HELLO.")
-        XCTAssertEqual(phrases, ["hello"])
+        // Case and edge punctuation fold so the three tokens accumulate as one word;
+        // n-grams (1–3) are still emitted per the extractor contract.
+        XCTAssertEqual(phrases, ["hello", "hello hello", "hello hello hello"])
     }
 
     func test_extractsUniBiAndTrigrams() {

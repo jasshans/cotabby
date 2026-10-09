@@ -181,7 +181,7 @@ final class PromptContextSanitizerTests: XCTestCase {
             ("sk-live-a1B2c3D4e5", true),
             ("  Tr0ub4dor&3\n", true), // surrounding whitespace is trimmed
             // Not credentials: too short, has whitespace, or too few classes.
-            ("short1A!", false), // 7 chars
+            ("shor1A!", false), // 7 chars
             ("correct horse battery staple", false), // whitespace
             ("https://example.com/some/path", false), // URL: two classes
             ("user@example.com", false), // email: two classes

@@ -413,8 +413,11 @@ final class SuggestionRequestFactoryTests: XCTestCase {
 
             // Sanitized (symbols become spaces) but present: on-device engines never
             // send anything off the Mac, so the context stays useful there.
+            // Note: the Apple Intelligence preview labels the section "User's clipboard:",
+            // while the base renderer uses "On the clipboard:".
             XCTAssertNotNil(result.request.clipboardContext)
-            XCTAssertTrue(result.promptPreview.contains("On the clipboard:"))
+            let expectedLabel = engine == .appleIntelligence ? "User's clipboard:" : "On the clipboard:"
+            XCTAssertTrue(result.promptPreview.contains(expectedLabel))
         }
     }
 

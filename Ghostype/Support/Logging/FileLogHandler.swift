@@ -212,8 +212,8 @@ struct FileLogHandler: LogHandler {
     /// `com.jasshans.ghostype.runtime` → `runtime`. Matches `OSLogHandler`'s category convention so the
     /// JSON `category` field lines up with what Console.app shows.
     private static func category(from label: String) -> String {
-        let parts = label.split(separator: ".", maxSplits: 2)
-        return parts.count > 2 ? String(parts[2]) : label
+        let parts = label.split(separator: ".", maxSplits: 3)
+        return parts.count > 3 ? String(parts[3]) : label
     }
 
     private static func jsonValue(of value: Logging.Logger.Metadata.Value) -> Any {
