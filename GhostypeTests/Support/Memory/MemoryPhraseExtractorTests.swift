@@ -83,11 +83,21 @@ final class MemoryPhraseExtractorTests: XCTestCase {
     // MARK: - Hashing
 
     func test_phraseHashIsStableHex() {
-        let first = MemoryPhraseExtractor.phraseHash("kind regards")
-        let second = MemoryPhraseExtractor.phraseHash("kind regards")
+        let salt = Data(repeating: 0x42, count: 32)
+        let first = MemoryPhraseExtractor.phraseHash("kind regards", salt: salt)
+        let second = MemoryPhraseExtractor.phraseHash("kind regards", salt: salt)
         XCTAssertEqual(first, second)
         XCTAssertEqual(first.count, 64)
         XCTAssertTrue(first.allSatisfy(\.isHexDigit))
-        XCTAssertNotEqual(first, MemoryPhraseExtractor.phraseHash("kind regard"))
+        XCTAssertNotEqual(first, MemoryPhraseExtractor.phraseHash("kind regard", salt: salt))
+    }
+
+    func test_phraseHashDependsOnSalt() {
+        // The per-database salt is what defeats precomputed dictionaries: the same phrase
+        // must hash differently under different salts.
+        let phrase = "kind regards"
+        let a = MemoryPhraseExtractor.phraseHash(phrase, salt: Data(repeating: 0x42, count: 32))
+        let b = MemoryPhraseExtractor.phraseHash(phrase, salt: Data(repeating: 0x43, count: 32))
+        XCTAssertNotEqual(a, b)
     }
 }

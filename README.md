@@ -70,9 +70,12 @@ Privacy is the whole point, so Ghostype's default engines keep generation on you
   database described below.
 - Suggestion memory (Settings → Context, on by default) learns words and phrases from accepted
   and dismissed suggestions into an AES-encrypted SQLite database in your Application Support
-  folder; the key lives in your Keychain and never leaves the Mac. Password fields are never
-  recorded, the learned vocabulary is never sent to an endpoint, and "Clear memory…" deletes the
-  database and rotates the key so it can never be decrypted again.
+  folder; the key lives in your Keychain and never leaves the Mac. Phrase lookup hashes are
+  HMAC-SHA256 under a per-database salt so they can't be matched against a precomputed
+  dictionary. Password fields are never recorded, the learned vocabulary is never sent to an
+  endpoint, and "Clear memory…" deletes the database and rotates the key so it can never be
+  decrypted again. Usage metadata (which app a suggestion was accepted in, and when) is stored
+  in plaintext alongside the encrypted content.
 - Apart from a configured endpoint, the network is used for model downloads and update checks, not
   suggestion generation.
 
