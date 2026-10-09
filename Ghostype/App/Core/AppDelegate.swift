@@ -170,7 +170,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         suggestionCoordinator.start()
         inlineCommandCoordinator.start()
         welcomeCoordinator.presentIfNeeded()
-        welcomeCoordinator.presentPermissionReminderIfNeeded()
+        // The first permission read happens off the main thread; await it so the reminder
+        // decision sees true grant state instead of the conservative pre-refresh defaults
+        // (which would spuriously prompt an established, fully-granted user).
+        Task { [weak self] in
+            await self?.permissionManager.initialRefresh.value
+            self?.welcomeCoordinator.presentPermissionReminderIfNeeded()
+        }
         didStartServices = true
         CotabbyLogger.app.info("All services started")
 

@@ -1049,6 +1049,13 @@ enum AXHelper {
     /// path. Used for surface conditioning (the title carries the email subject, document name,
     /// channel, or page title) and to detect navigation before reusing context.
     static func windowTitle(near element: AXUIElement) -> String? {
+        guard let window = windowElement(near: element) else { return nil }
+        return stringValue(for: kAXTitleAttribute as CFString, on: window)
+    }
+
+    /// The window containing `element`, without reading its title. Split from `windowTitle(near:)`
+    /// so the resolver can cache the (session-stable) element and re-read only the title per tick.
+    static func windowElement(near element: AXUIElement) -> AXUIElement? {
         guard let value = copyAttributeValue(kAXWindowAttribute as CFString, on: element) else {
             return nil
         }
@@ -1056,8 +1063,7 @@ enum AXHelper {
             return nil
         }
         // Same Core Foundation bridging rule as `parentElement(of:)`.
-        let window = unsafeBitCast(value, to: AXUIElement.self)
-        return stringValue(for: kAXTitleAttribute as CFString, on: window)
+        return unsafeBitCast(value, to: AXUIElement.self)
     }
 
     /// Best-effort read of the page URL for local navigation identity and per-site rules.
@@ -1078,8 +1084,9 @@ enum AXHelper {
     }
 
     /// Reads `kAXURLAttribute` as a string, tolerating the value arriving as a `URL`/`NSURL` (the
-    /// usual case) or already as a string.
-    private static func urlString(on element: AXUIElement) -> String? {
+    /// usual case) or already as a string. Internal (not private) for the resolver's memoized
+    /// URL climb, which needs the single-level read without the ancestor walk.
+    static func urlString(on element: AXUIElement) -> String? {
         guard let value = copyAttributeValue(kAXURLAttribute as CFString, on: element) else {
             return nil
         }

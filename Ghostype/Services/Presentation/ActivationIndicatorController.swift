@@ -39,6 +39,9 @@ final class ActivationIndicatorController {
     }()
 
     private var isVisible = false
+    /// The chip's measured size, cached after the first layout: the view is fixed-size, so
+    /// repeat `show` calls can compute the frame (and hit the early-out) without re-measuring.
+    private var cachedContentSize: CGSize?
 
     /// Shows or hides the field-edge Ghostype icon indicator.
     func show(
@@ -56,9 +59,26 @@ final class ActivationIndicatorController {
             return
         }
 
+        // Fast path: the chip is a fixed-size view, so once its size is measured, repeat
+        // shows at an unchanged frame skip the SwiftUI re-eval and forced layout entirely.
+        if let cachedSize = cachedContentSize {
+            let frame = CGRect(
+                origin: fieldEdgeIconOrigin(
+                    caretRect: caretRect,
+                    inputFrameRect: inputFrameRect,
+                    contentSize: cachedSize
+                ),
+                size: cachedSize
+            ).integral
+            if isVisible, panel.frame == frame, panel.isVisible {
+                return
+            }
+        }
+
         contentView.rootView = AnyView(FieldEdgeIconIndicatorView())
         contentView.layoutSubtreeIfNeeded()
         let contentSize = contentView.fittingSize
+        cachedContentSize = contentSize
         let origin = fieldEdgeIconOrigin(
             caretRect: caretRect,
             inputFrameRect: inputFrameRect,
