@@ -244,12 +244,21 @@ final class CotabbyAppEnvironment {
         let memoryRecorder = MemoryRecorder(store: persistentMemoryStore, loadsMemory: !isTestHost)
         let memoryContextProvider = MemoryContextProvider(
             store: persistentMemoryStore,
-            isEnabled: { [weak memoryRecorder] in memoryRecorder?.isEnabled ?? false }
+            isEnabled: { [weak memoryRecorder] in memoryRecorder?.isEnabled ?? false },
+            strength: { [weak memoryRecorder] in memoryRecorder?.strength ?? .medium }
         )
         // After every persist batch (and the launch load), reload the cached vocabulary the prompt
         // builders read from, so prompts trail learning by at most the recorder's debounce window.
+        // `refreshCurrent` re-reads the last-requested bundle plus the global aggregate.
         memoryRecorder.onDidPersist = { [weak memoryContextProvider] in
-            Task { await memoryContextProvider?.refresh() }
+            Task { await memoryContextProvider?.refreshCurrent() }
+        }
+        // Typed-text learning: finished history recordings feed the user's own wording into
+        // suggestion memory as `.typed` events. This is the cold-start fix — the vocabulary
+        // learns from everything the user types, not just Tab-accepts. Secure fields never
+        // reach the history recorder, so `isSecure` is always false here.
+        typingHistoryStore.onDidFinishRecording = { [weak memoryRecorder] text, bundleId in
+            memoryRecorder?.recordTyped(text, bundleIdentifier: bundleId, isSecure: false)
         }
         // Phrase shortcuts answer from history before the router runs. The live engine kind is
         // read per request so a power-source switch to the endpoint stops shortcuts immediately.

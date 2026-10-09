@@ -74,6 +74,17 @@ final class TypingHistoryStore: ObservableObject, SuggestionHistoryProviding {
     /// Ranked example candidates for the current query block (see `historyExamples`).
     private var exampleCache: (key: String, candidates: [TypingHistoryIndex.Candidate])?
 
+    /// Fired when a field's recording finishes with newly typed text. The composition root wires
+    /// this to the suggestion memory's typed-text learning: it is what breaks the cold-start
+    /// trap, teaching the vocabulary the user's own wording from day one instead of waiting for
+    /// Tab-accepts. Parameters are the newly added text and the app's bundle identifier.
+    /// Secure fields never reach the recorder, so the text is always safe to learn from.
+    var onDidFinishRecording: ((String, String) -> Void)?
+
+    /// Minimum new characters for a finished recording to teach vocabulary. Below this the
+    /// "new" text is a typo fix or a couple of words — real wording signal needs a phrase.
+    private static let minimumTypedLearningCharacters = 12
+
     /// The field being typed in right now. Its raw text is kept here and only scrubbed and copied
     /// into `records` when saving or when focus moves on, so recording costs a string comparison
     /// per keystroke rather than a regex pass over the whole field.
@@ -83,6 +94,10 @@ final class TypingHistoryStore: ObservableObject, SuggestionHistoryProviding {
         let bundleIdentifier: String
         let domain: String?
         let createdAt: Date
+        /// The field's text when this recording session started. Diffing against it at finish
+        /// time isolates what the user actually produced in this session, which is what the
+        /// typed-text learning hook reports.
+        let initialText: String
         var rawText: String
         /// Characters before the caret in `rawText` at the latest capture.
         var rawTypedLength: Int
@@ -95,7 +110,14 @@ final class TypingHistoryStore: ObservableObject, SuggestionHistoryProviding {
         static let isUsingHistory = "cotabbyTypingHistoryEnabled"
         static let isRecording = "cotabbyTypingHistoryRecordingEnabled"
         static let excludedBundleIdentifiers = "cotabbyTypingHistoryExcludedApps"
+        /// Stamps the preferences migration. Version 1 (2026-10-09) adopts the new defaults
+        /// (history on) for installs that never made an explicit choice.
+        static let prefsVersion = "cotabbyTypingHistoryPrefsVersion"
     }
+
+    /// Current preferences schema version. Bump when defaults change and old installs need a
+    /// deliberate migration rather than silently inheriting new behavior.
+    private static let currentPrefsVersion = 1
 
     init(
         vault: TypingHistoryVault = .standard(),
@@ -107,6 +129,7 @@ final class TypingHistoryStore: ObservableObject, SuggestionHistoryProviding {
         self.writer = TypingHistoryWriter(vault: vault)
         self.userDefaults = userDefaults
         self.saveDelayNanoseconds = saveDelayNanoseconds
+        Self.migratePreferencesIfNeeded(userDefaults: userDefaults)
         preferences = TypingHistoryPreferences(
             isUsingHistory: userDefaults.object(forKey: DefaultsKey.isUsingHistory) as? Bool
                 ?? TypingHistoryPreferences.defaults.isUsingHistory,
@@ -119,6 +142,25 @@ final class TypingHistoryStore: ObservableObject, SuggestionHistoryProviding {
         } else {
             status = .ready
         }
+    }
+
+    /// One-time migration for the 2026-10-09 defaults change (history off → on). Installs that
+    /// never made an explicit choice — stored values absent, or stored values matching the old
+    /// defaults — adopt the new defaults; an explicit user choice is never overridden. The user
+    /// asked for personalization directly, and the Settings toggle stays available to reverse it.
+    private static func migratePreferencesIfNeeded(userDefaults: UserDefaults) {
+        guard userDefaults.integer(forKey: DefaultsKey.prefsVersion) < currentPrefsVersion else {
+            return
+        }
+        let storedUsing = userDefaults.object(forKey: DefaultsKey.isUsingHistory) as? Bool
+        let storedRecording = userDefaults.object(forKey: DefaultsKey.isRecording) as? Bool
+        // Old defaults were (false, false). If that's what's stored (or nothing is stored),
+        // the user never chose — clear the keys so the new defaults apply.
+        if (storedUsing ?? false) == false, (storedRecording ?? false) == false {
+            userDefaults.removeObject(forKey: DefaultsKey.isUsingHistory)
+            userDefaults.removeObject(forKey: DefaultsKey.isRecording)
+        }
+        userDefaults.set(currentPrefsVersion, forKey: DefaultsKey.prefsVersion)
     }
 
     // MARK: - Preferences
@@ -305,6 +347,7 @@ final class TypingHistoryStore: ObservableObject, SuggestionHistoryProviding {
                 bundleIdentifier: input.bundleIdentifier,
                 domain: SurfaceContextComposer.registrableDomain(from: input.focusedURLString),
                 createdAt: Date(),
+                initialText: text,
                 rawText: text,
                 rawTypedLength: typedLength,
                 windowTitle: input.windowTitle
@@ -363,6 +406,19 @@ final class TypingHistoryStore: ObservableObject, SuggestionHistoryProviding {
         // Only writing worth keeping can be resumed; remembering an emptied field would replace the
         // entry for the text it held before.
         if Self.isWorthKeeping(finished.rawText) {
+            // Typed-text learning: what was added since the baseline is the user's own
+            // production. The baseline is this field's last finished text, or the text the
+            // field held when this session started. Only the strict-prefix case counts — it
+            // means the user kept typing rather than pasting or replacing text, so the added
+            // words are genuinely theirs. This feeds MemoryRecorder.recordTyped and is what
+            // breaks the cold-start trap.
+            let baseline = recentRecordings[finished.fieldKey]?.rawText ?? finished.initialText
+            if finished.rawText.hasPrefix(baseline) {
+                let added = String(finished.rawText.dropFirst(baseline.count))
+                if added.count >= Self.minimumTypedLearningCharacters {
+                    onDidFinishRecording?(added, finished.bundleIdentifier)
+                }
+            }
             recentRecordings[finished.fieldKey] = finished
             if recentRecordings.count > Self.maximumRecentRecordings, let oldest = recentRecordings.values
                 .min(by: { $0.createdAt < $1.createdAt }) {
