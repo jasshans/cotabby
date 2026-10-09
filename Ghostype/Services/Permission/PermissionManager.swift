@@ -23,7 +23,16 @@ final class PermissionManager: ObservableObject {
     /// round-trips to tccd, so the initial read happens off the main thread instead of on the
     /// launch critical path. Launch code that must decide on permission state (the
     /// permission-reminder check) awaits this rather than blocking on TCC.
-    let initialRefresh: Task<Void, Never>
+    ///
+    /// Lazily started on first access (always during launch, via AppDelegate): a `let`
+    /// initialized in `init()` cannot capture `self` in its task body because the other
+    /// stored properties aren't assigned yet at that point.
+    lazy var initialRefresh: Task<Void, Never> = Task.detached { [weak self] in
+        let state = Self.querySystemState()
+        await MainActor.run { [weak self] in
+            self?.applyRefresh(state)
+        }
+    }
 
     /// Keeps UI state aligned with permission changes the user makes in System Settings.
     ///
