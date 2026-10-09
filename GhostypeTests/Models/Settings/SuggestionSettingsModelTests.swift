@@ -955,7 +955,7 @@ final class SuggestionSettingsModelTests: XCTestCase {
         model.pauseSuggestions(for: .indefinitely)
         XCTAssertEqual(snapshots.last?.isTemporarilyPaused, true)
 
-        model.enableCotabby()
+        model.enableGhostype()
         XCTAssertEqual(snapshots.last?.isTemporarilyPaused, false)
         XCTAssertTrue(model.isGloballyEnabled)
 
