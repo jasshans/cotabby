@@ -1043,18 +1043,8 @@ enum AXHelper {
         return unsafeBitCast(value, to: AXUIElement.self)
     }
 
-    /// Best-effort, fail-safe read of the title of the window containing `element`. Most apps vend
-    /// `kAXWindowAttribute` directly on any descendant element; when that misses, nil is returned
-    /// rather than walking the tree, so the read stays a single bounded round-trip on the focus
-    /// path. Used for surface conditioning (the title carries the email subject, document name,
-    /// channel, or page title) and to detect navigation before reusing context.
-    static func windowTitle(near element: AXUIElement) -> String? {
-        guard let window = windowElement(near: element) else { return nil }
-        return stringValue(for: kAXTitleAttribute as CFString, on: window)
-    }
-
-    /// The window containing `element`, without reading its title. Split from `windowTitle(near:)`
-    /// so the resolver can cache the (session-stable) element and re-read only the title per tick.
+    /// The window containing `element`, without reading its title. Split out so the focus
+    /// resolver can cache the (session-stable) element and re-read only the title per tick.
     static func windowElement(near element: AXUIElement) -> AXUIElement? {
         guard let value = copyAttributeValue(kAXWindowAttribute as CFString, on: element) else {
             return nil
