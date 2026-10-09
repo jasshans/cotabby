@@ -32,6 +32,20 @@ final class TypingHistoryScrubberTests: XCTestCase {
         XCTAssertEqual(TypingHistoryScrubber.scrub(prose), prose)
     }
 
+    func test_ibansAreRedacted() {
+        XCTAssertEqual(
+            TypingHistoryScrubber.scrub("transfer to DE89370400440532013000 tomorrow"),
+            "transfer to [redacted] tomorrow"
+        )
+        XCTAssertEqual(
+            TypingHistoryScrubber.scrub("IBAN FR1420041010050500013M02606, thanks"),
+            "IBAN [redacted], thanks"
+        )
+        // Short alphanumeric codes in prose are untouched.
+        let prose = "Order AB12 is ready for pickup."
+        XCTAssertEqual(TypingHistoryScrubber.scrub(prose), prose)
+    }
+
     func test_privateKeyBlocksAreRedacted() {
         let text = "here:\n-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXk\n-----END OPENSSH PRIVATE KEY-----\nthanks"
         XCTAssertEqual(TypingHistoryScrubber.scrub(text), "here:\n[redacted]\nthanks")
