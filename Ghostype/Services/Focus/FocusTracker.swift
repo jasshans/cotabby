@@ -60,14 +60,25 @@ final class FocusTracker {
     private var chromiumHitTestCache: (element: AXUIElement, pid: pid_t)?
     private var lastChromeProbeSignature: String?
 
-    /// Codex's native shell can hide its focused web composer from AXFocusedUIElement.
+    /// Some apps hide their focused web composer from the system focus query (Codex embeds
+    /// Chromium in a native shell; Meta's Muse app reports a bare AXGroup with no text value).
     /// The tracker owns this incremental search; small slices avoid blocking typing, and a
     /// cached field is reused only while AX still marks it focused in the current window.
+    /// The `codex*` ivar names are historical — the walk now serves every bundle in
+    /// `deepSearchBundleIdentifiers`.
     private var codexSearchWindow: AXUIElement?
     private var codexSearchStack: [(AXUIElement, Int)] = []
     private var codexSearchVisits = 0
     private var codexSearchRetryAt = Date.distantPast
     private var codexFocusedField: AXUIElement?
+
+    /// Bundle identifiers whose focused web composer may be invisible to the system focus
+    /// query, so the tracker walks the focused window's AX tree directly. Entries must be
+    /// lowercase; matching is case-insensitive.
+    private static let deepSearchBundleIdentifiers: Set<String> = [
+        "com.openai.codex",
+        "com.meta.endo",
+    ]
 
     // Last bundle identifier we logged as suppressed. Used to emit one log line per
     // suppression transition instead of one per 50-80ms poll tick.
@@ -437,7 +448,8 @@ final class FocusTracker {
     private func resolveCodexFocusedField(systemFocused: AXUIElement?)
         -> (element: AXUIElement, application: NSRunningApplication)? {
         guard let app = NSWorkspace.shared.frontmostApplication,
-              app.bundleIdentifier?.lowercased() == "com.openai.codex",
+              let bundleIdentifier = app.bundleIdentifier?.lowercased(),
+              Self.deepSearchBundleIdentifiers.contains(bundleIdentifier),
               !isCaptureSuppressedForBundle(app.bundleIdentifier),
               systemFocused == nil || AXHelper.owningApplication(of: systemFocused!)?.processIdentifier == app.processIdentifier
         else {
