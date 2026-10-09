@@ -17,10 +17,17 @@ import Foundation
 enum GhostCaretRefinement {
     /// Largest disagreement with the reported caret still attributable to rounding.
     static let maximumAdjustment: CGFloat = 1.5
+    /// When the text advance stays under this fraction of the line width, the paragraph cannot
+    /// have soft-wrapped, so a large disagreement means the reported caret is wrong (stale or
+    /// mismeasured), not that the text spans multiple visual lines.
+    static let noWrapFraction: CGFloat = 0.9
 
     struct Input {
         /// Left edge of the host's visual line box, in the same coordinates as `reportedCaretX`.
         let lineLeft: CGFloat
+        /// Width of the host's visual line box. Used to rule out soft-wrapping when the
+        /// typographic caret disagrees with the reported one beyond rounding.
+        let lineWidth: CGFloat
         /// Text between the last hard line break and the caret.
         let paragraphTextBeforeCaret: String
         /// The host's exact typeface at its exact size.
@@ -30,15 +37,25 @@ enum GhostCaretRefinement {
     }
 
     /// The refined caret x, or nil when the line is wrapped, empty, right-to-left, or the
-    /// typographic answer disagrees with the host beyond rounding.
+    /// typographic answer cannot be trusted.
+    ///
+    /// Two cases return a value:
+    /// - The typographic x lands within `maximumAdjustment` of the reported x: rounding fix.
+    /// - The typographic x disagrees beyond rounding, but the text advance fits well inside the
+    ///   line width, ruling out a soft wrap: the reported caret is stale or mismeasured, so the
+    ///   typographic position (which must be right for unwrapped text in the host's own font)
+    ///   wins. Without this, a wrong AX caret paints the ghost over the user's typed text.
     static func caretX(_ input: Input) -> CGFloat? {
-        guard !input.isRightToLeft, !input.paragraphTextBeforeCaret.isEmpty else { return nil }
+        guard !input.isRightToLeft, !input.paragraphTextBeforeCaret.isEmpty, input.lineWidth > 0 else { return nil }
         let attributed = NSAttributedString(string: input.paragraphTextBeforeCaret, attributes: [.font: input.font])
         let line = CTLineCreateWithAttributedString(attributed)
         let advance = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
         guard advance > 0 else { return nil }
         let refined = input.lineLeft + advance
-        guard abs(refined - input.reportedCaretX) <= maximumAdjustment else { return nil }
+        let disagreement = abs(refined - input.reportedCaretX)
+        guard disagreement <= maximumAdjustment
+                || advance < input.lineWidth * noWrapFraction
+        else { return nil }
         return refined
     }
 

@@ -386,10 +386,12 @@ final class OverlayController: SuggestionOverlayControlling {
               // refinement was measured against index-based line boxes (WebKit) only.
               geometry.hostTextMetrics?.lineRectIsFromTextMarkers != true,
               let lineLeft = geometry.hostTextMetrics?.lineRect?.minX,
+              let lineWidth = geometry.hostTextMetrics?.lineRect?.width,
               let paragraph = geometry.lineTextBeforeCaret,
               let refinedX = GhostCaretRefinement.caretX(
                   GhostCaretRefinement.Input(
                       lineLeft: lineLeft,
+                      lineWidth: lineWidth,
                       paragraphTextBeforeCaret: paragraph,
                       font: font.font,
                       reportedCaretX: geometry.caretRect.minX,
