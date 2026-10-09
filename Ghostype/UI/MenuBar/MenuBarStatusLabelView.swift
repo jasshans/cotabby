@@ -13,7 +13,7 @@ struct MenuBarStatusLabelView: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            Image("MenuBarCatIcon")
+            Image("MenuBarGhostIcon")
                 .renderingMode(.template)
                 // Match the asset's 18-point canvas so macOS uses its native 1x/2x strokes.
                 .frame(width: 18, height: 18)

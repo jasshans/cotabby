@@ -68,6 +68,19 @@ final class BrowserAppDetectorTests: XCTestCase {
         XCTAssertFalse(BrowserAppDetector.needsWebAccessibilityPriming(bundleIdentifier: "com.openai.codex.helper"))
     }
 
+    func testClaudeDesktopUsesEditorRecoveryWithoutBrowserClassification() {
+        // Claude Desktop is an Electron app (bundle id com.anthropic.claudefordesktop, verified
+        // against the installed app's Info.plist and lsregister dumps) whose chat composer is a
+        // ProseMirror contenteditable. Recovery must follow that identity while the helper
+        // subprocesses stay outside the explicit allowlist; it is not a browser.
+        for bundleIdentifier in ["com.anthropic.claudefordesktop", "COM.ANTHROPIC.CLAUDEFORDESKTOP"] {
+            XCTAssertTrue(BrowserAppDetector.isElectronEditor(bundleIdentifier: bundleIdentifier))
+            XCTAssertTrue(BrowserAppDetector.needsWebAccessibilityPriming(bundleIdentifier: bundleIdentifier))
+            XCTAssertFalse(BrowserAppDetector.isBrowser(bundleIdentifier: bundleIdentifier))
+        }
+        XCTAssertFalse(BrowserAppDetector.needsWebAccessibilityPriming(bundleIdentifier: "com.anthropic.claudefordesktop.helper"))
+    }
+
     func testNeedsPrimingForChromiumAndElectronOnly() {
         XCTAssertTrue(
             BrowserAppDetector.needsWebAccessibilityPriming(bundleIdentifier: "com.google.Chrome"))
