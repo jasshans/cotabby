@@ -58,15 +58,18 @@ nonisolated struct TypingHistoryArchive: Codable, Equatable, Sendable {
 nonisolated struct TypingHistoryPreferences: Equatable, Sendable {
     /// Whether stored history shapes suggestions (prompt examples and phrase shortcuts).
     var isUsingHistory: Bool
-    /// Whether new typing is recorded. Off by default: recording keeps the user's writing on disk,
-    /// which is a privacy decision the user makes, not a default Ghostype makes for them.
+    /// Whether new typing is recorded. On by default since 2026-10-09: the user asked for
+    /// Cotypist-style personalization ("Yes, learn from my typing"), and the learning loop is
+    /// what makes suggestions personal instead of generic. Everything stays encrypted on this
+    /// Mac — history never leaves the device — and the Settings toggle reverses it any time.
+    /// Password fields are never recorded.
     var isRecording: Bool
     /// Apps whose fields are never recorded, by bundle identifier.
     var excludedBundleIdentifiers: [String]
 
     static let defaults = TypingHistoryPreferences(
-        isUsingHistory: false,
-        isRecording: false,
+        isUsingHistory: true,
+        isRecording: true,
         excludedBundleIdentifiers: []
     )
 }
