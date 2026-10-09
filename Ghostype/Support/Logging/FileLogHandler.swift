@@ -92,7 +92,7 @@ nonisolated final class FileLogWriter: @unchecked Sendable {
         // empty file, destroying exactly the history rotation was meant to preserve.
         let didRotate = rotateOnDisk(currentURL: logFileURL)
         if didRotate {
-            FileManager.default.createFile(atPath: logFileURL.path, contents: nil)
+            SecureFileUtilities.createSecureEmptyFile(at: logFileURL)
         }
         openHandleLocked()
     }
@@ -129,10 +129,8 @@ nonisolated final class FileLogWriter: @unchecked Sendable {
         guard let logFileURL else { return }
         let fileManager = FileManager.default
         let directory = logFileURL.deletingLastPathComponent()
-        try? fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
-        if !fileManager.fileExists(atPath: logFileURL.path) {
-            fileManager.createFile(atPath: logFileURL.path, contents: nil)
-        }
+        SecureFileUtilities.createSecureDirectory(at: directory)
+        SecureFileUtilities.createSecureEmptyFile(at: logFileURL)
         handle = try? FileHandle(forWritingTo: logFileURL)
         currentByteOffset = (try? handle?.seekToEnd()) ?? 0
     }

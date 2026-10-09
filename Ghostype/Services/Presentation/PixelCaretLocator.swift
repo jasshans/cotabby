@@ -712,8 +712,15 @@ final class PixelCaretLocator {
     /// (`defaults write <bundle> ghostypeDumpCalibrationStrips -bool YES`): every caret capture is
     /// written as a PNG plus a JSON sidecar (run frame, region, the text's tail, the analyzer's
     /// lines and the caret they gave) next to the strips, so a caret read a point off can be
-    /// examined on exactly the pixels it came from. Off by default.
-    private static let dumpsCaptures = UserDefaults.standard.bool(forKey: "ghostypeDumpCalibrationStrips")
+    /// examined on exactly the pixels it came from. One-session semantics: the flag is cleared
+    /// on read, so a forgotten `defaults write` can't accumulate captures forever. Off by default.
+    private static let dumpsCaptures: Bool = {
+        let enabled = UserDefaults.standard.bool(forKey: "ghostypeDumpCalibrationStrips")
+        if enabled {
+            UserDefaults.standard.set(false, forKey: "ghostypeDumpCalibrationStrips")
+        }
+        return enabled
+    }()
 
     private nonisolated static func dumpCapture(
         _ captured: Captured,
@@ -732,7 +739,8 @@ final class PixelCaretLocator {
         }
         let folder = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Logs/\(ProcessInfo.processInfo.processName)/strips", isDirectory: true)
-        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        SecureFileUtilities.createSecureDirectory(at: folder)
+        SecureFileUtilities.evictOldestFiles(in: folder, keepNewest: 100)
         let stamp = Int(Date().timeIntervalSince1970 * 1000)
         let bitmap = captured.bitmap
         if let representation = NSBitmapImageRep(
@@ -740,7 +748,9 @@ final class PixelCaretLocator {
             hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: bitmap.width * 4, bitsPerPixel: 32
         ), let data = representation.bitmapData {
             bitmap.bytes.withUnsafeBufferPointer { data.update(from: $0.baseAddress!, count: bitmap.bytes.count) }
-            try? representation.representation(using: .png, properties: [:])?.write(to: folder.appendingPathComponent("caret-\(stamp).png"))
+            if let png = representation.representation(using: .png, properties: [:]) {
+                try? SecureFileUtilities.secureWrite(png, to: folder.appendingPathComponent("caret-\(stamp).png"))
+            }
         }
         func values(_ rect: CGRect) -> [Double] { [rect.minX, rect.minY, rect.width, rect.height].map { Double($0) } }
         var sidecar: [String: Any] = [
@@ -760,7 +770,7 @@ final class PixelCaretLocator {
             sidecar["caret"] = values(measurement.caretRect)
         }
         if let json = try? JSONSerialization.data(withJSONObject: sidecar) {
-            try? json.write(to: folder.appendingPathComponent("caret-\(stamp).json"))
+            try? SecureFileUtilities.secureWrite(json, to: folder.appendingPathComponent("caret-\(stamp).json"))
         }
     }
 

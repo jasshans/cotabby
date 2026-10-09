@@ -73,6 +73,32 @@ nonisolated enum PromptContextSanitizer {
         text.unicodeScalars.contains { CharacterSet.alphanumerics.contains($0) }
     }
 
+    /// Heuristic: does this look like a password, API token, or other credential?
+    ///
+    /// Conservative on purpose — it only flags single-token, high-entropy strings, so prose,
+    /// URLs, emails, and code never match. Runs on the *raw* clipboard text: sanitization
+    /// strips the symbols that mark a secret, so this must be checked before `sanitize(_:)`.
+    ///
+    /// A credential is a single token (no whitespace) of at least 8 characters drawn from
+    /// at least three of the four character classes (lowercase, uppercase, digits, symbols).
+    /// That catches `Tr0ub4dor&3`-style passwords and `sk-live`-style tokens while leaving
+    /// `https://example.com/path` (two classes) and plain words alone.
+    static func looksLikeCredential(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 8,
+              trimmed.rangeOfCharacter(from: .whitespacesAndNewlines) == nil
+        else {
+            return false
+        }
+        let scalars = trimmed.unicodeScalars
+        var classes = 0
+        if scalars.contains(where: { CharacterSet.lowercaseLetters.contains($0) }) { classes += 1 }
+        if scalars.contains(where: { CharacterSet.uppercaseLetters.contains($0) }) { classes += 1 }
+        if scalars.contains(where: { CharacterSet.decimalDigits.contains($0) }) { classes += 1 }
+        if scalars.contains(where: { !CharacterSet.alphanumerics.contains($0) }) { classes += 1 }
+        return classes >= 3
+    }
+
     /// Common 1-2 character English words that should survive OCR noise filtering.
     private static let preservedShortWords: Set<String> = [
         "a", "i", "an", "am", "as", "at", "be", "by", "do", "go", "he",
