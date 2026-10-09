@@ -35,6 +35,11 @@ nonisolated final class LlamaRuntimeCore: @unchecked Sendable {
     private var autocompletePromptBytes: [UInt8] = []
     private var autocompletePromptTokens: [Int32] = []
     private var autocompleteSamplingFingerprint: SamplingFingerprint?
+    /// Memoized tokenization of the last prompt string (see `tokenize`). Guarded by
+    /// `autocompleteLock`: `preparedPrompt`'s callers hold it, and `prepare()` clears it
+    /// under the same lock when a new model loads.
+    private var lastTokenizedPrompt: String?
+    private var lastTokenizedTokens: [Int32] = []
 
     /// The sequence the in-flight autocomplete operation is decoding into, published for
     /// `abortInFlightGeneration` to target from the canceller's thread. Guarded by its own lock
@@ -108,6 +113,12 @@ nonisolated final class LlamaRuntimeCore: @unchecked Sendable {
             gpuLayerCount: Int(engine.getGPULayerCount()),
             backendName: "CotabbyInferenceEngine (llama.cpp in-process)"
         )
+        // A new model means a new vocabulary: drop the tokenization memo (see tokenize).
+        // Guarded by autocompleteLock like the rest of the autocomplete KV state.
+        autocompleteLock.lock()
+        lastTokenizedPrompt = nil
+        lastTokenizedTokens = []
+        autocompleteLock.unlock()
         self.preparedRuntime = result
         loggedTrimRejectionForCurrentModel = false
         CotabbyLogger.runtime.info(
@@ -711,6 +722,9 @@ nonisolated final class LlamaRuntimeCore: @unchecked Sendable {
     }
 
     private func logCacheRestoration(sequenceID: Int32) {
+        // The .debug call below is free in Release, but getCacheDiagnostics is a native call
+        // that would otherwise run on every KV reuse (i.e. per keystroke) even with debug off.
+        guard CotabbyLogger.runtime.logLevel <= .debug else { return }
         let cache = engine.getCacheDiagnostics(sequenceID)
         CotabbyLogger.runtime.debug(
             "Prompt cache restored",
@@ -727,10 +741,19 @@ nonisolated final class LlamaRuntimeCore: @unchecked Sendable {
     // MARK: - Private: helpers
 
     private func tokenize(_ text: String) -> [Int32] {
+        // Memoized: prewarm → generate with no typing in between (and retries) otherwise pay
+        // native tokenization per call for the identical prompt. Only touched under
+        // autocompleteLock (preparedPrompt's callers hold it); cleared when a new model loads.
+        if let lastTokenizedPrompt, lastTokenizedPrompt == text {
+            return lastTokenizedTokens
+        }
         let utf8Count = text.utf8.count
         guard utf8Count > 0 else { return [] }
         let vec = engine.tokenize(text, Int32(utf8Count))
-        return Array(vec)
+        let tokens = Array(vec)
+        lastTokenizedPrompt = text
+        lastTokenizedTokens = tokens
+        return tokens
     }
 
     private func setCompletionPrefix(_ bytes: [UInt8], sequenceID: Int32) {

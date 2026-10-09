@@ -259,6 +259,31 @@ enum SuggestionRequestFactory {
         return clippedText(distilled, maxCharacters: maxClipboardContextCharacters)
     }
 
+    /// Shrinks the visual summary to the 1200 budget with one measurement instead of shaving
+    /// 10% per iteration: the cost estimate is monotonic in length, so the target length follows
+    /// directly from the first measurement. A bounded verification loop covers estimator
+    /// nonlinearity; the bound enforced is identical to the old loop's.
+    private static func shrinkToVisualBudget(_ summary: String) -> String {
+        var shrunk = summary
+        var cost = visualBudgetCost(of: shrunk)
+        guard cost > 1200 else { return shrunk }
+        let targetCount = max(1, Int(Double(shrunk.count) * 1200.0 / Double(cost)))
+        shrunk = String(shrunk.prefix(targetCount))
+        cost = visualBudgetCost(of: shrunk)
+        while cost > 1200, !shrunk.isEmpty {
+            shrunk = String(shrunk.prefix(shrunk.count * 9 / 10))
+            cost = visualBudgetCost(of: shrunk)
+        }
+        return shrunk
+    }
+
+    /// The old loop's cost function, factored out: token estimate plus 2 per non-ASCII scalar,
+    /// counted without allocating the filtered array the old `.filter { }.count` built.
+    private static func visualBudgetCost(of text: String) -> Int {
+        let nonASCII = text.unicodeScalars.reduce(0) { $1.isASCII ? $0 : $0 + 1 }
+        return TokenCountEstimator.estimate(text) + nonASCII * 2
+    }
+
     private static func activeVisualContextSummary(rawSummary: String?, engine: SuggestionEngineKind) -> String? {
         guard let rawSummary else {
             return nil
@@ -270,10 +295,7 @@ enum SuggestionRequestFactory {
         // Apple's instructions, caret text and clipboard instead of filling its shared 4K window
         // with screen text alone. Native llama additionally allocates the complete prompt by token.
         if engine != .openAICompatible {
-            while TokenCountEstimator.estimate(sanitizedSummary)
-                + sanitizedSummary.unicodeScalars.filter({ !$0.isASCII }).count * 2 > 1200 {
-                sanitizedSummary = String(sanitizedSummary.prefix(sanitizedSummary.count * 9 / 10))
-            }
+            sanitizedSummary = shrinkToVisualBudget(sanitizedSummary)
         }
         guard !sanitizedSummary.isEmpty,
               PromptContextSanitizer.containsAlphanumericSignal(sanitizedSummary)
