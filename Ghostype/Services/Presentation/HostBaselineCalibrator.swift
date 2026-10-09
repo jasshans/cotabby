@@ -465,14 +465,22 @@ final class HostBaselineCalibrator {
     /// Debug-only: with `defaults write <bundle> ghostypeDumpCalibrationStrips -bool YES`, every
     /// captured strip is written as a PNG plus a JSON sidecar (caret column, baseline request,
     /// line text) under ~/Library/Logs/<app>/strips, so a typeface search that declined on a live
-    /// strip can be re-run offline on exactly the pixels it saw. Off by default; a session that
-    /// leaves it on writes a file per calibration.
-    private static let dumpsStrips = UserDefaults.standard.bool(forKey: "ghostypeDumpCalibrationStrips")
+    /// strip can be re-run offline on exactly the pixels it saw. One-session semantics: the flag
+    /// is cleared on read, so a forgotten `defaults write` can't accumulate strips forever.
+    /// Off by default; a session that leaves it on writes a file per calibration.
+    private static let dumpsStrips: Bool = {
+        let enabled = UserDefaults.standard.bool(forKey: "ghostypeDumpCalibrationStrips")
+        if enabled {
+            UserDefaults.standard.set(false, forKey: "ghostypeDumpCalibrationStrips")
+        }
+        return enabled
+    }()
 
     private nonisolated static func dumpStrip(_ captured: CapturedStrip, strip: CGRect, request: Request, attemptTypeface: Bool) {
         let logs = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Logs/\(ProcessInfo.processInfo.processName)/strips", isDirectory: true)
-        try? FileManager.default.createDirectory(at: logs, withIntermediateDirectories: true)
+        SecureFileUtilities.createSecureDirectory(at: logs)
+        SecureFileUtilities.evictOldestFiles(in: logs, keepNewest: 100)
         let stamp = Int(Date().timeIntervalSince1970 * 1000)
         let bitmap = captured.bitmap
         guard let representation = NSBitmapImageRep(
@@ -480,7 +488,9 @@ final class HostBaselineCalibrator {
             hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: bitmap.width * 4, bitsPerPixel: 32
         ), let data = representation.bitmapData else { return }
         bitmap.bytes.withUnsafeBufferPointer { data.update(from: $0.baseAddress!, count: bitmap.bytes.count) }
-        try? representation.representation(using: .png, properties: [:])?.write(to: logs.appendingPathComponent("strip-\(stamp).png"))
+        if let png = representation.representation(using: .png, properties: [:]) {
+            try? SecureFileUtilities.secureWrite(png, to: logs.appendingPathComponent("strip-\(stamp).png"))
+        }
         let sidecar: [String: Any] = [
             "caret_column": Double((request.caretRect.minX - strip.minX) * captured.scale),
             "scale": Double(captured.scale),
@@ -495,7 +505,7 @@ final class HostBaselineCalibrator {
             ]
         ]
         if let json = try? JSONSerialization.data(withJSONObject: sidecar) {
-            try? json.write(to: logs.appendingPathComponent("strip-\(stamp).json"))
+            try? SecureFileUtilities.secureWrite(json, to: logs.appendingPathComponent("strip-\(stamp).json"))
         }
     }
 

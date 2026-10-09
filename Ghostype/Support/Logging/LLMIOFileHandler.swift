@@ -80,7 +80,7 @@ nonisolated final class LLMIOFileWriter: @unchecked Sendable {
         // would otherwise destroy the live log we just failed to preserve.
         let didRotate = rotateOnDisk(currentURL: logFileURL)
         if didRotate {
-            FileManager.default.createFile(atPath: logFileURL.path, contents: nil)
+            SecureFileUtilities.createSecureEmptyFile(at: logFileURL)
         }
         openHandleLocked()
     }
@@ -111,12 +111,9 @@ nonisolated final class LLMIOFileWriter: @unchecked Sendable {
 
     private func openHandleLocked() {
         guard let logFileURL else { return }
-        let fileManager = FileManager.default
         let directory = logFileURL.deletingLastPathComponent()
-        try? fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
-        if !fileManager.fileExists(atPath: logFileURL.path) {
-            fileManager.createFile(atPath: logFileURL.path, contents: nil)
-        }
+        SecureFileUtilities.createSecureDirectory(at: directory)
+        SecureFileUtilities.createSecureEmptyFile(at: logFileURL)
         handle = try? FileHandle(forWritingTo: logFileURL)
         currentByteOffset = (try? handle?.seekToEnd()) ?? 0
     }

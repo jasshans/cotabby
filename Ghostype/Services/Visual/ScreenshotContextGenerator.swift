@@ -293,7 +293,7 @@ final class ScreenshotContextGenerator: ScreenshotContextGenerating {
         let appFolderURL = desktopURL
             .appendingPathComponent("ghostype-debug-screenshots")
             .appendingPathComponent(name)
-        try? FileManager.default.createDirectory(at: appFolderURL, withIntermediateDirectories: true)
+        SecureFileUtilities.createSecureDirectory(at: appFolderURL)
 
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -311,7 +311,8 @@ final class ScreenshotContextGenerator: ScreenshotContextGenerating {
         ) {
             CGImageDestinationAddImage(dest, image, nil)
             if CGImageDestinationFinalize(dest) {
-                try? text.write(to: textURL, atomically: true, encoding: .utf8)
+                SecureFileUtilities.setOwnerOnlyFilePermissions(url: fileURL)
+                try? SecureFileUtilities.secureWrite(text, to: textURL)
                 evictOldDebugCaptures(in: appFolderURL)
             }
         }
