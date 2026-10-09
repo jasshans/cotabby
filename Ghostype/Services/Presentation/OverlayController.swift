@@ -548,14 +548,15 @@ final class OverlayController: SuggestionOverlayControlling {
             )
         )
         let judged = applyingTypefaceEvidence(resolution, for: geometry)
+        let zoom = zoomStep(for: geometry)
         let matched = Self.applyingMatchedTypeface(
             judged,
             match: baselineCalibrator?.cachedTypeface(for: typefaceKey(for: geometry)),
             hostNamesFace: Self.hostNamesFace(geometry),
             widthSample: heldWidthSample(for: geometry),
             sizeMultiplier: CGFloat(suggestionSettings.ghostTextSizeMultiplier),
-            reportedSize: zoomStep(for: geometry).reportedSize,
-            zoomKind: zoomStep(for: geometry).kind
+            reportedSize: zoom.reportedSize,
+            zoomKind: zoom.kind
         )
         let sized = applyingHostAdvance(matched, for: geometry)
         let remembered = rememberingHostFace(sized.resolution, advanceMeasured: sized.advanceMeasured, for: geometry)
@@ -850,8 +851,9 @@ final class OverlayController: SuggestionOverlayControlling {
         if resolution.provenance == .hostSizeScaledSystem || resolution.provenance == .hostSizeSystem,
            evidence.scalingSample != nil {
             typefaceEvidence[identity] = evidence
+            let zoom = zoomStep(for: geometry)
             return Self.scaledSystemFace(
-                size: size, evidence: evidence, reportedSize: zoomStep(for: geometry).reportedSize, zoomKind: zoomStep(for: geometry).kind
+                size: size, evidence: evidence, reportedSize: zoom.reportedSize, zoomKind: zoom.kind
             )
         }
         guard let sample else {
@@ -1459,8 +1461,12 @@ final class OverlayController: SuggestionOverlayControlling {
             panelOrigin: frame.origin,
             isDarkAppearance: isDarkAppearance
         )
-        panel.setFrame(frame, display: true)
-        panel.orderFrontRegardless()
+        // Skip the WindowServer round-trip when the panel is already front at this frame —
+        // the common case while typing advances through a suggestion.
+        if panel.frame != frame || !panel.isVisible {
+            panel.setFrame(frame, display: true)
+            panel.orderFrontRegardless()
+        }
         logInlinePresentation(session, panelFrame: frame)
     }
 
@@ -1535,8 +1541,10 @@ final class OverlayController: SuggestionOverlayControlling {
             CotabbyLogger.suggestion.warning("Skipped mirror overlay: computed a non-finite frame")
             return
         }
-        panel.setFrame(panelFrame, display: true)
-        panel.orderFrontRegardless()
+        if panel.frame != panelFrame || !panel.isVisible {
+            panel.setFrame(panelFrame, display: true)
+            panel.orderFrontRegardless()
+        }
         logMirrorPresentation(geometry: geometry, reason: reason, panelFrame: panelFrame)
     }
 

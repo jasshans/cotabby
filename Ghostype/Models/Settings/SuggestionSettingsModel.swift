@@ -305,6 +305,13 @@ final class SuggestionSettingsModel: ObservableObject {
         pluggedInModelFilename = data.pluggedInModelFilename
         pluggedInEndpointModelName = data.pluggedInEndpointModelName
         schedulePauseExpirationIfNeeded()
+
+        // The snapshot cache (see `snapshot`) is only valid until a setting changes. Every
+        // mutation flows through an @Published property, so objectWillChange is the single
+        // invalidation point — no snapshotPublisher subscriber needs to exist for it to work.
+        objectWillChange
+            .sink { [weak self] _ in self?.cachedSnapshot = nil }
+            .store(in: &cancellables)
     }
 
     /// Restores every preference this facade owns to its first-launch default and persists the reset.
@@ -503,7 +510,22 @@ final class SuggestionSettingsModel: ObservableObject {
         )
     }
 
+    /// Cached settings snapshot. Building it walks ~70 fields (including a Set build over the
+    /// disabled-app rules); per-focus-change consumers were rebuilding it on every focus change
+    /// for a handful of gating fields. The cache is cleared by `objectWillChange` (see `init`),
+    /// so a cached value can never outlive the settings it was built from: all reads and all
+    /// invalidations happen on the main actor.
+    private var cachedSnapshot: SuggestionSettingsSnapshot?
+    private var cancellables = Set<AnyCancellable>()
+
     var snapshot: SuggestionSettingsSnapshot {
+        if let cachedSnapshot { return cachedSnapshot }
+        let built = buildSnapshot()
+        cachedSnapshot = built
+        return built
+    }
+
+    private func buildSnapshot() -> SuggestionSettingsSnapshot {
         let settings = domainSettings
         return SuggestionSettingsSnapshot(
             isGloballyEnabled: settings.general.isGloballyEnabled,
