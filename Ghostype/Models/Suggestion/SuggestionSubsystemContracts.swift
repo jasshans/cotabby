@@ -130,6 +130,9 @@ protocol SuggestionMemoryContextProviding: AnyObject {
     /// The cached learned vocabulary for prompt conditioning, best first. Returns [] for the
     /// endpoint engine (memory never leaves the Mac) and while the feature is off.
     func vocabularyForPrompt(engine: SuggestionEngineKind) -> [String]
+    /// Per-app variant: the focused field's app vocabulary, falling back to the global
+    /// aggregate for apps with no learned phrases yet.
+    func vocabularyForPrompt(engine: SuggestionEngineKind, bundleIdentifier: String?) -> [String]
 }
 
 @MainActor

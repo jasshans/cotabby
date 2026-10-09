@@ -18,7 +18,12 @@ nonisolated enum MemoryEventKind: String, Sendable, CaseIterable {
     case accepted
     /// The user explicitly dismissed a suggestion (Esc) without accepting it.
     case rejected
-    /// Reserved for future typed-text learning; not recorded today.
+    /// The user typed over a visible suggestion without accepting it: the shown wording was
+    /// seen and not taken. Weaker negative evidence than an explicit dismissal.
+    case softRejected
+    /// Text the user typed themselves (from typing-history recordings). Positive evidence for
+    /// the vocabulary the user actually produces; recorded with lower per-occurrence weight
+    /// than accepts because of its volume.
     case typed
 }
 
@@ -36,10 +41,18 @@ nonisolated struct MemoryEvent: Sendable, Equatable {
 nonisolated struct LearnedPhrase: Sendable, Equatable {
     let phrase: String
     let acceptCount: Int
+    /// Times the user produced this phrase by typing it themselves (from typing-history
+    /// recordings). Weaker per-occurrence evidence than an accept because of its volume, but
+    /// it is what breaks the cold-start trap: a phrase you type fifty times is your vocabulary
+    /// even if you never Tab-accepted it.
+    let typedCount: Int
     let rejectCount: Int
+    /// Times a visible suggestion carrying this phrase was typed over without being taken.
+    /// Weaker negative evidence than an explicit Esc dismissal.
+    let softRejectCount: Int
     let lastUsed: Date
-    /// Acceptance evidence minus rejection evidence, decayed by recency (see
-    /// `MemoryPhraseExtractor.score`). Higher means "more characteristic of this user right now".
+    /// Evidence for minus evidence against, decayed by recency (see `MemoryPhraseExtractor.score`).
+    /// Higher means "more characteristic of this user right now".
     let score: Double
 }
 
@@ -48,6 +61,27 @@ nonisolated struct LearnedPhrase: Sendable, Equatable {
 /// them together keeps the enable toggle, the recording gate, and Clear Memory in one place.
 nonisolated struct MemoryPreferences: Sendable, Equatable {
     var isEnabled: Bool
+    /// How strongly learned vocabulary nudges suggestions: the number of top phrases reaching
+    /// the prompt. Low keeps only the most certain wording; High lets the full vocabulary
+    /// condition the model. Mirrors the personalization strength slider in Cotypist.
+    var strength: PersonalizationStrength
 
-    static let defaults = MemoryPreferences(isEnabled: true)
+    static let defaults = MemoryPreferences(isEnabled: true, strength: .medium)
+}
+
+/// Personalization strength: how many learned phrases condition each suggestion.
+nonisolated enum PersonalizationStrength: String, Sendable, CaseIterable {
+    case low
+    case medium
+    case high
+
+    /// Top-phrase count reaching the prompt. The renderer's character budget still caps the
+    /// section, so High adds phrases only while they fit.
+    var phraseLimit: Int {
+        switch self {
+        case .low: 15
+        case .medium: 30
+        case .high: 50
+        }
+    }
 }
