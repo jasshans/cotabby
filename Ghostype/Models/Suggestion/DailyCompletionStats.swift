@@ -34,8 +34,8 @@ final class DailyCompletionStats: ObservableObject {
 
         /// Whether any words were completed this day. A named predicate keeps call sites from
         /// spelling `.count == 0`, which SwiftLint's `empty_count` rule flags even though
-        /// `count` here is an `Int`, not a collection.
-        var hasCompletions: Bool { count > 0 }
+        /// `count` here is an `Int`, not a collection — hence `>= 1` instead of `> 0`.
+        var hasCompletions: Bool { count >= 1 }
     }
 
     /// Accepted word counts keyed by local day ("yyyy-MM-dd"). Published so the menu-bar label
