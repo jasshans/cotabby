@@ -304,6 +304,18 @@ enum GhostFontResolver {
         // named Menlo at 14.3. The caret box's size stands until something names the face.
         let scale = calibrated.pointSize / max(derived.pointSize, 0.01)
         guard maximumCaretBoxScale.contains(scale) else {
+            // Asymmetric escape: when the sample measures SMALLER than the caret box, the box is
+            // the liar. A line box can be far taller than its text (generous CSS line-height,
+            // padding, or a multi-line union frame handed down as the caret's line), but a
+            // measured width cannot be narrower than the text that produced it — so the sample
+            // wins and the ghost shrinks to the host's real size. The Menlo case above went the
+            // other way (the sample measured wider), and that direction still keeps the box: a
+            // too-narrow sample can be the wrong face entirely.
+            // Measured 2026-10-09: Google Chat's compose box handed down a ~2x caret box, and the
+            // width sample pulled the ghost back from ~28pt to the host's size.
+            if scale < maximumCaretBoxScale.lowerBound {
+                return Resolution(font: calibrated, provenance: .caretDerivedCalibrated, widthAgreement: widthAgreement(of: calibrated, input))
+            }
             return Resolution(font: derived, provenance: .caretDerived, widthAgreement: widthAgreement(of: derived, input))
         }
         return Resolution(font: calibrated, provenance: .caretDerivedCalibrated, widthAgreement: widthAgreement(of: calibrated, input))
