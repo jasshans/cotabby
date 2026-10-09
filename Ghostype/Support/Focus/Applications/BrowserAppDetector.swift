@@ -62,6 +62,14 @@ nonisolated enum BrowserAppDetector {
         // The Chromium-based ChatGPT/Codex desktop build identifies as com.openai.codex.
         // Match its bundle identity, not its display name, so focus recovery can reach its composer.
         "com.openai.codex",
+        // Claude Desktop is an Electron app (Chromium under the hood; bundle id verified as
+        // com.anthropic.claudefordesktop) whose chat composer is a ProseMirror contenteditable.
+        // Like Obsidian's editor, its web-AX tree stays dormant until primed: without this entry
+        // no focused field ever resolves in the composer and no suggestions appear there.
+        // Assumption (unverified live): the composer exposes the standard Chromium contenteditable
+        // shape (AXDOMIdentifier / AXTextArea once awake), so the generic Electron recovery paths
+        // apply with no host-specific detector.
+        "com.anthropic.claudefordesktop",
         "com.microsoft.vscode",          // Visual Studio Code
         "com.microsoft.vscodeinsiders",  // VS Code - Insiders
         "com.vscodium",                  // VSCodium (FOSS VS Code build)
