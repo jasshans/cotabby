@@ -44,6 +44,10 @@ final class BrowserAppDetectorTests: XCTestCase {
         // editor's web-AX tree stays dormant and no focused field ever resolves.
         XCTAssertTrue(BrowserAppDetector.isElectronEditor(bundleIdentifier: "md.obsidian"))
         XCTAssertTrue(BrowserAppDetector.isElectronEditor(bundleIdentifier: "MD.Obsidian"))
+        // Meta's Muse desktop app: without this entry its composer element vends no AXValue
+        // ("Missing text value") and no suggestions ever appear in the app.
+        XCTAssertTrue(BrowserAppDetector.isElectronEditor(bundleIdentifier: "com.meta.endo"))
+        XCTAssertTrue(BrowserAppDetector.isElectronEditor(bundleIdentifier: "COM.META.ENDO"))
         // Electron, but not a text-editing surface we cover: must stay out of the priming allowlist.
         XCTAssertFalse(BrowserAppDetector.isElectronEditor(bundleIdentifier: "com.hnc.Discord"))
         XCTAssertFalse(BrowserAppDetector.isElectronEditor(bundleIdentifier: nil))

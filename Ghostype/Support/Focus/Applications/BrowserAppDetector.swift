@@ -70,6 +70,14 @@ nonisolated enum BrowserAppDetector {
         // shape (AXDOMIdentifier / AXTextArea once awake), so the generic Electron recovery paths
         // apply with no host-specific detector.
         "com.anthropic.claudefordesktop",
+        // Meta's Muse desktop app (bundle id com.meta.endo, verified from the app's own
+        // bundle): an Electron app whose chat composer keeps its web-AX tree dormant until
+        // primed. Without this entry the focused composer element vends no AXValue, so the
+        // resolver reports "Missing text value" and no suggestions ever appear in the app —
+        // even though completions work fine everywhere else. Same failure shape as Claude
+        // Desktop above, so the generic Electron recovery paths apply with no host-specific
+        // detector.
+        "com.meta.endo",
         "com.microsoft.vscode",          // Visual Studio Code
         "com.microsoft.vscodeinsiders",  // VS Code - Insiders
         "com.vscodium",                  // VSCodium (FOSS VS Code build)
