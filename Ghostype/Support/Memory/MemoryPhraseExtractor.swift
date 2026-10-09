@@ -67,12 +67,14 @@ enum MemoryPhraseExtractor {
         return net * pow(0.5, days / 30.0)
     }
 
-    /// Stable primary key for `phrase_stats`: SHA-256 of the normalized phrase, hex-encoded. The
-    /// hash (not the phrase) is the lookup key so indexing never touches plaintext; the encrypted
-    /// phrase column carries the display form.
-    static func phraseHash(_ phrase: String) -> String {
-        let digest = SHA256.hash(data: Data(phrase.utf8))
-        return digest.reduce(into: "") { $0 += String(format: "%02x", $1) }
+    /// Stable primary key for `phrase_stats`: HMAC-SHA256 of the normalized phrase under a
+    /// per-database random salt, hex-encoded. The salt makes every database's hashes unique,
+    /// so a precomputed dictionary of common phrases cannot confirm whether this user types
+    /// a given phrase. The hash (not the phrase) is the lookup key so indexing never touches
+    /// plaintext; the encrypted phrase column carries the display form.
+    static func phraseHash(_ phrase: String, salt: Data) -> String {
+        let mac = HMAC<SHA256>.authenticationCode(for: Data(phrase.utf8), using: SymmetricKey(data: salt))
+        return mac.reduce(into: "") { $0 += String(format: "%02x", $1) }
     }
 
     private static func isSignalWord(_ word: String) -> Bool {
