@@ -74,8 +74,13 @@ enum MemoryPhraseExtractor {
     /// plaintext; the encrypted phrase column carries the display form.
     static func phraseHash(_ phrase: String, salt: Data) -> String {
         let mac = HMAC<SHA256>.authenticationCode(for: Data(phrase.utf8), using: SymmetricKey(data: salt))
-        return mac.reduce(into: "") { $0 += String(format: "%02x", $1) }
+        // Lookup table instead of String(format:) per byte: 32 format-string parses and
+        // allocations per hash otherwise, and this runs per phrase per event.
+        return mac.reduce(into: "") { $0 += hexTable[Int($1)] }
     }
+
+    /// Precomputed "%02x" for every byte value.
+    private static let hexTable: [String] = (0...255).map { String(format: "%02x", $0) }
 
     private static func isSignalWord(_ word: String) -> Bool {
         word.count >= minSingleWordCharacters
