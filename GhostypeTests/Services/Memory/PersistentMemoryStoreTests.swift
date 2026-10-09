@@ -82,6 +82,51 @@ final class PersistentMemoryStoreTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: tempFile.path))
     }
 
+    func test_typedEventsTeachVocabulary() {
+        // Typed text is the cold-start fix: phrases the user produces themselves reach the
+        // vocabulary without any Tab-accept.
+        let events = (0..<6).map { _ in
+            MemoryEvent(kind: .typed, text: "looking forward to", bundleIdentifier: "com.apple.mail", date: Date())
+        }
+        store.persistAndWait(events)
+        let phrases = store.topPhrases(limit: 50).map(\.phrase)
+        XCTAssertTrue(phrases.contains("looking forward to"))
+    }
+
+    func test_perAppVocabularyPrefersTheAppsOwnPhrases() {
+        store.persistAndWait([
+            MemoryEvent(kind: .typed, text: "deploy the cluster", bundleIdentifier: "com.apple.Terminal", date: Date()),
+            MemoryEvent(kind: .typed, text: "deploy the cluster", bundleIdentifier: "com.apple.Terminal", date: Date()),
+            MemoryEvent(kind: .typed, text: "deploy the cluster", bundleIdentifier: "com.apple.Terminal", date: Date()),
+            MemoryEvent(kind: .accepted, text: "kind regards", bundleIdentifier: "com.apple.mail", date: Date()),
+            MemoryEvent(kind: .accepted, text: "kind regards", bundleIdentifier: "com.apple.mail", date: Date()),
+        ])
+        // Terminal's vocabulary leads with its own phrasing...
+        let terminal = store.topPhrases(limit: 50, bundleId: "com.apple.Terminal").map(\.phrase)
+        XCTAssertEqual(terminal.first, "deploy the cluster")
+        // ...while Mail still sees its own, and the global aggregate carries both.
+        let mail = store.topPhrases(limit: 50, bundleId: "com.apple.mail").map(\.phrase)
+        XCTAssertTrue(mail.contains("kind regards"))
+        let global = store.topPhrases(limit: 50).map(\.phrase)
+        XCTAssertTrue(global.contains("deploy the cluster"))
+        XCTAssertTrue(global.contains("kind regards"))
+    }
+
+    func test_softRejectsDownRankWithoutErasing() {
+        store.persistAndWait([
+            MemoryEvent(kind: .accepted, text: "best regards", bundleIdentifier: "com.apple.mail", date: Date()),
+            MemoryEvent(kind: .accepted, text: "best regards", bundleIdentifier: "com.apple.mail", date: Date()),
+        ])
+        // Two soft rejects (typed over twice) halve the evidence but don't erase it.
+        store.persistAndWait([
+            MemoryEvent(kind: .softRejected, text: "best regards", bundleIdentifier: "com.apple.mail", date: Date()),
+            MemoryEvent(kind: .softRejected, text: "best regards", bundleIdentifier: "com.apple.mail", date: Date()),
+        ])
+        let phrases = store.topPhrases(limit: 50).map(\.phrase)
+        XCTAssertTrue(phrases.contains("best regards"))
+    }
+    }
+
     func test_rejectionDownRanksPhrase() {
         let accepted = MemoryEvent(
             kind: .accepted, text: "best practices", bundleIdentifier: "com.apple.mail", date: Date()
