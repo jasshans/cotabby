@@ -5,9 +5,11 @@
 # The app's SUFeedURL points at that release, so "Check for Updates" (menu bar
 # and Settings > About) picks up each new build automatically.
 #
-# Versioning: MARKETING_VERSION stays 0.1.0; CURRENT_PROJECT_VERSION is the
-# GitHub run number, which always increases. Sparkle treats a higher build
-# number as an update even when the marketing version is unchanged.
+# Versioning: each release build bumps the patch version in the VERSION file
+# (0.1.0 -> 0.1.1 -> ...), committed back with [skip ci], so the marketing
+# version visibly changes with every shipped update. CURRENT_PROJECT_VERSION
+# is the GitHub run number, which always increases. Sparkle treats a higher
+# build number as an update even when the marketing version is unchanged.
 #
 # Signing: ad-hoc only (CODE_SIGN_IDENTITY="-"). No Apple Developer identity
 # is needed. The update's integrity comes from the Sparkle EdDSA signature,
@@ -80,6 +82,24 @@ jobs:
             echo "Paste the public key from generate_keys into SUPublicEDKey and push again." >&2
             exit 1
           fi
+
+      # Every release build bumps the patch version (0.1.0 -> 0.1.1 -> ...), so
+      # the menu-bar version label and "Check for Updates" visibly change with
+      # each shipped update. The bump is committed back with [skip ci] so the
+      # VERSION file stays the single source of truth without retriggering CI.
+      - name: Bump patch version
+        run: |
+          set -euo pipefail
+          current="$(cat VERSION)"
+          bumped="$(awk -F. -v OFS=. '{$NF += 1; print}' VERSION)"
+          echo "Bumping marketing version: ${current} -> ${bumped}"
+          echo "${bumped}" > VERSION
+          echo "MARKETING_VERSION=${bumped}" >> "${GITHUB_ENV}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add VERSION
+          git commit -m "Bump version to ${bumped} [skip ci]"
+          git push origin HEAD:main
 
       # Same Xcode pin policy as the Build workflow: runner images drift their
       # default Xcode without notice, so pin explicitly.
