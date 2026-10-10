@@ -626,4 +626,10 @@ final class TypingHistoryStore: ObservableObject, SuggestionHistoryProviding {
             )
         )
     }
+
+    /// All typed texts for n-gram model building. The caller is responsible for
+    /// running the build on a background thread; the returned array is a snapshot.
+    func allTypedTexts() -> [String] {
+        records.map(\.typedText).filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
 }

@@ -267,6 +267,18 @@ final class CotabbyAppEnvironment {
             history: typingHistoryStore,
             engineKind: { [weak suggestionSettings] in suggestionSettings?.selectedEngine ?? .openAICompatible }
         )
+        // Personal n-gram: builds in the background from typing history, then answers
+        // synchronously (<1ms) on each keystroke. The "fast" layer; the LLM is the "smart" layer.
+        // This is what makes the stream feel instant like Cotypist — no inference wait.
+        Task.detached(priority: .utility) { [weak typingHistoryStore, weak historyAwareEngine] in
+            guard let store = typingHistoryStore else { return }
+            let texts = await store.allTypedTexts()
+            guard !texts.isEmpty else { return }
+            let ngram = PersonalNGramEngine.build(from: texts)
+            await MainActor.run { [weak historyAwareEngine] in
+                historyAwareEngine?.ngramEngine = ngram
+            }
+        }
         let suggestionEngine: any SuggestionGenerating = DebugForcedSuggestionEngine.isConfigured()
             ? DebugForcedSuggestionEngine(wrapping: historyAwareEngine)
             : historyAwareEngine
