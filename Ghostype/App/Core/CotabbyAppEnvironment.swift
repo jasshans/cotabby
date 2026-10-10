@@ -270,15 +270,9 @@ final class CotabbyAppEnvironment {
         // Personal n-gram: builds in the background from typing history, then answers
         // synchronously (<1ms) on each keystroke. The "fast" layer; the LLM is the "smart" layer.
         // This is what makes the stream feel instant like Cotypist — no inference wait.
-        Task.detached(priority: .utility) { [weak typingHistoryStore, weak historyAwareEngine] in
-            guard let store = typingHistoryStore else { return }
-            let texts = await store.allTypedTexts()
-            guard !texts.isEmpty else { return }
-            let ngram = PersonalNGramEngine.build(from: texts)
-            await MainActor.run { [weak historyAwareEngine] in
-                historyAwareEngine?.ngramEngine = ngram
-            }
-        }
+        // A separate method so `init()` stays under SwiftLint's complexity cap of 10 —
+        // the two `guard`s inside the detached task would otherwise count against it.
+        startBackgroundNGramBuild(typingHistoryStore: typingHistoryStore, phraseEngine: historyAwareEngine)
         let suggestionEngine: any SuggestionGenerating = DebugForcedSuggestionEngine.isConfigured()
             ? DebugForcedSuggestionEngine(wrapping: historyAwareEngine)
             : historyAwareEngine
@@ -473,6 +467,28 @@ final class CotabbyAppEnvironment {
 
         observePowerSourceProfileSwitching()
         observeOpenAICompatibleSelection()
+    }
+
+    /// Builds the personal n-gram engine from typing history on a background thread and
+    /// installs it into the phrase engine once ready. Runs detached (`.utility`) so the
+    /// launch path never blocks on it; the install hops back to the main actor because
+    /// the engine is mutated from the suggestion pipeline there. Weak captures on both
+    /// the store and the engine: if either is gone by the time the build finishes, the
+    /// result is simply dropped. Extracted from `init` to keep the initializer's
+    /// complexity bounded.
+    private func startBackgroundNGramBuild(
+        typingHistoryStore: TypingHistoryStore,
+        phraseEngine: TypingHistoryPhraseEngine
+    ) {
+        Task.detached(priority: .utility) { [weak typingHistoryStore, weak phraseEngine] in
+            guard let store = typingHistoryStore else { return }
+            let texts = await store.allTypedTexts()
+            guard !texts.isEmpty else { return }
+            let ngram = PersonalNGramEngine.build(from: texts)
+            await MainActor.run { [weak phraseEngine] in
+                phraseEngine?.ngramEngine = ngram
+            }
+        }
     }
 
     /// Applies the user's per-power-source profile (engine + model) whenever anything that could
