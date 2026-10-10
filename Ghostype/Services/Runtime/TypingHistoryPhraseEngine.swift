@@ -16,6 +16,9 @@ final class TypingHistoryPhraseEngine: SuggestionGenerating {
     private let base: any SuggestionGenerating
     private let history: any SuggestionHistoryProviding
     private let engineKind: @MainActor () -> SuggestionEngineKind
+    /// Personal n-gram model for instant (<1ms) predictions. Set by the environment
+    /// after background build from typing history. Nil until built.
+    var ngramEngine: PersonalNGramEngine?
 
     init(
         wrapping base: any SuggestionGenerating,
@@ -36,6 +39,23 @@ final class TypingHistoryPhraseEngine: SuggestionGenerating {
         onPartial: (@MainActor (SuggestionResult) -> Void)?
     ) async throws -> SuggestionResult {
         let started = ProcessInfo.processInfo.systemUptime
+        // N-gram fast path: synchronous <1ms prediction from personal trigram model.
+        // This is what makes the stream feel instant — no inference, no waiting.
+        // Falls through to phrase/LLM if the n-gram has no confident prediction.
+        if let ngram = ngramEngine,
+           let prediction = ngram.predict(for: request.context.precedingText) {
+            CotabbyLogger.suggestion.debug(
+                "Answered from n-gram",
+                metadata: ["request_id": .string(request.requestID), "engine": .string("ngram")]
+            )
+            return SuggestionResult(
+                generation: request.generation,
+                rawText: prediction,
+                text: prediction,
+                latency: ProcessInfo.processInfo.systemUptime - started,
+                spacingIsExact: true
+            )
+        }
         if let phrase = history.phraseContinuation(for: request, engine: engineKind()) {
             CotabbyLogger.suggestion.debug(
                 "Answered from typing history",
