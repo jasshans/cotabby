@@ -58,24 +58,14 @@ final class PersonalNGramEngine: Sendable {
 
             // Build trigrams: (w1, w2) -> w3
             guard words.count >= 3 else { continue }
-            for i in 0..<(words.count - 2) {
-                let key = trigramKey(words[i], words[i + 1])
-                trigramCounts[key, default: [:]][words[i + 2], default: 0] += 1
+            for index in 0..<(words.count - 2) {
+                let key = trigramKey(words[index], words[index + 1])
+                trigramCounts[key, default: [:]][words[index + 2], default: 0] += 1
             }
         }
 
         // Convert to sorted, bounded arrays.
-        var trigrams: [String: [(word: String, count: Int)]] = [:]
-        for (key, candidates) in trigramCounts {
-            let filtered = candidates
-                .filter { $0.value >= minTrigramCount }
-                .sorted { $0.value > $1.value }
-                .prefix(maxCandidatesPerKey)
-                .map { (word: $0.key, count: $0.value) }
-            if !filtered.isEmpty {
-                trigrams[key] = Array(filtered)
-            }
-        }
+        let trigrams = Self.boundedTrigramCandidates(from: trigramCounts)
 
         // Build prefix index from frequent words.
         var prefixIndex: [String: [(word: String, count: Int)]] = [:]
@@ -100,6 +90,27 @@ final class PersonalNGramEngine: Sendable {
         }
 
         return PersonalNGramEngine(trigrams: trigrams, prefixIndex: prefixIndex)
+    }
+
+    /// Keeps the strongest candidates per trigram key, sorted by count and bounded.
+    /// A separate method (rather than inline in `build`) because SwiftLint caps function
+    /// complexity at 10 and `build(from:)` is already near that limit — folding this loop
+    /// back in would fail CI on `cyclomatic_complexity`.
+    private static func boundedTrigramCandidates(
+        from trigramCounts: [String: [String: Int]]
+    ) -> [String: [(word: String, count: Int)]] {
+        var trigrams: [String: [(word: String, count: Int)]] = [:]
+        for (key, candidates) in trigramCounts {
+            let filtered = candidates
+                .filter { $0.value >= minTrigramCount }
+                .sorted { $0.value > $1.value }
+                .prefix(maxCandidatesPerKey)
+                .map { (word: $0.key, count: $0.value) }
+            if !filtered.isEmpty {
+                trigrams[key] = Array(filtered)
+            }
+        }
+        return trigrams
     }
 
     /// Predicts the next word after the given two words. Returns nil if no confident prediction.
