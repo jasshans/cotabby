@@ -24,38 +24,38 @@ final class PersonalNGramEngine: Sendable {
     /// (w1 + "\u{1F}" + w2) -> [(w3, count)], sorted by count descending.
     /// The unit separator is a safe key delimiter (never appears in words).
     private let trigrams: [String: [(word: String, count: Int)]]
-    
+
     /// prefix (lowercased) -> [(word, count)], for word completion. Only prefixes of length 2+.
     private let prefixIndex: [String: [(word: String, count: Int)]]
-    
+
     /// Minimum times a trigram must appear to be trusted. Filters noise.
     private static let minTrigramCount = 2
     /// Minimum times a word must appear to be in the prefix index.
     private static let minWordCount = 3
     /// Maximum candidates stored per key. Bounds memory.
     private static let maxCandidatesPerKey = 5
-    
+
     init(trigrams: [String: [(word: String, count: Int)]] = [:],
          prefixIndex: [String: [(word: String, count: Int)]] = [:]) {
         self.trigrams = trigrams
         self.prefixIndex = prefixIndex
     }
-    
+
     /// Builds an engine from the user's typed texts. Call on a background thread;
     /// the result is immutable and Sendable.
     static func build(from texts: [String]) -> PersonalNGramEngine {
         var trigramCounts: [String: [String: Int]] = [:]
         var wordCounts: [String: Int] = [:]
-        
+
         for text in texts {
             let words = tokenize(text)
             guard words.count >= 1 else { continue }
-            
+
             // Count individual words for the prefix index.
             for word in words {
                 wordCounts[word, default: 0] += 1
             }
-            
+
             // Build trigrams: (w1, w2) -> w3
             guard words.count >= 3 else { continue }
             for i in 0..<(words.count - 2) {
@@ -63,7 +63,7 @@ final class PersonalNGramEngine: Sendable {
                 trigramCounts[key, default: [:]][words[i + 2], default: 0] += 1
             }
         }
-        
+
         // Convert to sorted, bounded arrays.
         var trigrams: [String: [(word: String, count: Int)]] = [:]
         for (key, candidates) in trigramCounts {
@@ -76,7 +76,7 @@ final class PersonalNGramEngine: Sendable {
                 trigrams[key] = Array(filtered)
             }
         }
-        
+
         // Build prefix index from frequent words.
         var prefixIndex: [String: [(word: String, count: Int)]] = [:]
         let frequentWords = wordCounts.filter { $0.value >= minWordCount }
@@ -98,17 +98,17 @@ final class PersonalNGramEngine: Sendable {
                     .prefix(maxCandidatesPerKey)
             )
         }
-        
+
         return PersonalNGramEngine(trigrams: trigrams, prefixIndex: prefixIndex)
     }
-    
+
     /// Predicts the next word after the given two words. Returns nil if no confident prediction.
     /// Synchronous, <1ms.
     func predictNext(after w1: String, _ w2: String) -> String? {
         let key = Self.trigramKey(normalize(w1), normalize(w2))
         return trigrams[key]?.first?.word
     }
-    
+
     /// Completes a partial word. E.g., "hel" -> "hello". Returns nil if no confident completion.
     /// Synchronous, <1ms.
     func completeWord(prefix: String) -> String? {
@@ -117,14 +117,14 @@ final class PersonalNGramEngine: Sendable {
         // Don't suggest if the prefix is already a complete frequent word.
         return prefixIndex[lower]?.first?.word
     }
-    
+
     /// The main entry point: given the text before the caret, predict what comes next.
     /// Returns the completion text (without leading space) or nil.
     /// Synchronous, <1ms.
     func predict(for precedingText: String) -> String? {
         let trimmed = precedingText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        
+
         // Case 1: caret is mid-word (e.g., "hel"). Complete the word.
         if let partialWord = Self.trailingPartialWord(in: precedingText) {
             if let completion = completeWord(prefix: partialWord) {
@@ -139,7 +139,7 @@ final class PersonalNGramEngine: Sendable {
             }
             return nil
         }
-        
+
         // Case 2: caret is at a word boundary (e.g., "looking forward "). Predict next word.
         let words = Self.tokenize(precedingText)
         guard words.count >= 2 else { return nil }
@@ -150,24 +150,24 @@ final class PersonalNGramEngine: Sendable {
         }
         return nil
     }
-    
+
     // MARK: - Private
-    
+
     private static func trigramKey(_ w1: String, _ w2: String) -> String {
         w1 + "\u{1F}" + w2
     }
-    
+
     private func normalize(_ word: String) -> String {
         word.lowercased()
     }
-    
+
     /// Splits text into lowercase words. Simple whitespace/punctuation split.
     private static func tokenize(_ text: String) -> [String] {
         text.lowercased()
             .components(separatedBy: CharacterSet.alphanumerics.inverted)
             .filter { !$0.isEmpty }
     }
-    
+
     /// Returns the partial word at the end of the text, if the caret is mid-word.
     /// E.g., "hello wo" -> "wo". Returns nil if at a word boundary.
     private static func trailingPartialWord(in text: String) -> String? {
