@@ -9,8 +9,11 @@ import Foundation
 ///
 /// How it works:
 /// - From typing history, builds P(w3 | w1, w2): given the last two words, the most likely next.
+/// - Bigram fallback P(w3 | w2) when no trigram fires: denser, engages on thinner history.
+/// - Chains predictions into multi-word ghosts ("to hearing from you"): each step feeds
+///   the next, so familiar phrases complete as whole sentences, Cotypist-style.
 /// - Also builds a prefix index: given a partial word ("hel"), the most likely completion ("hello").
-/// - Both are synchronous hash lookups, <1ms. No async, no inference.
+/// - All synchronous hash lookups, <1ms total. No async, no inference.
 ///
 /// This is how phone keyboards do autocomplete — they don't run an LLM per keystroke.
 /// The LLM is the "smart" layer; the n-gram is the "fast" layer.
@@ -24,20 +27,29 @@ final class PersonalNGramEngine: Sendable {
     /// (w1 + "\u{1F}" + w2) -> [(w3, count)], sorted by count descending.
     /// The unit separator is a safe key delimiter (never appears in words).
     private let trigrams: [String: [(word: String, count: Int)]]
+    /// w1 -> [(w2, count)]: bigram fallback when no trigram fires. Denser, so it
+    /// engages on thinner history.
+    private let bigrams: [String: [(word: String, count: Int)]]
 
     /// prefix (lowercased) -> [(word, count)], for word completion. Only prefixes of length 2+.
     private let prefixIndex: [String: [(word: String, count: Int)]]
 
     /// Minimum times a trigram must appear to be trusted. Filters noise.
     private static let minTrigramCount = 2
+    /// Minimum times a bigram must appear to be trusted.
+    private static let minBigramCount = 2
     /// Minimum times a word must appear to be in the prefix index.
-    private static let minWordCount = 3
+    private static let minWordCount = 2
     /// Maximum candidates stored per key. Bounds memory.
     private static let maxCandidatesPerKey = 5
+    /// Maximum words in one chained ghost. Bounds runaway predictions.
+    private static let maxChainWords = 8
 
     init(trigrams: [String: [(word: String, count: Int)]] = [:],
+         bigrams: [String: [(word: String, count: Int)]] = [:],
          prefixIndex: [String: [(word: String, count: Int)]] = [:]) {
         self.trigrams = trigrams
+        self.bigrams = bigrams
         self.prefixIndex = prefixIndex
     }
 
@@ -45,6 +57,7 @@ final class PersonalNGramEngine: Sendable {
     /// the result is immutable and Sendable.
     static func build(from texts: [String]) -> PersonalNGramEngine {
         var trigramCounts: [String: [String: Int]] = [:]
+        var bigramCounts: [String: [String: Int]] = [:]
         var wordCounts: [String: Int] = [:]
 
         for text in texts {
@@ -57,15 +70,24 @@ final class PersonalNGramEngine: Sendable {
             }
 
             // Build trigrams: (w1, w2) -> w3
-            guard words.count >= 3 else { continue }
-            for index in 0..<(words.count - 2) {
-                let key = trigramKey(words[index], words[index + 1])
-                trigramCounts[key, default: [:]][words[index + 2], default: 0] += 1
+            if words.count >= 3 {
+                for index in 0..<(words.count - 2) {
+                    let key = trigramKey(words[index], words[index + 1])
+                    trigramCounts[key, default: [:]][words[index + 2], default: 0] += 1
+                }
+            }
+
+            // Build bigrams: w1 -> w2 (fallback when no trigram fires)
+            if words.count >= 2 {
+                for index in 0..<(words.count - 1) {
+                    bigramCounts[words[index], default: [:]][words[index + 1], default: 0] += 1
+                }
             }
         }
 
         // Convert to sorted, bounded arrays.
         let trigrams = Self.boundedTrigramCandidates(from: trigramCounts)
+        let bigrams = Self.boundedBigramCandidates(from: bigramCounts)
 
         // Build prefix index from frequent words.
         var prefixIndex: [String: [(word: String, count: Int)]] = [:]
@@ -89,7 +111,7 @@ final class PersonalNGramEngine: Sendable {
             )
         }
 
-        return PersonalNGramEngine(trigrams: trigrams, prefixIndex: prefixIndex)
+        return PersonalNGramEngine(trigrams: trigrams, bigrams: bigrams, prefixIndex: prefixIndex)
     }
 
     /// Keeps the strongest candidates per trigram key, sorted by count and bounded.
@@ -113,11 +135,39 @@ final class PersonalNGramEngine: Sendable {
         return trigrams
     }
 
+    /// Keeps the strongest candidates per bigram key, sorted by count and bounded.
+    /// Extracted so `build(from:)` stays under SwiftLint's complexity cap.
+    private static func boundedBigramCandidates(
+        from bigramCounts: [String: [String: Int]]
+    ) -> [String: [(word: String, count: Int)]] {
+        var bigrams: [String: [(word: String, count: Int)]] = [:]
+        for (key, candidates) in bigramCounts {
+            let filtered = candidates
+                .filter { $0.value >= minBigramCount }
+                .sorted { $0.value > $1.value }
+                .prefix(maxCandidatesPerKey)
+                .map { (word: $0.key, count: $0.value) }
+            if !filtered.isEmpty {
+                bigrams[key] = Array(filtered)
+            }
+        }
+        return bigrams
+    }
+
     /// Predicts the next word after the given two words. Returns nil if no confident prediction.
     /// Synchronous, <1ms.
     func predictNext(after w1: String, _ w2: String) -> String? {
         let key = Self.trigramKey(normalize(w1), normalize(w2))
         return trigrams[key]?.first?.word
+    }
+
+    /// Predicts the next word with bigram fallback: trigram (w1,w2)->w3 first,
+    /// then bigram (w2)->w3. The fallback is what makes the engine useful on thin
+    /// history — bigrams need far fewer observations to be trustworthy.
+    /// Synchronous, <1ms.
+    func predictNextWord(after w1: String, _ w2: String) -> String? {
+        if let hit = predictNext(after: w1, w2) { return hit }
+        return bigrams[normalize(w2)]?.first?.word
     }
 
     /// Completes a partial word. E.g., "hel" -> "hello". Returns nil if no confident completion.
@@ -156,10 +206,57 @@ final class PersonalNGramEngine: Sendable {
         guard words.count >= 2 else { return nil }
         let w1 = words[words.count - 2]
         let w2 = words[words.count - 1]
-        if let next = predictNext(after: w1, w2) {
+        if let next = predictNextWord(after: w1, w2) {
             return " " + next
         }
         return nil
+    }
+
+    /// Chains predictions into a multi-word ghost: "looking forward " -> "to hearing from you".
+    /// Each step feeds the next ((w2,w3)->w4), so familiar phrases complete as whole
+    /// sentences — the Cotypist-style "already suggesting the whole sentence" feel.
+    /// Every step is a hash lookup; the whole chain is still <1ms. A visited-set stops
+    /// degenerate loops ("the the the"), and maxChainWords bounds runaway ghosts.
+    /// As the user types, each keystroke re-anchors the chain, so a wrong branch snaps
+    /// back into place within a letter or two.
+    /// Synchronous.
+    func predictChain(for precedingText: String, maxWords: Int = maxChainWords) -> String? {
+        let trimmed = precedingText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        var words = Self.tokenize(precedingText)
+        var parts: [String] = []
+        // Mid-word caret: no leading space before the word remainder.
+        let leadingSpace = Self.trailingPartialWord(in: precedingText) == nil
+
+        if let partial = Self.trailingPartialWord(in: precedingText) {
+            guard let completion = completeWord(prefix: partial),
+                  completion.lowercased().hasPrefix(partial.lowercased()),
+                  completion.count > partial.count
+            else { return nil }
+            parts.append(String(completion.dropFirst(partial.count)))
+            words.append(completion.lowercased())
+        }
+
+        var visited = Set<String>()
+        var chained = 0
+        while chained < maxWords, words.count >= 2 {
+            let w1 = words[words.count - 2]
+            let w2 = words[words.count - 1]
+            let stepKey = w1 + " " + w2
+            guard !visited.contains(stepKey),
+                  let next = predictNextWord(after: w1, w2)
+            else { break }
+            visited.insert(stepKey)
+            if next == w2 { break } // immediate repetition: "the the"
+            parts.append(next)
+            words.append(next)
+            chained += 1
+        }
+
+        guard !parts.isEmpty else { return nil }
+        let glued = parts.joined(separator: " ")
+        return leadingSpace ? " " + glued : glued
     }
 
     // MARK: - Private

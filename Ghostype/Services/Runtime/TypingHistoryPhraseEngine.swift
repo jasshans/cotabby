@@ -39,11 +39,12 @@ final class TypingHistoryPhraseEngine: SuggestionGenerating {
         onPartial: (@MainActor (SuggestionResult) -> Void)?
     ) async throws -> SuggestionResult {
         let started = ProcessInfo.processInfo.systemUptime
-        // N-gram fast path: synchronous <1ms prediction from personal trigram model.
-        // This is what makes the stream feel instant — no inference, no waiting.
+        // N-gram fast path: synchronous <1ms chained prediction from the personal
+        // n-gram model. Chains whole familiar phrases ("to hearing from you"), which is
+        // what makes the stream feel instant like Cotypist — no inference, no waiting.
         // Falls through to phrase/LLM if the n-gram has no confident prediction.
         if let ngram = ngramEngine,
-           let prediction = ngram.predict(for: request.context.precedingText) {
+           let prediction = ngram.predictChain(for: request.context.precedingText) {
             CotabbyLogger.suggestion.debug(
                 "Answered from n-gram",
                 metadata: ["request_id": .string(request.requestID), "engine": .string("ngram")]
