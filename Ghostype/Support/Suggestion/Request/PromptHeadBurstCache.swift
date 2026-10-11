@@ -27,7 +27,7 @@ struct PromptHeadBurstCache: Sendable {
 
     private struct Entry: Sendable {
         let head: Head
-        let identityKey: String
+        let identityKey: UInt64
         let capturedAt: Date
     }
 
@@ -37,7 +37,7 @@ struct PromptHeadBurstCache: Sendable {
     /// A hit slides the window forward so continuous typing extends the burst;
     /// a pause longer than `burstWindow` expires it and the next request refreshes.
     mutating func head(
-        for identityKey: String,
+        for identityKey: UInt64,
         now: Date = Date(),
         burstWindow: TimeInterval = defaultBurstWindow
     ) -> Head? {
@@ -52,7 +52,7 @@ struct PromptHeadBurstCache: Sendable {
         return cached.head
     }
 
-    mutating func store(_ head: Head, identityKey: String, now: Date = Date()) {
+    mutating func store(_ head: Head, identityKey: UInt64, now: Date = Date()) {
         cached = Entry(head: head, identityKey: identityKey, capturedAt: now)
     }
 
