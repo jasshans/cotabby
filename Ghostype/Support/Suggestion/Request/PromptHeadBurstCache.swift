@@ -16,7 +16,7 @@ import Foundation
 ///
 /// Pure value type. The coordinator owns one instance, feeds it the focus identity key,
 /// and invalidates it on focus/navigation changes (alongside the anchor cache).
-struct PromptHeadBurstCache: Equatable, Sendable {
+struct PromptHeadBurstCache: Sendable {
     struct Head: Equatable, Sendable {
         let examples: [String]
         let vocabulary: [String]
@@ -25,7 +25,13 @@ struct PromptHeadBurstCache: Equatable, Sendable {
     /// How long a burst lasts without typing before the head is refreshed.
     static let defaultBurstWindow: TimeInterval = 2.0
 
-    private var cached: (head: Head, identityKey: String, capturedAt: Date)?
+    private struct Entry: Sendable {
+        let head: Head
+        let identityKey: String
+        let capturedAt: Date
+    }
+
+    private var cached: Entry?
 
     /// Returns the cached head when it is still valid for this burst, else nil.
     /// A hit slides the window forward so continuous typing extends the burst;
@@ -42,12 +48,12 @@ struct PromptHeadBurstCache: Equatable, Sendable {
             return nil
         }
         // Sliding window: the burst stays alive as long as keystrokes keep coming.
-        self.cached = (head: cached.head, identityKey: identityKey, capturedAt: now)
+        self.cached = Entry(head: cached.head, identityKey: identityKey, capturedAt: now)
         return cached.head
     }
 
     mutating func store(_ head: Head, identityKey: String, now: Date = Date()) {
-        cached = (head: head, identityKey: identityKey, capturedAt: now)
+        cached = Entry(head: head, identityKey: identityKey, capturedAt: now)
     }
 
     mutating func invalidate() {
