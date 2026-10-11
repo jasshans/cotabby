@@ -88,8 +88,16 @@ final class PersonalNGramEngine: Sendable {
         // Convert to sorted, bounded arrays.
         let trigrams = Self.boundedTrigramCandidates(from: trigramCounts)
         let bigrams = Self.boundedBigramCandidates(from: bigramCounts)
+        let prefixIndex = Self.buildPrefixIndex(from: wordCounts)
 
-        // Build prefix index from frequent words.
+        return PersonalNGramEngine(trigrams: trigrams, bigrams: bigrams, prefixIndex: prefixIndex)
+    }
+
+    /// Builds the word-completion prefix index from word frequencies.
+    /// Extracted so `build(from:)` stays under SwiftLint's complexity cap.
+    private static func buildPrefixIndex(
+        from wordCounts: [String: Int]
+    ) -> [String: [(word: String, count: Int)]] {
         var prefixIndex: [String: [(word: String, count: Int)]] = [:]
         let frequentWords = wordCounts.filter { $0.value >= minWordCount }
         for (word, count) in frequentWords {
@@ -110,8 +118,7 @@ final class PersonalNGramEngine: Sendable {
                     .prefix(maxCandidatesPerKey)
             )
         }
-
-        return PersonalNGramEngine(trigrams: trigrams, bigrams: bigrams, prefixIndex: prefixIndex)
+        return prefixIndex
     }
 
     /// Keeps the strongest candidates per trigram key, sorted by count and bounded.
