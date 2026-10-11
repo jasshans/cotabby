@@ -272,7 +272,7 @@ final class CotabbyAppEnvironment {
         // This is what makes the stream feel instant like Cotypist — no inference wait.
         // A separate method so `init()` stays under SwiftLint's complexity cap of 10 —
         // the two `guard`s inside the detached task would otherwise count against it.
-        startBackgroundNGramBuild(typingHistoryStore: typingHistoryStore, phraseEngine: historyAwareEngine)
+        Self.startBackgroundNGramBuild(typingHistoryStore: typingHistoryStore, phraseEngine: historyAwareEngine)
         let suggestionEngine: any SuggestionGenerating = DebugForcedSuggestionEngine.isConfigured()
             ? DebugForcedSuggestionEngine(wrapping: historyAwareEngine)
             : historyAwareEngine
@@ -474,9 +474,10 @@ final class CotabbyAppEnvironment {
     /// launch path never blocks on it; the install hops back to the main actor because
     /// the engine is mutated from the suggestion pipeline there. Weak captures on both
     /// the store and the engine: if either is gone by the time the build finishes, the
-    /// result is simply dropped. Extracted from `init` to keep the initializer's
+    /// result is simply dropped. Static so it can be called from `init` before all
+    /// stored properties are initialized; extracted to keep the initializer's
     /// complexity bounded.
-    private func startBackgroundNGramBuild(
+    private static func startBackgroundNGramBuild(
         typingHistoryStore: TypingHistoryStore,
         phraseEngine: TypingHistoryPhraseEngine
     ) {
