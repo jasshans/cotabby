@@ -121,14 +121,18 @@ extension SuggestionCoordinator {
             return
         }
         let clipboardContext = pinnedClipboardContext(rawContext: rawContext)
+        // Burst-frozen prompt head: history examples + vocabulary stay byte-stable across
+        // keystrokes so the llama KV prefix hint survives (see PromptHeadBurstCache).
+        // Only the caret prefix changes per keystroke — exactly what append-only reuse needs.
+        let promptHead = burstPromptHead(for: context)
         let requestBuildResult = SuggestionRequestFactory.buildRequest(
             context: context,
             settings: settingsSnapshot,
             configuration: configuration,
             clipboardContext: clipboardContext,
             visualContextSummary: visualContextSummary,
-            historyExamples: historyExamples(for: context),
-            learnedVocabulary: learnedVocabulary(for: context)
+            historyExamples: promptHead.examples,
+            learnedVocabulary: promptHead.vocabulary
         )
         latestGenerationNumber = context.generation
         let request = requestBuildResult.request
@@ -187,6 +191,22 @@ extension SuggestionCoordinator {
     /// same display guards a fresh generation passes. Returns true when a suggestion was restored
     /// (the caller skips generation entirely). The win is exactly the common editing moments:
     /// deleting a typo, retyping suggested words after an invalidation, returning to a field.
+    /// Returns the prompt preface head for this request: the burst-cached head when the
+    /// user is mid-burst in the same field, otherwise freshly retrieved (and cached).
+    /// Extracted so `generateFromCurrentFocus` stays within the complexity budget.
+    private func burstPromptHead(for context: FocusedInputContext) -> PromptHeadBurstCache.Head {
+        let identityKey = context.suggestionSessionIdentityKey
+        if let cached = promptHeadBurstCache.head(for: identityKey) {
+            return cached
+        }
+        let head = PromptHeadBurstCache.Head(
+            examples: historyExamples(for: context),
+            vocabulary: learnedVocabulary(for: context)
+        )
+        promptHeadBurstCache.store(head, identityKey: identityKey)
+        return head
+    }
+
     private func restoreSuggestionFromAnchorCache(context: FocusedInputContext, workID: UInt64) -> Bool {
         guard !userDefaults.bool(forKey: Self.anchorReuseDisabledDefaultsKey) else { return false }
         guard context.selection.length == 0, !context.isSecure else { return false }

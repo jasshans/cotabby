@@ -158,6 +158,10 @@ final class SuggestionCoordinator: ObservableObject {
     /// Bounded string-only memory of recent suggestions for instant re-show on rollback and
     /// re-entry (see `SuggestionAnchorCache`). `cotabbyAnchorReuseDisabled` is the kill switch.
     var suggestionAnchorCache = SuggestionAnchorCache()
+    /// Burst-scoped freeze of the prompt preface head (history examples + learned vocabulary).
+    /// Keeps preface bytes stable across keystrokes so the llama KV prefix hint stays maximal
+    /// (see `PromptHeadBurstCache`). Reset alongside the anchor cache on navigation changes.
+    var promptHeadBurstCache = PromptHeadBurstCache()
     static let anchorReuseDisabledDefaultsKey = "cotabbyAnchorReuseDisabled"
     static let speculativePrefetchDisabledDefaultsKey = "cotabbySpeculativePrefetchDisabled"
     static let continuationPrefetchDisabledDefaultsKey = "cotabbyContinuationPrefetchDisabled"
@@ -354,6 +358,7 @@ final class SuggestionCoordinator: ObservableObject {
             // cached completion, or late result. New requests can use the live draft immediately.
             if lostContext {
                 self.suggestionAnchorCache = SuggestionAnchorCache()
+                self.promptHeadBurstCache.invalidate()
                 self.cancelPredictionWork()
                 self.clearSuggestion()
                 self.hideOverlay(reason: "Overlay hidden because screen context was invalidated.")
@@ -368,6 +373,7 @@ final class SuggestionCoordinator: ObservableObject {
             // is then our next navigation signal. Retire visible tails as well as cached/async
             // work; keeping an old tail stable would let it outlive arbitrarily many refreshes.
             self.suggestionAnchorCache = SuggestionAnchorCache()
+            self.promptHeadBurstCache.invalidate()
             self.clipboardPrefaceMemo = nil
             self.cancelPredictionWork()
             self.clearSuggestion()
