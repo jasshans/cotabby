@@ -352,13 +352,11 @@ final class OverlayController: SuggestionOverlayControlling {
                 contentBounds: .zero
             )
         )
-        // Text follows the caret on its line: an inline ghost there could only sit on the host's own
-        // characters, so the card under the caret shows the suggestion instead (the policy already
-        // picks it under `auto`; this covers an explicit inline preference).
-        guard geometry.isCaretAtEndOfLine else {
-            logInlineDeclined(geometry: geometry, fontResolution: fontResolution, reason: .caretMidLine)
-            return .caretMidLine
-        }
+        // Mid-line carets now render inline too (Cotypist-style mid-line completion): the
+        // ghost appears at the caret even with trailing text on the line. The layout keeps
+        // it to a single row when trailing content exists, and accepting inserts at the
+        // caret, pushing the trailing text right. Users who prefer the card can choose
+        // Popup mode in Settings.
         guard let layout = makeLayout(for: session) else {
             logInlineDeclined(geometry: geometry, fontResolution: fontResolution, reason: .inlineLayoutUnavailable)
             return .inlineLayoutUnavailable

@@ -37,10 +37,10 @@ enum LanguageCatalog {
     static let maxLanguages = 6
     static let maxLanguageLength = 30
 
-    /// Soft default applied on a clean install: pre-select English so the length budget has a
-    /// language to anchor on out of the box. Users with a different primary language clear English
-    /// and pick their own; multi-language users fall back to the English factor by design.
-    static let defaultLanguages: [String] = ["English"]
+    /// Soft default applied on a clean install: pre-select British English so the length budget
+    /// has a language to anchor on out of the box. Users with a different primary language clear
+    /// it and pick their own; multi-language users fall back to the English factor by design.
+    static let defaultLanguages: [String] = ["British English"]
 
     /// Tokens-per-word fallback when the user has no language selected, multiple languages selected,
     /// or a single language we don't have calibrated factors for. English-tokenizer-ish baseline,
@@ -53,7 +53,8 @@ enum LanguageCatalog {
     /// rough Llama-tokenizer averages (Latin scripts cluster ~1.3-1.7, Cyrillic/Arabic/Devanagari
     /// closer to 2, CJK depends heavily on segmentation).
     static let commonLanguages: [LanguageOption] = [
-        LanguageOption(code: "en", name: "English", nativeLabel: "English", tokensPerWord: 1.3),
+        LanguageOption(code: "en-GB", name: "British English", nativeLabel: "British English", tokensPerWord: 1.3),
+        LanguageOption(code: "en", name: "English", nativeLabel: "English (American)", tokensPerWord: 1.3),
         LanguageOption(code: "es", name: "Spanish", nativeLabel: "Español (Spanish)", tokensPerWord: 1.5),
         LanguageOption(code: "fr", name: "French", nativeLabel: "Français (French)", tokensPerWord: 1.5),
         LanguageOption(code: "de", name: "German", nativeLabel: "Deutsch (German)", tokensPerWord: 1.7),
@@ -122,8 +123,14 @@ enum LanguageCatalog {
 
         let andList = formattedList(normalized, conjunction: "and")
         let orList = formattedList(normalized, conjunction: "or")
-        return "The user usually writes in \(andList). Match the language of the text before the caret. "
+        var instruction = "The user usually writes in \(andList). Match the language of the text before the caret. "
             + "If that text is too short or ambiguous to tell, write in \(orList)."
+        // British English gets explicit spelling guidance so the model doesn't default to
+        // American forms (color/organize) when the surrounding text is too short to tell.
+        if normalized.contains(where: { $0.caseInsensitiveCompare("British English") == .orderedSame }) {
+            instruction += " Use British spelling: colour, favour, organise, centre, travelled, etc."
+        }
+        return instruction
     }
 
     /// Maps the previous single-select `SuggestionLanguage` raw value onto the new list. English was
