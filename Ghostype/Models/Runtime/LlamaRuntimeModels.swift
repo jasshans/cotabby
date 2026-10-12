@@ -124,6 +124,12 @@ enum RuntimeModelCatalog {
     /// validation when they are nil. Old instruct GGUFs are intentionally no longer listed.
     static let downloadableModels: [DownloadableRuntimeModel] = [
         DownloadableRuntimeModel(
+            filename: "gemma-4-E2B.i1-Q6_K.gguf",
+            displayName: displayName(for: "gemma-4-E2B.i1-Q6_K.gguf"),
+            downloadURL: hfURL("mradermacher/gemma-4-E2B-i1-GGUF", "gemma-4-E2B.i1-Q6_K.gguf"),
+            approximateSizeInGigabytes: 4.5
+        ),
+        DownloadableRuntimeModel(
             filename: "Qwen3.5-0.8B-Base.i1-Q6_K.gguf",
             displayName: displayName(for: "Qwen3.5-0.8B-Base.i1-Q6_K.gguf"),
             downloadURL: hfURL("mradermacher/Qwen3.5-0.8B-Base-i1-GGUF", "Qwen3.5-0.8B-Base.i1-Q6_K.gguf"),
@@ -134,12 +140,6 @@ enum RuntimeModelCatalog {
             displayName: displayName(for: "Qwen3.5-2B-Base.i1-Q4_K_M.gguf"),
             downloadURL: hfURL("mradermacher/Qwen3.5-2B-Base-i1-GGUF", "Qwen3.5-2B-Base.i1-Q4_K_M.gguf"),
             approximateSizeInGigabytes: 1.4
-        ),
-        DownloadableRuntimeModel(
-            filename: "gemma-4-E2B.i1-Q6_K.gguf",
-            displayName: displayName(for: "gemma-4-E2B.i1-Q6_K.gguf"),
-            downloadURL: hfURL("mradermacher/gemma-4-E2B-i1-GGUF", "gemma-4-E2B.i1-Q6_K.gguf"),
-            approximateSizeInGigabytes: 4.5
         ),
         DownloadableRuntimeModel(
             filename: "gemma-4-E4B.i1-Q4_K_M.gguf",
