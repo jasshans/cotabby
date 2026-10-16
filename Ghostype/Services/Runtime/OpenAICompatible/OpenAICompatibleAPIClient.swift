@@ -226,7 +226,7 @@ final class OpenAICompatibleConnectionModel: ObservableObject {
         } catch {
             guard refreshGeneration == generation else { return }
             models = []
-            state = .failed(Self.friendlyErrorMessage(for: error))
+            state = .failed(OpenAICompatibleAPIClient.friendlyErrorMessage(for: error))
         }
     }
 }
