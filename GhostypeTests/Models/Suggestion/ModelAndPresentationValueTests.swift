@@ -357,7 +357,7 @@ final class RuntimeModelValueTests: XCTestCase {
     func test_downloadableModelCatalog_entriesAreUniqueHuggingFaceGGUFDownloads() {
         let models = RuntimeModelCatalog.downloadableModels
 
-        XCTAssertEqual(models.count, 4)
+        XCTAssertEqual(models.count, 5)
         XCTAssertEqual(Set(models.map(\.id)).count, models.count)
         for model in models {
             XCTAssertTrue(model.filename.hasSuffix(".gguf"), "\(model.filename) should be a GGUF")
