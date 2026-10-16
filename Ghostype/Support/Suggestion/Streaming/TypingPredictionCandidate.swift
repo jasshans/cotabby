@@ -74,7 +74,12 @@ nonisolated struct TypingPredictionCandidate {
     /// Out-of-order partial callbacks may be shorter than a newer snapshot. Ignore those;
     /// the final result is authoritative and must still agree with everything the user typed.
     mutating func receive(_ result: SuggestionResult, final: Bool) -> Bool {
-        guard result.generation == context.generation, !isFinal else { return false }
+        // Final results from a just-superseded request (generation off by one due to typing
+        // during generation) are still valid if the text matches — the candidate's purpose
+        // is to survive intervening keystrokes. Strict generation matching would drop
+        // completions that correctly cover the typed text.
+        guard !isFinal else { return false }
+        guard result.generation == context.generation || (final && result.text.hasPrefix(typedText)) else { return false }
         if !final, let latestResult, !result.text.hasPrefix(latestResult.text) { return true }
         guard result.text.hasPrefix(typedText) || (!final && typedText.hasPrefix(result.text)) else { return false }
         latestResult = result

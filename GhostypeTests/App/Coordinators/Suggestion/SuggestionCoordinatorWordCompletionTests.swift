@@ -274,11 +274,11 @@ final class SuggestionCoordinatorWordCompletionTests: XCTestCase {
         rig.coordinator.typingCadence.record(identityKey: context.focusedInputIdentityKey, characters: "u",
                                             at: ProcessInfo.processInfo.systemUptime)
         let workID = rig.coordinator.currentWorkID
-        let task = Task { await rig.coordinator.apply(result: .init(generation: context.generation,
-            rawText: "le", text: "le", latency: 0.01), workID: workID) }
-        await Task.yield()
+        // Cancel BEFORE starting apply: this tests that a cancelled workID is rejected
+        // at apply's entry guard, without depending on task scheduling races.
         rig.coordinator.cancelPredictionWork()
-        await task.value
+        await rig.coordinator.apply(result: .init(generation: context.generation,
+            rawText: "le", text: "le", latency: 0.01), workID: workID)
         XCTAssertTrue(rig.overlayController.shownTexts.isEmpty)
         XCTAssertNil(rig.interactionState.activeSession)
     }
