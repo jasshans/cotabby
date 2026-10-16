@@ -8,9 +8,12 @@ workspace_root="${1:-$PWD/build/cotabby-dependencies}"
 mkdir -p "$workspace_root"
 workspace_root="$(cd "$workspace_root" && pwd)"
 native_dir="$workspace_root/CotabbyInference"
-revision=7574a21516c65fc31f5cf8ef7380a03412eed480
+# Ghostype fork of CotabbyInference: Package.swift points at PrismML's llama.cpp
+# fork (superset: runs stock models + Bonsai Ternary 2). Upstream FuJacob
+# uses stock llama.cpp, which refuses or garbles Bonsai models.
+revision=b34b01b8fbc2ddd2bec152e89fbdfce706508f31
 if [[ ! -d "$native_dir/.git" ]]; then
-    git clone https://github.com/FuJacob/cotabbyinference.git "$native_dir"
+    git clone https://github.com/jasshans/cotabbyinference.git "$native_dir"
     git -C "$native_dir" checkout --detach "$revision"
     git -C "$native_dir" apply "$PWD/patches/cotabbyinference-upstream-pending.patch"
 fi
