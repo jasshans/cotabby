@@ -158,8 +158,8 @@ struct SuggestionConfiguration: Equatable, Sendable {
         // 4k chars (≈1000 tokens) prefills ~3x faster while keeping the relevant context. The
         // personalization sections (vocabulary, history, instructions) matter more than raw
         // prefix length for "magic" completions.
-        maxPrefixWords: 700,
-        maxPrefixCharacters: 4000,
+        maxPrefixWords: 350,
+        maxPrefixCharacters: 2000,
         // Apple's on-device model has a 4096-token shared context. Even with instructions plus
         // visual/clipboard context, there is room to send ~3x the llama window before crowding
         // the prompt, and the extra surrounding sentences materially help mid-thought completions.
@@ -174,7 +174,7 @@ struct SuggestionConfiguration: Equatable, Sendable {
         // endpoint backend can carry that prompt off the Mac, so a real name is an explicit opt-in
         // and a placeholder would sign every user's mail with someone else's name.
         defaultUserName: nil,
-        defaultWordCountPreset: .twelveToTwenty,
+        defaultWordCountPreset: .fourToSeven,
         focusPollIntervalMilliseconds: 50
     )
 }
