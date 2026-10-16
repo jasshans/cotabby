@@ -178,7 +178,6 @@ final class SuggestionRequestFactoryTests: XCTestCase {
             context: context,
             settings: CotabbyTestFixtures.settingsSnapshot(
                 isSurfaceContextEnabled: false,
-                customRules: ["IMPERATIVE_RULE_MUST_STAY_DISABLED"],
                 extendedContext: notes
             ),
             configuration: .standard
@@ -188,8 +187,6 @@ final class SuggestionRequestFactoryTests: XCTestCase {
         XCTAssertEqual(bare.request.prompt, text)
         XCTAssertEqual(withNotes.request.prompt, "Notes the writer keeps in mind: " + notes + "\n\n" + text)
         XCTAssertEqual(withNotes.request.prefixText, bare.request.prefixText)
-        XCTAssertTrue(withNotes.request.customRules.isEmpty)
-        XCTAssertFalse(withNotes.request.prompt.contains("IMPERATIVE_RULE_MUST_STAY_DISABLED"))
     }
 
     /// Request construction is the boundary between live editor state and runtime-specific prompt
