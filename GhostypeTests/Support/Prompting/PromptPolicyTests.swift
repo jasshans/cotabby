@@ -144,7 +144,7 @@ final class FoundationModelPromptRendererTests: XCTestCase {
             [
                 "Screen context:",
                 "User is on Mail.",
-                "The user is writing an email, so keep the same register and finish the current thought.",
+                "The user is writing an email. Match a professional, clear register. Finish the current thought; don't start a new topic.",
                 "The window is titled \"Re: Q3\".",
                 "The user is on mail.example.com.",
                 "The text field is labeled \"Body\".",
@@ -211,10 +211,10 @@ final class FoundationModelPromptRendererTests: XCTestCase {
     /// Cursor's opaque ToDesktop bundle is intentionally unclassified, so both get no hint.
     func test_prompt_toneHintFollowsAppSurfaceClass() {
         let cases: [(bundle: String, hint: String?)] = [
-            ("com.apple.dt.Xcode", "The user is writing code, so the continuation should be code rather than prose."),
-            ("com.apple.mail", "The user is writing an email, so keep the same register and finish the current thought."),
-            ("com.tinyspeck.slackmacgap", "The user is in a chat app, so keep the continuation short and informal."),
-            ("com.google.Chrome", "The user is typing inside a browser, so keep the continuation concise."),
+            ("com.apple.dt.Xcode", "The user is writing code, so the continuation should be code rather than prose. In comments, be concise and technical."),
+            ("com.apple.mail", "The user is writing an email. Match a professional, clear register. Finish the current thought; don't start a new topic."),
+            ("com.tinyspeck.slackmacgap", "The user is in Slack (work chat). Keep it brief, friendly-professional, and scannable. Match the thread's tone."),
+            ("com.google.Chrome", "The user is typing inside a browser, so keep the continuation concise and match the page's context."),
             ("com.apple.Terminal", nil),
             ("com.googlecode.iterm2", nil),
             ("co.zeit.hyper", nil),
