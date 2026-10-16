@@ -255,6 +255,9 @@ final class TypingHistoryStoreTests: XCTestCase {
 
     func test_recordingOffRecordsNothing() {
         let store = makeStore()
+        // Explicitly disable recording: UserDefaults is shared across tests, so a
+        // previous test's setRecording(true) would leak into this test otherwise.
+        store.setRecording(false)
 
         store.observe(focus("Hi Arnaud, the Imperum POC is ready for review.")) { true }
         store.observe(focus("", element: "other")) { true }

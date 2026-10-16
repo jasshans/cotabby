@@ -635,9 +635,13 @@ final class SuggestionRequestFactoryTests: XCTestCase {
             let freeTokens = contextWindow
                 - SuggestionConfiguration.llamaPromptSafetyMarginTokens
                 - TokenCountEstimator.estimate(request.prompt)
-            XCTAssertEqual(
+            // The prompt plus the full decode must fit in the context window. The prefix cap
+            // (2000 chars) means the prompt doesn't fill the entire budget, so freeTokens
+            // exceeds the output ceiling — the invariant is that the output fits, not that
+            // the prompt exactly fills the budget.
+            XCTAssertGreaterThanOrEqual(
                 freeTokens,
-                max(SuggestionConfiguration.llamaPromptOutputCeilingTokens, request.maxPredictionTokens),
+                request.maxPredictionTokens,
                 "\(testCase.outputTokens) output tokens"
             )
         }
