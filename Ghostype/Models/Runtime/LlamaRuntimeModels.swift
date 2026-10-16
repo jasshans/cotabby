@@ -107,6 +107,8 @@ enum RuntimeModelCatalog {
             return "Ghostype Base"
         case "gemma-4-E4B.i1-Q4_K_M.gguf":
             return "Ghostype Pro"
+        case "Ternary-Bonsai-2-2B-PQ2_0.gguf":
+            return "Ghostype Bonsai"
         default:
             return filename
         }
@@ -146,6 +148,12 @@ enum RuntimeModelCatalog {
             displayName: displayName(for: "gemma-4-E4B.i1-Q4_K_M.gguf"),
             downloadURL: hfURL("mradermacher/gemma-4-E4B-i1-GGUF", "gemma-4-E4B.i1-Q4_K_M.gguf"),
             approximateSizeInGigabytes: 5.0
+        ),
+        DownloadableRuntimeModel(
+            filename: "Ternary-Bonsai-2-2B-PQ2_0.gguf",
+            displayName: displayName(for: "Ternary-Bonsai-2-2B-PQ2_0.gguf"),
+            downloadURL: hfURL("prism-ml/Ternary-Bonsai-2-2B-gguf", "Ternary-Bonsai-2-2B-PQ2_0.gguf"),
+            approximateSizeInGigabytes: 0.5
         )
     ]
 }
