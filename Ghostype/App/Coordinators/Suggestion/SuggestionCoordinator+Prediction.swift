@@ -848,6 +848,9 @@ extension SuggestionCoordinator {
         delayedStreamPresentation?.cancel()
         delayedStreamPresentation = nil
         guard await waitForTypingPause(workID: workID) else { return }
+        // Re-check after the pause: cancellation may have landed while waiting.
+        // Without this, a cancelled result can present after cancelPredictionWork.
+        guard workController.isCurrent(workID) else { return }
 
         // Record every completed result, including output later suppressed by normalization or seam
         // checks. Those requests still consumed backend time and are exactly the evidence the next

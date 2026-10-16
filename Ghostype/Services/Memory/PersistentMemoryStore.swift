@@ -180,7 +180,13 @@ nonisolated final class PersistentMemoryStore: @unchecked Sendable {
                 score: score
             ))
         }
-        return ranked.sorted { $0.score > $1.score }.prefix(limit).map(\.phrase)
+        // Sort by score descending; on ties prefer longer phrases (more words = more
+        // specific signal). Without the tiebreak, "deploy" (unigram) beats "deploy the
+        // cluster" (trigram) on equal evidence because unigrams are inserted first.
+        return ranked.sorted {
+            if $0.score != $1.score { return $0.score > $1.score }
+            return $0.phrase.phrase.split(separator: " ").count > $1.phrase.phrase.split(separator: " ").count
+        }.prefix(limit).map(\.phrase)
     }
 
     /// (events, phrases) for the Settings UI. Never creates the database file.

@@ -26,7 +26,8 @@ enum AppToneHint {
     static func instruction(forBundleIdentifier identifier: String) -> String? {
         switch tone(forBundleIdentifier: identifier) {
         case .email:
-            return "The user is writing an email. Match a professional, clear register. Finish the current thought; don't start a new topic."
+            return "The user is writing an email. Match a professional, clear register. " +
+                "Finish the current thought; don't start a new topic."
         case .slack:
             return "The user is in Slack (work chat). Keep it brief, friendly-professional, and scannable. Match the thread's tone."
         case .discord:
