@@ -11,7 +11,7 @@ native_dir="$workspace_root/CotabbyInference"
 # Ghostype fork of CotabbyInference: Package.swift points at PrismML's llama.cpp
 # fork (superset: runs stock models + Bonsai Ternary 2). Upstream FuJacob
 # uses stock llama.cpp, which refuses or garbles Bonsai models.
-revision=12a4ea6b9ad44f11b677d8d21af0cd083359cbbd
+revision=4f0816c438a49368fc4502a3d23cb5c560972e07
 if [[ ! -d "$native_dir/.git" ]]; then
     git clone https://github.com/jasshans/cotabbyinference.git "$native_dir"
     git -C "$native_dir" checkout --detach "$revision"
