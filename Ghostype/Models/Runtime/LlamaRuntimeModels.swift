@@ -109,7 +109,7 @@ enum RuntimeModelCatalog {
             return "Ghostype Pro"
         case "Ternary-Bonsai-2-2B-PQ2_0.gguf":
             return "Ghostype Bonsai"
-        case "Ternary-Bonsai-4B-Q2_0.gguf":
+        case "Ternary-Bonsai-2-4B-PQ2_0.gguf":
             return "Ghostype Bonsai 4B"
         default:
             return filename
@@ -158,10 +158,10 @@ enum RuntimeModelCatalog {
             approximateSizeInGigabytes: 0.5
         ),
         DownloadableRuntimeModel(
-            filename: "Ternary-Bonsai-4B-Q2_0.gguf",
-            displayName: displayName(for: "Ternary-Bonsai-4B-Q2_0.gguf"),
-            downloadURL: hfURL("prism-ml/Ternary-Bonsai-4B-gguf", "Ternary-Bonsai-4B-Q2_0.gguf"),
-            approximateSizeInGigabytes: 1.0
+            filename: "Ternary-Bonsai-2-4B-PQ2_0.gguf",
+            displayName: displayName(for: "Ternary-Bonsai-2-4B-PQ2_0.gguf"),
+            downloadURL: hfURL("prism-ml/Ternary-Bonsai-2-4B-gguf", "Ternary-Bonsai-2-4B-PQ2_0.gguf"),
+            approximateSizeInGigabytes: 1.1
         )
     ]
 }
@@ -184,7 +184,7 @@ struct LlamaRuntimeConfiguration: Equatable, Sendable {
             "Qwen3.5-0.8B-Base.i1-Q6_K.gguf",
             "gemma-4-E4B.i1-Q4_K_M.gguf",
             "Ternary-Bonsai-2-2B-PQ2_0.gguf",
-            "Ternary-Bonsai-4B-Q2_0.gguf"
+            "Ternary-Bonsai-2-4B-PQ2_0.gguf"
         ],
         contextWindowTokens: 4096,
         batchSize: 512,
