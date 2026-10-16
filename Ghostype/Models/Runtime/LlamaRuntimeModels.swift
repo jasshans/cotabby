@@ -186,7 +186,7 @@ struct LlamaRuntimeConfiguration: Equatable, Sendable {
             "Ternary-Bonsai-2-2B-PQ2_0.gguf",
             "Ternary-Bonsai-2-4B-PQ2_0.gguf"
         ],
-        contextWindowTokens: 4096,
+        contextWindowTokens: 2048,
         batchSize: 512,
         gpuLayerCount: -1
     )

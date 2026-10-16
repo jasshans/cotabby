@@ -391,7 +391,11 @@ nonisolated final class LlamaRuntimeCore: @unchecked Sendable {
             // stop here even though the stochastic sampler drew something else. Finalize with the
             // text accumulated so far and discard the sampled-but-unwanted token; this is the
             // anti-rambling stop the sentence classifier cannot express (lists, fragments, code).
-            if options.stopAtArgmaxEOG, result.argmax_is_eog {
+            // Minimum-token guard: ternary models (Bonsai) have less-calibrated argmax
+            // distributions, so the EOG argmax can fire after a single word ("Japonia") even
+            // when the model has more to say. Require at least 4 tokens before this stop
+            // applies, so short completions aren't truncated to a single word.
+            if options.stopAtArgmaxEOG, result.argmax_is_eog, tokensGenerated >= 4 {
                 stopReason = "argmax_eog"
                 break
             }
