@@ -6,6 +6,10 @@ import Foundation
 nonisolated struct SurfaceContext: Equatable, Sendable {
     let surfaceClass: AppSurfaceClass
     let applicationName: String
+    /// The app's bundle identifier (e.g. "com.apple.mail"). Carried so the prompt
+    /// renderers can derive per-app tone hints without re-classifying. Defaults to
+    /// empty when the focus snapshot didn't report one.
+    let bundleIdentifier: String = ""
     let windowTitle: String?
     let domain: String?
     let fieldPlaceholder: String?
@@ -33,6 +37,7 @@ nonisolated enum SurfaceContextComposer {
     static func compose(
         surfaceClass: AppSurfaceClass,
         applicationName: String,
+        bundleIdentifier: String = "",
         windowTitle: String?,
         focusedURLString: String?,
         fieldPlaceholder: String?
@@ -59,6 +64,7 @@ nonisolated enum SurfaceContextComposer {
         return SurfaceContext(
             surfaceClass: surfaceClass,
             applicationName: cleanedApplicationName,
+            bundleIdentifier: bundleIdentifier,
             windowTitle: title,
             domain: domain,
             fieldPlaceholder: placeholder

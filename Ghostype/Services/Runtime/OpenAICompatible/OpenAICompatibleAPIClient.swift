@@ -154,6 +154,33 @@ final class OpenAICompatibleAPIClient {
             throw OpenAICompatibleClientError.server(statusCode: http.statusCode)
         }
     }
+
+    /// Maps raw network errors to plain-English messages. `URLError.localizedDescription`
+    /// produces strings like "The operation couldn't be completed. (NSURLErrorDomain
+    /// error -1001.)" which don't tell the user what to fix. These map the common
+    /// failure modes (timeout, connection refused, offline, TLS) to actionable hints,
+    /// falling back to the raw description for anything unrecognized.
+    static func friendlyErrorMessage(for error: Error) -> String {
+        guard let urlError = error as? URLError else {
+            return error.localizedDescription
+        }
+        switch urlError.code {
+        case .timedOut:
+            return "The server took too long to respond. Check that it's running and reachable."
+        case .cannotFindHost, .cannotConnectToHost, .networkConnectionLost:
+            return "Couldn't reach the server. Check the URL and that the server is running."
+        case .notConnectedToInternet:
+            return "No internet connection. Check your network and try again."
+        case .secureConnectionFailed, .serverCertificateHasBadDate,
+             .serverCertificateUntrusted, .serverCertificateHasUnknownRoot,
+             .serverCertificateNotYetValid:
+            return "The server's certificate couldn't be verified. Check the URL uses https and the certificate is valid."
+        case .cancelled:
+            return "The request was cancelled."
+        default:
+            return error.localizedDescription
+        }
+    }
 }
 
 /// Observable model catalog shared by Settings and the Home status card.
@@ -199,7 +226,7 @@ final class OpenAICompatibleConnectionModel: ObservableObject {
         } catch {
             guard refreshGeneration == generation else { return }
             models = []
-            state = .failed(error.localizedDescription)
+            state = .failed(Self.friendlyErrorMessage(for: error))
         }
     }
 }

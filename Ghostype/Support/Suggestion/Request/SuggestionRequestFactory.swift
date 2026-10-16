@@ -96,6 +96,7 @@ enum SuggestionRequestFactory {
                     isIntegratedTerminal: context.isIntegratedTerminal
                 ),
                 applicationName: context.applicationName,
+                bundleIdentifier: context.bundleIdentifier,
                 windowTitle: context.windowTitle,
                 focusedURLString: context.focusedURLString,
                 fieldPlaceholder: context.fieldPlaceholder
