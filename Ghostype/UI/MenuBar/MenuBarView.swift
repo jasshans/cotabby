@@ -34,6 +34,7 @@ struct MenuBarView: View {
         VStack(alignment: .leading, spacing: 0) {
             headerSection
             Divider().padding(.bottom, 12)
+            modelFailureBanner
             controlsSection
             permissionsCard
             footerSection
@@ -103,6 +104,32 @@ struct MenuBarView: View {
     }
 
     // MARK: - Quick controls
+
+    /// Orange banner shown when the llama runtime failed to load a model (corrupt GGUF,
+    /// out of memory, missing file). Without it, the user types, nothing appears, and
+    /// has no idea why — the failure is only visible in Settings. The banner surfaces
+    /// the failure where the user actually looks.
+    @ViewBuilder
+    private var modelFailureBanner: some View {
+        if let detail = runtimeModel.state.failureDetail {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Model failed to load")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+            .padding(.bottom, 12)
+        }
+    }
 
     /// Session-level preferences that users reach for mid-work: engine choice,
     /// model selection (when using local llama), and completion length.

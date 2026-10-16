@@ -206,40 +206,10 @@ enum FoundationModelPromptRenderer {
     }
 
     /// prompt, log pager, or `git commit` buffer is mostly prose, not code, so the no-hint default
-    /// is safer than a guessed cue.
+    /// is safer than a guessed cue. The mapping lives in the shared `AppToneHint` so the
+    /// Foundation Models and base-model renderers agree about tone.
     private static func appToneHint(forBundleIdentifier identifier: String) -> String? {
-        let lowercased = identifier.lowercased()
-        // App-specific tone overrides for well-known apps, before the coarse category.
-        // These capture the typical register of each app so the user doesn't have to
-        // configure per-app instructions manually.
-        if lowercased.hasPrefix("com.apple.mail") || lowercased.hasPrefix("com.microsoft.outlook") {
-            return "The user is writing an email. Match a professional, clear register. Finish the current thought; don't start a new topic."
-        }
-        if lowercased.hasPrefix("com.tinyspeck.slackmacgap") {
-            return "The user is in Slack (work chat). Keep it brief, friendly-professional, and scannable. Match the thread's tone."
-        }
-        if lowercased.hasPrefix("com.hnc.discord") {
-            return "The user is in Discord (casual chat). Keep it informal and conversational, like texting a friend."
-        }
-        if lowercased.hasPrefix("net.whatsapp.whatsapp") || lowercased.hasPrefix("ru.keepcoder.telegram")
-            || lowercased.hasPrefix("com.apple.mobilesms") {
-            return "The user is in a messaging app. Keep it short and natural, like a text message. No formal sign-offs."
-        }
-        if lowercased.hasPrefix("com.anthropic.claudefordesktop") || lowercased.hasPrefix("com.openai.codex") {
-            return "The user is prompting an AI assistant. Help them phrase a clear, specific request."
-        }
-        switch AppSurfaceClassifier.classify(bundleIdentifier: identifier) {
-        case .codeEditor:
-            return "The user is writing code, so the continuation should be code rather than prose. In comments, be concise and technical."
-        case .email:
-            return "The user is writing an email, so keep a professional register and finish the current thought."
-        case .chat:
-            return "The user is in a chat app, so keep the continuation short and match the conversation's tone."
-        case .browser:
-            return "The user is typing inside a browser, so keep the continuation concise and match the page's context."
-        case .terminal, .other:
-            return nil
-        }
+        AppToneHint.instruction(forBundleIdentifier: identifier)
     }
 
     /// Diagnostics need to show both payloads Apple receives: the high-priority instructions and

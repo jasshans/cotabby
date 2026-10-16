@@ -72,6 +72,29 @@ final class LanguageSupportTests: XCTestCase {
         )
     }
 
+    // MARK: - British English default
+
+    func test_defaultLanguages_isBritishEnglish() {
+        // Locks the clean-install default: British English, not generic "English".
+        // This is a literal assertion (not self-referential against the constant) so
+        // a future refactor can't silently change the default with a green suite.
+        XCTAssertEqual(LanguageCatalog.defaultLanguages, ["British English"])
+    }
+
+    func test_promptInstruction_britishEnglishIncludesSpellingGuidance() throws {
+        let hint = try XCTUnwrap(LanguageCatalog.promptInstruction(for: ["British English"]))
+        XCTAssertTrue(hint.contains("British English"))
+        // The spelling sentence steers the model away from American forms (color/organize)
+        // when the surrounding text is too short to tell.
+        XCTAssertTrue(hint.contains("British spelling"))
+        XCTAssertTrue(hint.contains("colour"))
+    }
+
+    func test_promptInstruction_americanEnglishHasNoSpellingGuidance() throws {
+        let hint = try XCTUnwrap(LanguageCatalog.promptInstruction(for: ["English"]))
+        XCTAssertFalse(hint.contains("British spelling"))
+    }
+
     // MARK: - migration
 
     func test_migration_knownNonEnglishCodeBecomesThatLanguage() {

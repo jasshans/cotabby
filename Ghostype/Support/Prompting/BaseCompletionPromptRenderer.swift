@@ -137,9 +137,16 @@ enum BaseCompletionPromptRenderer {
     private static func surfaceSection(_ surface: SurfaceContext?, compact: Bool) -> PromptSection? {
         guard let surface else { return nil }
         // Compact rendering remains an opt-in evaluation control.
-        let lines = compact
+        var lines = compact
             ? SurfaceContextComposer.baseCompletionPrefaceLines(for: surface)
             : SurfaceContextComposer.prefaceLines(for: surface)
+        // Per-app tone as descriptive conditioning: a base model conditions on
+        // description, not commands. The bundle ID rides along in SurfaceContext so
+        // both renderers derive tone from the same mapping (AppToneHint).
+        if !surface.bundleIdentifier.isEmpty,
+           let tone = AppToneHint.description(forBundleIdentifier: surface.bundleIdentifier) {
+            lines.append(tone)
+        }
         guard !lines.isEmpty else { return nil }
         return contextSection("surface", lines.joined(separator: " "), priority: 70, maxChars: 240)
     }
