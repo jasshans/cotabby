@@ -9,10 +9,26 @@ nonisolated struct SurfaceContext: Equatable, Sendable {
     /// The app's bundle identifier (e.g. "com.apple.mail"). Carried so the prompt
     /// renderers can derive per-app tone hints without re-classifying. Defaults to
     /// empty when the focus snapshot didn't report one.
-    let bundleIdentifier: String = ""
+    let bundleIdentifier: String
     let windowTitle: String?
     let domain: String?
     let fieldPlaceholder: String?
+
+    init(
+        surfaceClass: AppSurfaceClass,
+        applicationName: String,
+        bundleIdentifier: String = "",
+        windowTitle: String?,
+        domain: String?,
+        fieldPlaceholder: String?
+    ) {
+        self.surfaceClass = surfaceClass
+        self.applicationName = applicationName
+        self.bundleIdentifier = bundleIdentifier
+        self.windowTitle = windowTitle
+        self.domain = domain
+        self.fieldPlaceholder = fieldPlaceholder
+    }
 }
 
 /// Converts focus-capture metadata into bounded surface facts for `SuggestionRequestFactory`,
