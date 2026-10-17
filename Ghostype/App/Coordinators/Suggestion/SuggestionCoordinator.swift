@@ -111,6 +111,8 @@ final class SuggestionCoordinator: ObservableObject {
     /// them as the user typed changed that head mid-prompt, so the llama KV cache missed and the
     /// GPU re-read the whole prompt (0.6-3s spikes). Both are pinned per field session instead.
     var historyPin = PromptSectionPin()
+    /// Set when the field's first screen excerpt lands; that arrival enriches rather than replaces.
+    var visualContextJustAppeared = false
     var vocabularyPin = PromptSectionPin()
     /// Coalescing and monotonic-render state for engine partials. The coordinator owns scheduling
     /// and presentation; the value owns the stream's pure state transitions.
@@ -215,6 +217,32 @@ final class SuggestionCoordinator: ObservableObject {
     /// Examples of the user's past writing for this field, for every request built from it.
     /// Every request kind (ordinary, speculative, continuation, prewarm) passes the same examples so
     /// their prompts share one head and the llama KV cache stays reusable between them.
+    /// A screen capture produced new context for `identity`'s field (see `onInjectedContextReady`).
+    private func handleVisualContextReady(_ identity: FocusedInputIdentity) {
+        guard focusModel.snapshot.context?.identity == identity else { return }
+        // The field's first capture adds context to a suggestion that is still right for the
+        // text: keep it on screen and let the next request carry the screen section. Hiding it
+        // here made every new field start twice (a cold answer, then a second cold rebuild).
+        if visualContextJustAppeared {
+            visualContextJustAppeared = false
+            promptHeadBurstCache.invalidate()
+            if interactionState.activeSession == nil {
+                schedulePredictionForCurrentFocusIfPossible(matching: identity)
+            }
+            return
+        }
+        // A host may expose identical URL/title/geometry for two chats. Changed screen text
+        // is then our next navigation signal. Retire visible tails as well as cached/async
+        // work; keeping an old tail stable would let it outlive arbitrarily many refreshes.
+        suggestionAnchorCache = SuggestionAnchorCache()
+        promptHeadBurstCache.invalidate()
+        clipboardPrefaceMemo = nil
+        cancelPredictionWork()
+        clearSuggestion()
+        hideOverlay(reason: "Overlay hidden because screen context changed.")
+        schedulePredictionForCurrentFocusIfPossible(matching: identity)
+    }
+
     func historyExamples(for context: FocusedInputContext) -> [String] {
         historyPin.resolve(session: promptPinSession(context)) {
             historyProvider?.historyExamples(for: context, engine: settingsSnapshot.selectedEngine) ?? []
@@ -374,6 +402,7 @@ final class SuggestionCoordinator: ObservableObject {
         visualContextCoordinator.onStateChange = { [weak self] status, excerpt in
             guard let self else { return }
             let lostContext = self.latestVisualContextText != nil && excerpt == nil
+            self.visualContextJustAppeared = self.latestVisualContextText == nil && excerpt != nil
             self.visualContextStatus = status
             self.latestVisualContextText = excerpt
             // Expired or invalidated screen text must not survive indirectly in a visible tail,
@@ -390,17 +419,7 @@ final class SuggestionCoordinator: ObservableObject {
         }
 
         visualContextCoordinator.onInjectedContextReady = { [weak self] identity in
-            guard let self, self.focusModel.snapshot.context?.identity == identity else { return }
-            // A host may expose identical URL/title/geometry for two chats. Changed screen text
-            // is then our next navigation signal. Retire visible tails as well as cached/async
-            // work; keeping an old tail stable would let it outlive arbitrarily many refreshes.
-            self.suggestionAnchorCache = SuggestionAnchorCache()
-            self.promptHeadBurstCache.invalidate()
-            self.clipboardPrefaceMemo = nil
-            self.cancelPredictionWork()
-            self.clearSuggestion()
-            self.hideOverlay(reason: "Overlay hidden because screen context changed.")
-            self.schedulePredictionForCurrentFocusIfPossible(matching: identity)
+            self?.handleVisualContextReady(identity)
         }
         visualContextCoordinator.refreshContextProvider = { [weak self] in
             self?.currentVisualRefreshContext()
