@@ -220,10 +220,13 @@ extension SuggestionCoordinator {
             // null the freshly primed session out from under us.
             await self.awaitCachedGenerationContextResetIfNeeded()
             let prewarmContext = FocusedInputContext(snapshot: rawContext, generation: 0)
+            // Same sections the first real request will carry (clipboard included), so its prompt
+            // head matches this prefill byte for byte and the KV work is reused, not thrown away.
             let request = SuggestionRequestFactory.buildRequest(
                 context: prewarmContext,
                 settings: settings,
                 configuration: configuration,
+                clipboardContext: self.pinnedClipboardContext(rawContext: rawContext),
                 historyExamples: self.historyExamples(for: prewarmContext),
                 learnedVocabulary: self.learnedVocabulary(for: prewarmContext)
             ).request
