@@ -27,6 +27,13 @@ final class GhostTextPanelView: NSView {
         didSet { needsDisplay = true }
     }
 
+    /// UTF-16 offset into the full suggestion up to which glyphs are drawn, for the type-on reveal
+    /// (`GhostRevealPolicy`). Nil draws everything. Rows keep their final positions; only how much
+    /// of each is painted changes, so the reveal never moves a glyph.
+    var revealLimitUTF16: Int? {
+        didSet { if revealLimitUTF16 != oldValue { needsDisplay = true } }
+    }
+
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
@@ -64,13 +71,20 @@ final class GhostTextPanelView: NSView {
             .font: content.layout.font,
             .foregroundColor: content.textColor
         ]
+        let limit = revealLimitUTF16 ?? Int.max
         for row in content.layout.rows where !row.text.isEmpty {
-            let line = CTLineCreateWithAttributedString(NSAttributedString(string: row.text, attributes: attributes))
+            let visibleLength = min(NSMaxRange(row.utf16Range), limit) - row.utf16Range.location
+            guard visibleLength > 0 else { continue }
+            let rowLength = (row.text as NSString).length
+            let rowText = visibleLength >= rowLength ? row.text : (row.text as NSString).substring(to: visibleLength)
+            let line = CTLineCreateWithAttributedString(NSAttributedString(string: rowText, attributes: attributes))
             context.textPosition = CGPoint(x: row.penX - origin.x, y: row.baselineY - origin.y)
             CTLineDraw(line, context)
         }
 
-        if let keycapLabel = content.keycapLabel, let keycapFrame = content.layout.keycapFrame {
+        // The accept hint appears once the text it accepts has finished arriving.
+        let fullyRevealed = content.layout.rows.allSatisfy { NSMaxRange($0.utf16Range) <= limit }
+        if fullyRevealed, let keycapLabel = content.keycapLabel, let keycapFrame = content.layout.keycapFrame {
             drawKeycap(label: keycapLabel, in: keycapFrame.offsetBy(dx: -origin.x, dy: -origin.y), dark: content.isDarkAppearance)
         }
     }
