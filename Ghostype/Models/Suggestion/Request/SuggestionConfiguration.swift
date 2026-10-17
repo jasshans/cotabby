@@ -189,6 +189,7 @@ struct SuggestionConfiguration: Equatable, Sendable {
 enum SpeedSettings {
     static let stablePrefixWindowKey = "ghostypeSpeedStablePrefixWindow"
     static let shortContextKey = "ghostypeSpeedShortContext"
+    static let autoTuneKey = "ghostypeSpeedAutoTune"
     /// Window used by "Shorter context": the current paragraph or two, about a third of the default.
     static let shortPrefixCharacters = 800
     static let shortPrefixWords = 150
@@ -201,13 +202,73 @@ enum SpeedSettings {
         defaults.object(forKey: shortContextKey) as? Bool ?? false
     }
 
-    static func applied(to base: SuggestionConfiguration, defaults: UserDefaults) -> SuggestionConfiguration {
+    /// Auto-tune (default ON): Ghostype measures its own latency and switches short context
+    /// on/off by itself. The manual toggle still wins when auto-tune is OFF.
+    static func isAutoTuneEnabled(_ defaults: UserDefaults) -> Bool {
+        defaults.object(forKey: autoTuneKey) as? Bool ?? true
+    }
+
+    static func applied(
+        to base: SuggestionConfiguration,
+        defaults: UserDefaults,
+        autoTuner: LatencyAutoTuner? = nil
+    ) -> SuggestionConfiguration {
         var configuration = base
         configuration.stablePrefixWindow = isStablePrefixWindowEnabled(defaults)
-        if isShortContextEnabled(defaults) {
+        let shortContext: Bool
+        if isAutoTuneEnabled(defaults), let autoTuner {
+            // Auto-tune overrides the manual toggle: the measured latency decides.
+            shortContext = autoTuner.shouldUseShortContext(current: isShortContextEnabled(defaults))
+        } else {
+            shortContext = isShortContextEnabled(defaults)
+        }
+        if shortContext {
             configuration.maxPrefixCharacters = min(base.maxPrefixCharacters, shortPrefixCharacters)
             configuration.maxPrefixWords = min(base.maxPrefixWords, shortPrefixWords)
         }
         return configuration
+    }
+}
+
+/// Tracks recent request latencies and decides whether short context should be on.
+///
+/// Why auto-tune: the Speed pane's short-context toggle is a manual guess — the user has to
+/// know their machine is slow and remember to flip it. Ghostype already measures every
+/// request's latency, so it can adapt on its own: slow machine → shorter context (faster);
+/// fast machine → full context (better quality).
+///
+/// Hysteresis: the thresholds are far apart (300ms / 800ms) and the decision sticks until
+/// the median crosses the opposite threshold, so the setting never flip-flops when latency
+/// hovers near a boundary.
+struct LatencyAutoTuner {
+    /// Enable short context when the median latency exceeds this (too slow to feel instant).
+    static let enableThresholdMs = 800
+    /// Disable short context when the median latency drops below this (fast enough for full context).
+    static let disableThresholdMs = 300
+    /// Samples kept: enough to smooth out one slow outlier, few enough to react within seconds.
+    static let maxSamples = 20
+
+    private var samples: [Int] = []
+
+    /// Records a completed request's latency in milliseconds.
+    mutating func record(latencyMs: Int) {
+        samples.append(latencyMs)
+        if samples.count > Self.maxSamples { samples.removeFirst(samples.count - Self.maxSamples) }
+    }
+
+    /// Median latency of recent requests, nil when no samples yet.
+    var medianLatencyMs: Int? {
+        guard !samples.isEmpty else { return nil }
+        let sorted = samples.sorted()
+        return sorted[sorted.count / 2]
+    }
+
+    /// Whether short context should be on, given its current state. With too few samples
+    /// (< 3) the current state is kept — don't react to one cold-start outlier.
+    func shouldUseShortContext(current: Bool) -> Bool {
+        guard samples.count >= 3, let median = medianLatencyMs else { return current }
+        if median > Self.enableThresholdMs { return true }
+        if median < Self.disableThresholdMs { return false }
+        return current
     }
 }

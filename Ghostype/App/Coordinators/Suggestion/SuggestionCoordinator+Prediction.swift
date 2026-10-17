@@ -855,8 +855,11 @@ extension SuggestionCoordinator {
         // Record every completed result, including output later suppressed by normalization or seam
         // checks. Those requests still consumed backend time and are exactly the evidence the next
         // debounce needs to avoid another burst of doomed HTTP work.
-        lastLatencyByEngine[settingsSnapshot.selectedEngine] =
-            Int((result.latency * 1_000).rounded())
+        let latencyMs = Int((result.latency * 1_000).rounded())
+        lastLatencyByEngine[settingsSnapshot.selectedEngine] = latencyMs
+        // Feed the Speed auto-tuner from the same completion: the next request's context
+        // window adapts to the latency this one just measured.
+        latencyAutoTuner.record(latencyMs: latencyMs)
 
         // The free-running focus poll keeps capturing while the engine generates, so a fresh
         // capture often already exists here; only pay a synchronous AX walk when it does not.

@@ -10,6 +10,7 @@ struct SpeedPaneView: View {
 
     @AppStorage(SpeedSettings.stablePrefixWindowKey) private var stablePrefixWindow = true
     @AppStorage(SpeedSettings.shortContextKey) private var shortContext = false
+    @AppStorage(SpeedSettings.autoTuneKey) private var autoTune = true
 
     var body: some View {
         SettingsPaneScaffold {
@@ -25,16 +26,30 @@ struct SpeedPaneView: View {
                 }
                 .settingsItem(.reuseContextBetweenKeystrokes)
 
+                Toggle(isOn: $autoTune) {
+                    SettingsRowLabel(
+                        title: "Adapt speed to your Mac",
+                        description: "Ghostype measures how fast suggestions arrive and switches shorter context " +
+                            "on when it's slow, off when it's fast — so you get full context on a fast machine " +
+                            "and snappy suggestions on a slow one, without flipping toggles. Turn off to use " +
+                            "the Shorter context toggle manually.",
+                        systemImage: "gauge.with.dots.needle.33percent"
+                    )
+                }
+                .settingsItem(.shorterContext)
+
                 Toggle(isOn: $shortContext) {
                     SettingsRowLabel(
                         title: "Shorter context",
                         description: "Read about \(SpeedSettings.shortPrefixCharacters) characters before the caret " +
                             "instead of the full window. Faster first suggestion in a new field or after an edit, " +
-                            "at some cost to how well suggestions follow the earlier text.",
+                            "at some cost to how well suggestions follow the earlier text." +
+                            (autoTune ? " Ignored while Adapt speed is on." : ""),
                         systemImage: "text.badge.minus"
                     )
                 }
                 .settingsItem(.shorterContext)
+                .disabled(autoTune)
 
                 Toggle(isOn: Binding(
                     get: { suggestionSettings.predictAheadWhileTyping },

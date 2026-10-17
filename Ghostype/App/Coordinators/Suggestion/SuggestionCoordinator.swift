@@ -46,7 +46,7 @@ final class SuggestionCoordinator: ObservableObject {
     let userDefaults: UserDefaults
     /// The shipped configuration with the Speed pane's toggles applied (see `SpeedSettings`).
     var configuration: SuggestionConfiguration {
-        SpeedSettings.applied(to: baseConfiguration, defaults: userDefaults)
+        SpeedSettings.applied(to: baseConfiguration, defaults: userDefaults, autoTuner: latencyAutoTuner)
     }
     let overlayPresenter: SuggestionOverlayPresenter
     let logger: SuggestionDebugLogger
@@ -84,6 +84,10 @@ final class SuggestionCoordinator: ObservableObject {
     /// a slow HTTP backend retain an appropriate debounce without leaking that latency into the
     /// in-process engines.
     var lastLatencyByEngine: [SuggestionEngineKind: Int] = [:]
+    /// Rolling latency tracker for Speed auto-tune (see `LatencyAutoTuner`). Fed from the same
+    /// completion path that updates `lastLatencyByEngine`, so the auto-tune decision always
+    /// reflects the most recent requests.
+    var latencyAutoTuner = LatencyAutoTuner()
     // Synchronous input/focus callbacks cannot directly `await`, so resets are represented as a
     // barrier task that the next generation must cross before it can ask the runtime for output.
     var cacheResetSequence: UInt64 = 0
