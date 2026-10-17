@@ -103,6 +103,25 @@ final class SuggestionConversationIsolationTests: XCTestCase {
         await waitUntil { rig.engine.requests.count == 2 && rig.coordinator.overlayState.isVisible }
     }
 
+    /// The field's first capture only adds context: hiding the still-correct suggestion made every
+    /// new field start twice. A later change of screen content still replaces it.
+    func test_firstScreenCaptureKeepsVisiblePredictionButLaterChangeReplacesIt() async {
+        let rig = makeCoordinatorRig()
+        defer { rig.coordinator.stop() }
+        rig.coordinator.schedulePrediction()
+        await waitUntil { rig.coordinator.overlayState.isVisible }
+        let identity = rig.focusProvider.snapshot.context!.identity
+
+        rig.visualContext.onStateChange?(.ready, "First capture")
+        rig.visualContext.onInjectedContextReady?(identity)
+        XCTAssertTrue(rig.coordinator.overlayState.isVisible)
+        XCTAssertNotNil(rig.interactionState.activeSession)
+
+        rig.visualContext.onStateChange?(.ready, "Another conversation")
+        rig.visualContext.onInjectedContextReady?(identity)
+        XCTAssertFalse(rig.coordinator.overlayState.isVisible)
+    }
+
     private func publish(_ snapshot: FocusedInputSnapshot, in rig: CoordinatorRig) {
         setSnapshot(snapshot, in: rig)
         rig.focusProvider.snapshotSubject.send(rig.focusProvider.snapshot)
