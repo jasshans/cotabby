@@ -107,6 +107,11 @@ final class SuggestionCoordinator: ObservableObject {
     }
 
     var clipboardPrefaceMemo: ClipboardPrefaceMemo?
+    /// History examples and learned vocabulary sit in the prompt before the caret text. Re-picking
+    /// them as the user typed changed that head mid-prompt, so the llama KV cache missed and the
+    /// GPU re-read the whole prompt (0.6-3s spikes). Both are pinned per field session instead.
+    var historyPin = PromptSectionPin()
+    var vocabularyPin = PromptSectionPin()
     /// Coalescing and monotonic-render state for engine partials. The coordinator owns scheduling
     /// and presentation; the value owns the stream's pure state transitions.
     var suggestionStreamingState = SuggestionStreamingState()
@@ -211,7 +216,9 @@ final class SuggestionCoordinator: ObservableObject {
     /// Every request kind (ordinary, speculative, continuation, prewarm) passes the same examples so
     /// their prompts share one head and the llama KV cache stays reusable between them.
     func historyExamples(for context: FocusedInputContext) -> [String] {
-        historyProvider?.historyExamples(for: context, engine: settingsSnapshot.selectedEngine) ?? []
+        historyPin.resolve(session: promptPinSession(context)) {
+            historyProvider?.historyExamples(for: context, engine: settingsSnapshot.selectedEngine) ?? []
+        }
     }
 
     /// Learned vocabulary for this request, for every request built from it. Like the history
@@ -220,10 +227,17 @@ final class SuggestionCoordinator: ObservableObject {
     /// The vocabulary is per-app: the focused field's bundle identifier selects that app's
     /// learned phrases, with the global aggregate as fallback.
     func learnedVocabulary(for context: FocusedInputContext) -> [String] {
-        memoryContext?.vocabularyForPrompt(
-            engine: settingsSnapshot.selectedEngine,
-            bundleIdentifier: context.bundleIdentifier
-        ) ?? []
+        vocabularyPin.resolve(session: promptPinSession(context)) {
+            memoryContext?.vocabularyForPrompt(
+                engine: settingsSnapshot.selectedEngine,
+                bundleIdentifier: context.bundleIdentifier
+            ) ?? []
+        }
+    }
+
+    /// One field session under one engine: the span over which both prompt sections stay pinned.
+    private func promptPinSession(_ context: FocusedInputContext) -> String {
+        "\(context.focusChangeSequence)|\(context.elementIdentifier)|\(settingsSnapshot.selectedEngine.rawValue)"
     }
 
     init(
