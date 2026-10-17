@@ -22,8 +22,10 @@ import Foundation
 /// No data leaves the device. The index lives in memory only.
 ///
 /// Threading: build on a background thread via `rebuild(from:)`. `predict` is lock-free
-/// read-only and safe to call from any thread.
-final class PersonalNGramEngine: Sendable {
+/// read-only and safe to call from any thread. `nonisolated` opts out of the target's default
+/// MainActor isolation: the app builds this off the main actor (`CotabbyAppEnvironment`), and an
+/// implicitly main-actor class torn down from those contexts crashed the test host on CI.
+nonisolated final class PersonalNGramEngine: Sendable {
     /// (w1 + "\u{1F}" + w2) -> [(w3, count)], sorted by count descending.
     /// The unit separator is a safe key delimiter (never appears in words).
     private let trigrams: [String: [(word: String, count: Int)]]
