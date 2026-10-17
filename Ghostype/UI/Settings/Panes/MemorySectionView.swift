@@ -40,7 +40,6 @@ struct MemorySectionView: View {
                 .foregroundStyle(.red)
                 .disabled(recorder.eventCount == 0 && recorder.phraseCount == 0)
             }
-            .settingsItem(.suggestionMemory)
 
             Picker(selection: Binding(
                 get: { recorder.strength },
@@ -59,7 +58,6 @@ struct MemorySectionView: View {
                 )
             }
             .pickerStyle(.segmented)
-            .settingsItem(.suggestionMemory)
 
             if let clearError = recorder.clearError {
                 SettingsRowLabel(

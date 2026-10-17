@@ -36,7 +36,7 @@ struct SpeedPaneView: View {
                         systemImage: "gauge.with.dots.needle.33percent"
                     )
                 }
-                .settingsItem(.shorterContext)
+                .settingsItem(.adaptSpeedToMac)
 
                 Toggle(isOn: $shortContext) {
                     SettingsRowLabel(
