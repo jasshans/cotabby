@@ -100,3 +100,25 @@ SymSpell published the derived multilingual files.
 Chinese is intentionally not bundled: SymSpell's generation notes do not identify
 the source word list and license for that file, and Ghostype's current typo gate does
 not yet provide reliable word segmentation for languages without whitespace.
+
+## Web fonts (SIL Open Font License 1.1)
+
+`Ghostype/Resources/Fonts/` bundles Inter, Lato, Roboto, Open Sans, Nunito, Nunito Sans,
+Source Sans 3, Source Code Pro and JetBrains Mono, taken unmodified from the
+[google/fonts](https://github.com/google/fonts) repository (commit
+`47d54ca1ebb14fd864695f1d39dc734f39017c33`). They are registered for Ghostype's process only, so
+ghost text can be drawn in the face a web page names. Each is licensed under the SIL Open Font
+License, Version 1.1; the copyright line and full licence text for each family are in
+`Ghostype/Resources/ThirdPartyLicenses/<Family>-OFL.txt`.
+
+Copyright notices:
+
+- Inter: Copyright 2020 The Inter Project Authors (https://github.com/rsms/inter)
+- Lato: Copyright (c) 2010-2014 by tyPoland Lukasz Dziedzic (team@latofonts.com) with Reserved Font Name "Lato"
+- Roboto: Copyright 2011 The Roboto Project Authors (https://github.com/googlefonts/roboto-classic)
+- Open Sans: Copyright 2020 The Open Sans Project Authors (https://github.com/googlefonts/opensans)
+- Nunito: Copyright 2014 The Nunito Project Authors (https://github.com/googlefonts/nunito)
+- Nunito Sans: Copyright 2016 The Nunito Sans Project Authors (https://github.com/Fonthausen/NunitoSans)
+- Source Sans 3: Copyright 2010-2020 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'
+- Source Code Pro: Copyright 2010, 2012 Adobe Systems Incorporated (http://www.adobe.com/), with Reserved Font Name 'Source'
+- JetBrains Mono: Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)

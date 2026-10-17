@@ -88,6 +88,13 @@ struct AcknowledgementsView: View {
             name: "CotabbyInference",
             summary: "Swift wrapper around llama.cpp that exposes the inference API Ghostype links against.",
             url: "https://github.com/FuJacob/cotabbyinference"
+        ),
+        AcknowledgementEntry(
+            name: "Web fonts",
+            summary: "Inter, Lato, Roboto, Open Sans, Nunito, Nunito Sans, Source Sans 3, Source Code Pro "
+                + "and JetBrains Mono, from Google Fonts under the SIL Open Font License 1.1, so ghost "
+                + "text matches web pages set in them. See THIRD_PARTY_LICENSES.md for the notices.",
+            url: "https://github.com/google/fonts"
         )
     ]
 }
