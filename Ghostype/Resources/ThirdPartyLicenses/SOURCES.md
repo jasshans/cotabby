@@ -10,6 +10,7 @@ The table lists the dependencies still bundled in this checkout.
 | llama.cpp | `b9310` | `Llama.cpp-MIT.txt` |
 | swift-log | `9c6fb14227f55d8f711ce3847dc2f419fb0ecacb` (1.15.1) | `SwiftLog-Apache-2.0.txt` |
 | LaunchAtLogin-Modern | `a04ec1c363be3627734f6dad757d82f5d4fa8fcc` (1.1.0) | `LaunchAtLogin-MIT.txt` |
+| Web fonts (Inter, Lato, Roboto, Open Sans, Nunito, Nunito Sans, Source Sans 3, Source Code Pro, JetBrains Mono) | google/fonts `47d54ca1ebb14fd864695f1d39dc734f39017c33`, retrieved October 17, 2026 | `<Family>-OFL.txt` |
 | GitHub gemoji | Upstream LICENSE retrieved September 24, 2026; the emoji data predates this rebranding | `Gemoji-MIT.txt` |
 
 Upstream repositories: [Sparkle](https://github.com/sparkle-project/Sparkle), [CotabbyInference](https://github.com/FuJacob/cotabbyinference),

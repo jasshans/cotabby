@@ -165,6 +165,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             "Ghostype \(version) (build \(build)) launching on macOS \(ProcessInfo.processInfo.operatingSystemVersionString)"
         )
         applyLaunchAtLoginDefaultIfNeeded()
+        // The web fonts under `Resources/Fonts` (Inter, Lato, Roboto, ...) are what Slack, Notion,
+        // Gmail and most web apps name for their text. Registered for this process only, a page
+        // naming one resolves to the real face (`GhostFontResolver.font(family:)`) instead of the
+        // scaled system stand-in it takes for a face this Mac lacks. A face already installed is
+        // left alone (see `registerTextFaces`). Off the main actor: a dozen files, parsed once.
+        if let resources = Bundle.main.resourceURL {
+            Task.detached(priority: .userInitiated) {
+                _ = HostBundledFontRegistry.registerTextFaces(under: resources)
+            }
+        }
         startRuntimeIfPreferredEngineRequiresIt()
         focusModel.start()
         inputMonitor.start()
