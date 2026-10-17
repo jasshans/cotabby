@@ -81,4 +81,15 @@ final class HostBundledFontRegistryTests: XCTestCase {
         XCTAssertEqual(registry.candidateFontNames(forBundleIdentifier: "com.example.not-running"), [])
         XCTAssertEqual(registry.candidateFontNames(forBundleIdentifier: nil), [])
     }
+
+    /// Ghostype's own web fonts (`Resources/Fonts`, registered at launch): a page naming Lato, which
+    /// macOS does not ship, resolves to the bundled face rather than the scaled system stand-in.
+    func testAppBundledWebFontResolvesByFamilyName() throws {
+        let appResources = try XCTUnwrap(Bundle.main.resourceURL)
+        _ = HostBundledFontRegistry.registerTextFaces(under: appResources)
+
+        for family in ["Lato", "Inter", "Roboto", "Open Sans", "Nunito", "Nunito Sans", "Source Sans 3", "Source Code Pro", "JetBrains Mono"] {
+            XCTAssertEqual(GhostFontResolver.font(family: family, size: 14)?.familyName, family)
+        }
+    }
 }
