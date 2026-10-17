@@ -42,8 +42,12 @@ final class SuggestionCoordinator: ObservableObject {
     let visualContextCoordinator: any VisualContextCoordinating
     let interactionState: SuggestionInteractionState
     let workController: SuggestionWorkController
-    let configuration: SuggestionConfiguration
+    let baseConfiguration: SuggestionConfiguration
     let userDefaults: UserDefaults
+    /// The shipped configuration with the Speed pane's toggles applied (see `SpeedSettings`).
+    var configuration: SuggestionConfiguration {
+        SpeedSettings.applied(to: baseConfiguration, defaults: userDefaults)
+    }
     let overlayPresenter: SuggestionOverlayPresenter
     let logger: SuggestionDebugLogger
     /// Drives the typo gate before each prediction. Owned at app scope (constructed once in
@@ -259,7 +263,7 @@ final class SuggestionCoordinator: ObservableObject {
         self.visualContextCoordinator = visualContextCoordinator
         self.interactionState = interactionState
         self.workController = workController
-        self.configuration = configuration
+        self.baseConfiguration = configuration
         self.spellChecker = spellChecker
         self.symSpellCorrector = symSpellCorrector
         self.spellingLanguageResolver = spellingLanguageResolver

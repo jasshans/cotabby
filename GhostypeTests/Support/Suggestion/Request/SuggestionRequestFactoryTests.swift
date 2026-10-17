@@ -746,4 +746,28 @@ final class SuggestionRequestFactoryTests: XCTestCase {
             text
         )
     }
+
+    func test_stablePrefixWindow_keepsThePromptStartWhileTyping() {
+        var configuration = SuggestionConfiguration.standard
+        configuration.stablePrefixWindow = true
+        let base = String(repeating: "abcdefghi ", count: 250)
+        let first = SuggestionRequestFactory.truncatedPromptPrefix(from: base, configuration: configuration)
+        let typed = SuggestionRequestFactory.truncatedPromptPrefix(from: base + "more", configuration: configuration)
+        // Typing appended to the same window: the start did not slide, so the cached head survives.
+        XCTAssertEqual(typed, first + "more")
+        XCTAssertLessThanOrEqual(first.count, configuration.maxPrefixCharacters)
+        XCTAssertGreaterThanOrEqual(first.count, configuration.maxPrefixCharacters / 2)
+
+        configuration.stablePrefixWindow = false
+        let sliding = SuggestionRequestFactory.truncatedPromptPrefix(from: base + "more", configuration: configuration)
+        XCTAssertFalse(sliding.hasPrefix(String(first.prefix(20))))
+    }
+
+    func test_droppedCount_movesInHalfCapSteps() {
+        XCTAssertEqual(SuggestionRequestFactory.droppedCount(total: 90, cap: 100, stable: true), 0)
+        XCTAssertEqual(SuggestionRequestFactory.droppedCount(total: 101, cap: 100, stable: true), 50)
+        XCTAssertEqual(SuggestionRequestFactory.droppedCount(total: 150, cap: 100, stable: true), 50)
+        XCTAssertEqual(SuggestionRequestFactory.droppedCount(total: 151, cap: 100, stable: true), 100)
+        XCTAssertEqual(SuggestionRequestFactory.droppedCount(total: 151, cap: 100, stable: false), 51)
+    }
 }
