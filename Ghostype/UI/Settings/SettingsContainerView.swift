@@ -148,6 +148,8 @@ struct SettingsContainerView: View {
                 modelDownloadManager: modelDownloadManager,
                 huggingFaceSearchService: huggingFaceSearchService
             )
+        case .speed:
+            SpeedPaneView(suggestionSettings: suggestionSettings)
         case .writing:
             WritingPaneView(suggestionSettings: suggestionSettings)
         case .context:

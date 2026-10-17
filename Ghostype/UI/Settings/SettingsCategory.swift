@@ -18,6 +18,7 @@ enum SettingsCategory: String, CaseIterable, Hashable, Identifiable {
     case writing
     case context
     case engineAndModel
+    case speed
     case shortcuts
     case apps
     case permissions
@@ -35,6 +36,7 @@ enum SettingsCategory: String, CaseIterable, Hashable, Identifiable {
         case .writing: return "Writing"
         case .context: return "Context"
         case .engineAndModel: return "Engine & Model"
+        case .speed: return "Speed"
         case .shortcuts: return "Shortcuts"
         case .apps: return "Apps"
         case .permissions: return "Permissions"
@@ -53,6 +55,7 @@ enum SettingsCategory: String, CaseIterable, Hashable, Identifiable {
         case .writing: return "square.and.pencil"
         case .context: return "doc.text"
         case .engineAndModel: return "cpu.fill"
+        case .speed: return "hare.fill"
         case .shortcuts: return "keyboard.fill"
         case .apps: return "app.badge.fill"
         case .permissions: return "lock.shield.fill"
@@ -73,6 +76,7 @@ enum SettingsCategory: String, CaseIterable, Hashable, Identifiable {
         case .writing: return .indigo
         case .context: return .teal
         case .engineAndModel: return .orange
+        case .speed: return .mint
         case .shortcuts: return .pink
         case .apps: return .red
         case .permissions: return .cyan
@@ -91,6 +95,7 @@ enum SettingsCategory: String, CaseIterable, Hashable, Identifiable {
         case .writing: return "Length, profile, and corrections"
         case .context: return "What the model can reference"
         case .engineAndModel: return "Choose the engine and models"
+        case .speed: return "Faster suggestions"
         case .shortcuts: return "Keys that accept suggestions"
         case .apps: return "Where Ghostype stays quiet"
         case .permissions: return "System access and privacy"
@@ -106,7 +111,7 @@ enum SettingsCategory: String, CaseIterable, Hashable, Identifiable {
     static let sidebarGroups: [[SettingsCategory]] = [
         [.home],
         [.general, .appearance, .emoji],
-        [.writing, .context, .engineAndModel],
+        [.writing, .context, .engineAndModel, .speed],
         [.shortcuts, .apps, .permissions],
         [.performance, .about]
     ]
