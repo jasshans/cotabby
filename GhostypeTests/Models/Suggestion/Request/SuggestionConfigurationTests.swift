@@ -74,4 +74,81 @@ final class SuggestionConfigurationTests: XCTestCase {
         // The shipped configuration must use the derived value, not a stale literal.
         XCTAssertEqual(SuggestionConfiguration.standard.llamaPromptTokenBudget, expected)
     }
+
+    // MARK: - LatencyAutoTuner
+
+    func test_autoTuner_keepsCurrentStateWithTooFewSamples() {
+        var tuner = LatencyAutoTuner()
+        // One slow outlier must not flip the setting on a cold start.
+        tuner.record(latencyMs: 2000)
+        XCTAssertFalse(tuner.shouldUseShortContext(current: false))
+        tuner.record(latencyMs: 2000)
+        XCTAssertFalse(tuner.shouldUseShortContext(current: false))
+    }
+
+    func test_autoTuner_enablesShortContextWhenMedianIsSlow() {
+        var tuner = LatencyAutoTuner()
+        tuner.record(latencyMs: 900)
+        tuner.record(latencyMs: 1200)
+        tuner.record(latencyMs: 1000)
+        XCTAssertTrue(tuner.shouldUseShortContext(current: false))
+    }
+
+    func test_autoTuner_disablesShortContextWhenMedianIsFast() {
+        var tuner = LatencyAutoTuner()
+        tuner.record(latencyMs: 150)
+        tuner.record(latencyMs: 200)
+        tuner.record(latencyMs: 180)
+        XCTAssertFalse(tuner.shouldUseShortContext(current: true))
+    }
+
+    func test_autoTuner_hysteresisKeepsStateInTheMiddleBand() {
+        var tuner = LatencyAutoTuner()
+        // Median 500ms is between the 300ms disable and 800ms enable thresholds:
+        // the setting sticks instead of flip-flopping.
+        tuner.record(latencyMs: 480)
+        tuner.record(latencyMs: 520)
+        tuner.record(latencyMs: 500)
+        XCTAssertTrue(tuner.shouldUseShortContext(current: true))
+        XCTAssertFalse(tuner.shouldUseShortContext(current: false))
+    }
+
+    func test_autoTuner_medianIgnoresOneSlowOutlier() {
+        var tuner = LatencyAutoTuner()
+        tuner.record(latencyMs: 150)
+        tuner.record(latencyMs: 180)
+        tuner.record(latencyMs: 5000)
+        // Sorted [150, 180, 5000], median 180 → fast, outlier ignored.
+        XCTAssertFalse(tuner.shouldUseShortContext(current: false))
+    }
+
+    func test_speedSettings_autoTuneOverridesManualToggle() {
+        let defaults = UserDefaults(suiteName: "test-speed-auto-tune")!
+        defaults.removePersistentDomain(forName: "test-speed-auto-tune")
+        defaults.set(true, forKey: SpeedSettings.autoTuneKey)
+        defaults.set(false, forKey: SpeedSettings.shortContextKey)
+
+        var tuner = LatencyAutoTuner()
+        tuner.record(latencyMs: 1000)
+        tuner.record(latencyMs: 1100)
+        tuner.record(latencyMs: 900)
+        // Manual toggle is OFF, but auto-tune sees slow latency → short context ON.
+        let config = SpeedSettings.applied(to: .standard, defaults: defaults, autoTuner: tuner)
+        XCTAssertEqual(config.maxPrefixCharacters, SpeedSettings.shortPrefixCharacters)
+    }
+
+    func test_speedSettings_manualToggleWinsWhenAutoTuneIsOff() {
+        let defaults = UserDefaults(suiteName: "test-speed-manual")!
+        defaults.removePersistentDomain(forName: "test-speed-manual")
+        defaults.set(false, forKey: SpeedSettings.autoTuneKey)
+        defaults.set(true, forKey: SpeedSettings.shortContextKey)
+
+        var tuner = LatencyAutoTuner()
+        tuner.record(latencyMs: 100)
+        tuner.record(latencyMs: 120)
+        tuner.record(latencyMs: 110)
+        // Auto-tune is OFF, manual toggle is ON → short context stays ON despite fast latency.
+        let config = SpeedSettings.applied(to: .standard, defaults: defaults, autoTuner: tuner)
+        XCTAssertEqual(config.maxPrefixCharacters, SpeedSettings.shortPrefixCharacters)
+    }
 }
