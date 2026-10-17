@@ -23,6 +23,7 @@ enum SettingsItem: String, CaseIterable, Identifiable {
     case predictAheadWhileTyping
     // Speed
     case reuseContextBetweenKeystrokes
+    case adaptSpeedToMac
     case shorterContext
     case showFollowingWords
     case inlineMacros
@@ -123,6 +124,7 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .allowMultiLine: return "Allow Multi-line Suggestions"
         case .predictAheadWhileTyping: return "Predict Ahead While Typing"
         case .reuseContextBetweenKeystrokes: return "Reuse Context Between Keystrokes"
+        case .adaptSpeedToMac: return "Adapt Speed to Your Mac"
         case .shorterContext: return "Shorter Context"
         case .suggestWithinWords: return "Suggest while typing a word"
         case .showFollowingWords: return "Show following words"
@@ -214,6 +216,7 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .allowMultiLine: return "text.alignleft"
         case .predictAheadWhileTyping: return "bolt.horizontal.circle"
         case .reuseContextBetweenKeystrokes: return "memorychip"
+        case .adaptSpeedToMac: return "gauge.with.dots.needle.33percent"
         case .shorterContext: return "text.badge.minus"
         case .suggestWithinWords: return "text.cursor"
         case .showFollowingWords: return "text.word.spacing"
@@ -300,7 +303,7 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         #if DEBUG
         case .developmentDebugOverlays: return .general
         #endif
-        case .reuseContextBetweenKeystrokes, .shorterContext:
+        case .reuseContextBetweenKeystrokes, .adaptSpeedToMac, .shorterContext:
             return .speed
         case .enableGlobally, .useScreenContext, .openAtLogin, .includeClipboardContext, .includeAppContext,
              .allowMultiLine, .suggestWithinWords, .predictAheadWhileTyping, .showFollowingWords,
@@ -350,6 +353,7 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .allowMultiLine: return "Allow continuations that span more than one line."
         case .predictAheadWhileTyping: return "Keep on-device predictions ready through matching typing for a faster pause."
         case .reuseContextBetweenKeystrokes: return "Keep the text window steady so the model only reads your new letters."
+        case .adaptSpeedToMac: return "Switch shorter context on or off automatically from measured suggestion speed."
         case .shorterContext: return "Read less text before the caret for a faster first suggestion."
         case .suggestWithinWords: return "Show new suggestions inside a word, or wait for a space or punctuation."
         case .showFollowingWords: return "Preview the following phrase, or reveal one word at a time as you type or accept."
@@ -464,6 +468,8 @@ enum SettingsItem: String, CaseIterable, Identifiable {
                     "auto-accept", "space"]
         case .reuseContextBetweenKeystrokes:
             return ["speed", "fast", "faster", "cache", "kv", "reuse", "latency", "prefill", "context"]
+        case .adaptSpeedToMac:
+            return ["speed", "adapt", "auto", "automatic", "tune", "latency", "slow", "fast", "mac"]
         case .shorterContext:
             return ["speed", "fast", "faster", "context", "window", "short", "latency", "prefix"]
         case .predictAheadWhileTyping:
