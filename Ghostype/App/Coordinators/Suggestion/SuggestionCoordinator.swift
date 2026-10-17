@@ -111,6 +111,8 @@ final class SuggestionCoordinator: ObservableObject {
     /// them as the user typed changed that head mid-prompt, so the llama KV cache missed and the
     /// GPU re-read the whole prompt (0.6-3s spikes). Both are pinned per field session instead.
     var historyPin = PromptSectionPin()
+    /// Set when the field's first screen excerpt lands; that arrival enriches rather than replaces.
+    var visualContextJustAppeared = false
     var vocabularyPin = PromptSectionPin()
     /// Coalescing and monotonic-render state for engine partials. The coordinator owns scheduling
     /// and presentation; the value owns the stream's pure state transitions.
@@ -374,6 +376,7 @@ final class SuggestionCoordinator: ObservableObject {
         visualContextCoordinator.onStateChange = { [weak self] status, excerpt in
             guard let self else { return }
             let lostContext = self.latestVisualContextText != nil && excerpt == nil
+            self.visualContextJustAppeared = self.latestVisualContextText == nil && excerpt != nil
             self.visualContextStatus = status
             self.latestVisualContextText = excerpt
             // Expired or invalidated screen text must not survive indirectly in a visible tail,
@@ -394,6 +397,17 @@ final class SuggestionCoordinator: ObservableObject {
             // A host may expose identical URL/title/geometry for two chats. Changed screen text
             // is then our next navigation signal. Retire visible tails as well as cached/async
             // work; keeping an old tail stable would let it outlive arbitrarily many refreshes.
+            // The field's first capture adds context to a suggestion that is still right for the
+            // text: keep it on screen and let the next request carry the screen section. Hiding it
+            // here made every new field start twice (a cold answer, then a second cold rebuild).
+            if self.visualContextJustAppeared {
+                self.visualContextJustAppeared = false
+                self.promptHeadBurstCache.invalidate()
+                if self.interactionState.activeSession == nil {
+                    self.schedulePredictionForCurrentFocusIfPossible(matching: identity)
+                }
+                return
+            }
             self.suggestionAnchorCache = SuggestionAnchorCache()
             self.promptHeadBurstCache.invalidate()
             self.clipboardPrefaceMemo = nil
