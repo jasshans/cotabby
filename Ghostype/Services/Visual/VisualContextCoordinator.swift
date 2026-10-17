@@ -350,11 +350,16 @@ final class VisualContextCoordinator {
             return
         }
 
-        let changed = activeAugmentationSession?.excerpt?.text != excerpt.text
+        // A capture that only differs by what the user typed keeps the excerpt already in the
+        // prompt, byte for byte, so the visible suggestion and the KV-cached prompt head survive
+        // (see `ScreenExcerptChangePolicy`). Its timestamp still refreshes so it does not expire.
+        let current = activeAugmentationSession?.excerpt
+        let changed = ScreenExcerptChangePolicy.isMaterialChange(from: current?.text, to: excerpt.text)
+        let kept = changed ? excerpt : (current ?? excerpt)
         activeAugmentationSession?.status = .ready
-        activeAugmentationSession?.excerpt = excerpt
+        activeAugmentationSession?.excerpt = kept
         status = .ready
-        latestExcerpt = excerpt.text
+        latestExcerpt = kept.text
         excerptCapturedAt = capturedAt
         scheduleExpiry(sessionID: sessionID, capturedAt: capturedAt)
         CotabbyLogger.app.debug("Visual context ready: \(excerpt.text.count) chars")
