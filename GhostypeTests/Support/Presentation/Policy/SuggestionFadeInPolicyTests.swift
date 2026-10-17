@@ -37,3 +37,47 @@ final class SuggestionFadeInPolicyTests: XCTestCase {
         }
     }
 }
+
+
+/// The reveal must never re-type characters already on screen (that is the jump it exists to
+/// remove), must always finish within its bound, and must never split a composed character.
+final class GhostRevealPolicyTests: XCTestCase {
+    func test_carriesOverTextAlreadyShownWhenTheNewTextExtendsIt() {
+        // A streamed partial grew from "hello wor" to "hello world and".
+        XCTAssertEqual(GhostRevealPolicy.carriedOverUTF16(
+            previousText: "hello wor", previousConsumed: 0, previousRevealed: 9, newText: "hello world and"), 9)
+        // After typing "he" through it, the re-present starts at the remaining text.
+        XCTAssertEqual(GhostRevealPolicy.carriedOverUTF16(
+            previousText: "hello world", previousConsumed: 2, previousRevealed: 7, newText: "llo world"), 5)
+    }
+
+    func test_revealsFromZeroForADifferentSuggestionOrNothingShown() {
+        XCTAssertEqual(GhostRevealPolicy.carriedOverUTF16(
+            previousText: "hello world", previousConsumed: 0, previousRevealed: 11, newText: "goodbye"), 0)
+        XCTAssertEqual(GhostRevealPolicy.carriedOverUTF16(
+            previousText: nil, previousConsumed: 0, previousRevealed: 0, newText: "hello"), 0)
+    }
+
+    func test_revealIsMonotonicAndFinishesWithinTheBound() {
+        let text = String(repeating: "word ", count: 20)
+        var last = 0
+        for step in 0...30 {
+            let value = GhostRevealPolicy.revealedUTF16(text: text, startUTF16: 0, elapsed: Double(step) * 0.01)
+            XCTAssertGreaterThanOrEqual(value, last)
+            last = value
+        }
+        XCTAssertEqual(GhostRevealPolicy.revealedUTF16(
+            text: text, startUTF16: 0, elapsed: GhostRevealPolicy.maximumDuration), (text as NSString).length)
+    }
+
+    func test_neverSplitsAComposedCharacter() {
+        let text = "ok 👍🏽 done"
+        for step in 0...40 {
+            let value = GhostRevealPolicy.revealedUTF16(text: text, startUTF16: 0, elapsed: Double(step) * 0.001)
+            let ns = text as NSString
+            if value < ns.length {
+                XCTAssertEqual(ns.rangeOfComposedCharacterSequence(at: value).location, value)
+            }
+        }
+    }
+}

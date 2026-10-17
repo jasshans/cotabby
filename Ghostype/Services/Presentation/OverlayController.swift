@@ -62,6 +62,12 @@ final class OverlayController: SuggestionOverlayControlling {
     }
 
     private var inlineSession: InlineSession?
+    /// Type-on reveal state for the inline session (see `GhostRevealPolicy`). `revealedUTF16` is an
+    /// offset into `inlineSession.fullText`; at or past its length everything is drawn.
+    private var revealedUTF16 = 0
+    private var revealStartUTF16 = 0
+    private var revealStartTime: CFTimeInterval = 0
+    private var revealTimer: Timer?
     /// What each field's width samples have said about its typeface so far (see `TypefaceEvidence`).
     /// Keyed by the field's session identity, which survives the field growing as text wraps.
     private var typefaceEvidence: [UInt64: TypefaceEvidence] = [:]
@@ -298,7 +304,53 @@ final class OverlayController: SuggestionOverlayControlling {
         CotabbyLogger.suggestion.debug("Overlay hidden", metadata: ["stage": .string("overlay-hide"), "reason": .string(reason)])
         panel.orderOut(nil)
         inlineSession = nil
+        stopReveal()
         state = .hidden(reason: reason)
+    }
+
+    // MARK: - Type-on reveal
+
+    /// Starts revealing the current inline session from `start` (characters already on screen).
+    /// Shares the fade toggle: both are "appear smoothly", and both yield to Reduce Motion.
+    private func startReveal(from start: Int, length: Int) {
+        revealTimer?.invalidate()
+        revealTimer = nil
+        guard suggestionSettings.fadeInSuggestions, !reduceMotionEnabled, start < length else {
+            revealedUTF16 = length
+            return
+        }
+        revealedUTF16 = start
+        revealStartUTF16 = start
+        revealStartTime = CACurrentMediaTime()
+        // `.common` keeps the reveal running while the host is tracking a scroll or menu.
+        let timer = Timer(timeInterval: 1.0 / 120.0, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.tickReveal() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        revealTimer = timer
+    }
+
+    private func tickReveal() {
+        guard let session = inlineSession else {
+            stopReveal()
+            return
+        }
+        let length = (session.fullText as NSString).length
+        let target = GhostRevealPolicy.revealedUTF16(
+            text: session.fullText,
+            startUTF16: revealStartUTF16,
+            elapsed: CACurrentMediaTime() - revealStartTime
+        )
+        revealedUTF16 = max(revealedUTF16, target, session.consumedUTF16)
+        inlineView?.revealLimitUTF16 = revealedUTF16 >= length ? nil : revealedUTF16
+        if revealedUTF16 >= length {
+            stopReveal()
+        }
+    }
+
+    private func stopReveal() {
+        revealTimer?.invalidate()
+        revealTimer = nil
     }
 
     /// Mirrors the system Accessibility "Reduce Motion" preference, read live.
@@ -362,7 +414,15 @@ final class OverlayController: SuggestionOverlayControlling {
             return .inlineLayoutUnavailable
         }
         session.layout = layout
+        let previous = inlineSession
+        let carried = GhostRevealPolicy.carriedOverUTF16(
+            previousText: previous?.fullText,
+            previousConsumed: previous?.consumedUTF16 ?? 0,
+            previousRevealed: revealedUTF16,
+            newText: text
+        )
         inlineSession = session
+        startReveal(from: carried, length: (text as NSString).length)
         renderInline(session)
         // Built after the render so the request knows where the panel now covers the host.
         if cachedOffset == nil || calibration?.matchTypeface == true,
@@ -1296,6 +1356,8 @@ final class OverlayController: SuggestionOverlayControlling {
         }
         session.layout = layout
         inlineSession = session
+        // Typed-through characters are in the host now; the reveal never lags behind them.
+        revealedUTF16 = max(revealedUTF16, newConsumed)
         renderInline(session)
 
         // The geometry the coordinator sees keeps its caret at the predicted insertion point so the
@@ -1454,6 +1516,8 @@ final class OverlayController: SuggestionOverlayControlling {
         let acceptanceHintLabel = suggestionSettings.acceptanceHintLabel(
             forBundleIdentifier: session.geometry.bundleIdentifier
         )
+        let fullLength = (session.fullText as NSString).length
+        contentView.revealLimitUTF16 = revealedUTF16 >= fullLength ? nil : revealedUTF16
         contentView.content = GhostTextPanelView.Content(
             layout: layout,
             textColor: ghostTextColor(for: session.geometry),
