@@ -14,9 +14,9 @@ import Foundation
 ///
 /// Pure; `VisualContextCoordinator` asks it when a capture finishes.
 enum ScreenExcerptChangePolicy {
+    // ponytail: fixed line-overlap threshold; tune from real captures if navigation slips through.
     /// Below this share of lines in common, the capture shows different content. Typing into one
     /// paragraph of a 20-line capture keeps ~90% overlap; switching chats keeps little beyond chrome.
-    // ponytail: fixed line-overlap threshold; tune from real captures if navigation slips through.
     static let minimumSharedLineFraction = 0.6
 
     static func isMaterialChange(from old: String?, to new: String) -> Bool {
