@@ -112,7 +112,9 @@ nonisolated struct MemoryCrypto: Sendable {
 
 /// Lock-guarded box for the cached Keychain key. MemoryCrypto is a value type used on the
 /// store's serial queue, but Sendable is claimed, so the cache is internally synchronized.
-private final class KeyCache: @unchecked Sendable {
+/// `nonisolated` opts out of the target's default MainActor isolation: the store's background
+/// queue is its real caller, and the implicit main-actor class crashed the test host on CI.
+nonisolated private final class KeyCache: @unchecked Sendable {
     private let lock = NSLock()
     private var key: SymmetricKey?
 
