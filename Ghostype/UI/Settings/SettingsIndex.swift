@@ -21,6 +21,9 @@ enum SettingsItem: String, CaseIterable, Identifiable {
     case allowMultiLine
     case suggestWithinWords
     case predictAheadWhileTyping
+    // Speed
+    case reuseContextBetweenKeystrokes
+    case shorterContext
     case showFollowingWords
     case inlineMacros
     case onboarding
@@ -119,6 +122,8 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .includeAppContext: return "Include App Context"
         case .allowMultiLine: return "Allow Multi-line Suggestions"
         case .predictAheadWhileTyping: return "Predict Ahead While Typing"
+        case .reuseContextBetweenKeystrokes: return "Reuse Context Between Keystrokes"
+        case .shorterContext: return "Shorter Context"
         case .suggestWithinWords: return "Suggest while typing a word"
         case .showFollowingWords: return "Show following words"
         case .acceptPunctuation: return "Accept Punctuation With Word"
@@ -208,6 +213,8 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .includeAppContext: return "macwindow"
         case .allowMultiLine: return "text.alignleft"
         case .predictAheadWhileTyping: return "bolt.horizontal.circle"
+        case .reuseContextBetweenKeystrokes: return "memorychip"
+        case .shorterContext: return "text.badge.minus"
         case .suggestWithinWords: return "text.cursor"
         case .showFollowingWords: return "text.word.spacing"
         case .acceptPunctuation: return "textformat.abc"
@@ -293,6 +300,8 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         #if DEBUG
         case .developmentDebugOverlays: return .general
         #endif
+        case .reuseContextBetweenKeystrokes, .shorterContext:
+            return .speed
         case .enableGlobally, .useScreenContext, .openAtLogin, .includeClipboardContext, .includeAppContext,
              .allowMultiLine, .suggestWithinWords, .predictAheadWhileTyping, .showFollowingWords,
              .inlineMacros, .onboarding, .resetAllSettings:
@@ -340,6 +349,8 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .includeAppContext: return "Tell the model which app and window you are typing in."
         case .allowMultiLine: return "Allow continuations that span more than one line."
         case .predictAheadWhileTyping: return "Keep on-device predictions ready through matching typing for a faster pause."
+        case .reuseContextBetweenKeystrokes: return "Keep the text window steady so the model only reads your new letters."
+        case .shorterContext: return "Read less text before the caret for a faster first suggestion."
         case .suggestWithinWords: return "Show new suggestions inside a word, or wait for a space or punctuation."
         case .showFollowingWords: return "Preview the following phrase, or reveal one word at a time as you type or accept."
         case .acceptPunctuation: return "Also accept trailing commas and periods with a word."
@@ -451,6 +462,10 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .acceptPunctuation:
             return ["punctuation", "comma", "period", "accept", "trailing", "auto accept",
                     "auto-accept", "space"]
+        case .reuseContextBetweenKeystrokes:
+            return ["speed", "fast", "faster", "cache", "kv", "reuse", "latency", "prefill", "context"]
+        case .shorterContext:
+            return ["speed", "fast", "faster", "context", "window", "short", "latency", "prefix"]
         case .predictAheadWhileTyping:
             return ["predict", "predictive", "ahead", "background", "typing", "latency", "faster", "pause",
                     "speculative", "reuse", "local", "on device", "power"]

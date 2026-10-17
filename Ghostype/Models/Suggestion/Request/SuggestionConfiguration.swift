@@ -89,8 +89,12 @@ struct SuggestionConfiguration: Equatable, Sendable {
     /// Production leaves this nil so LlamaRuntimeCore supplies its stable default seed.
     /// Tests and microbenches can override it to compare sampler state across cache paths.
     let randomSeed: UInt32?
-    let maxPrefixWords: Int
-    let maxPrefixCharacters: Int
+    var maxPrefixWords: Int
+    var maxPrefixCharacters: Int
+    /// When true, a prefix longer than the window is cut at a start that moves only in half-window
+    /// steps (see `SuggestionRequestFactory.truncatedPromptPrefix`), so the prompt head stays the same
+    /// across keystrokes and the runtime can reuse its cache. Set from the Speed pane.
+    var stablePrefixWindow = false
     /// Foundation Models has a noticeably larger shared context than the local llama path, so the
     /// FM-selected request gets a separate (larger) prefix budget. Setting this above the llama
     /// caps avoids crowding instructions while keeping the local-continuation focus.
@@ -177,4 +181,33 @@ struct SuggestionConfiguration: Equatable, Sendable {
         defaultWordCountPreset: .fourToSeven,
         focusPollIntervalMilliseconds: 50
     )
+}
+
+/// The Speed pane's toggles. They are read straight from `UserDefaults` (like the coordinator's
+/// speculative-prefetch switch) and folded into the request configuration per request, so a toggle
+/// takes effect on the next keystroke without threading through the settings snapshot.
+enum SpeedSettings {
+    static let stablePrefixWindowKey = "ghostypeSpeedStablePrefixWindow"
+    static let shortContextKey = "ghostypeSpeedShortContext"
+    /// Window used by "Shorter context": the current paragraph or two, about a third of the default.
+    static let shortPrefixCharacters = 800
+    static let shortPrefixWords = 150
+
+    static func isStablePrefixWindowEnabled(_ defaults: UserDefaults) -> Bool {
+        defaults.object(forKey: stablePrefixWindowKey) as? Bool ?? true
+    }
+
+    static func isShortContextEnabled(_ defaults: UserDefaults) -> Bool {
+        defaults.object(forKey: shortContextKey) as? Bool ?? false
+    }
+
+    static func applied(to base: SuggestionConfiguration, defaults: UserDefaults) -> SuggestionConfiguration {
+        var configuration = base
+        configuration.stablePrefixWindow = isStablePrefixWindowEnabled(defaults)
+        if isShortContextEnabled(defaults) {
+            configuration.maxPrefixCharacters = min(base.maxPrefixCharacters, shortPrefixCharacters)
+            configuration.maxPrefixWords = min(base.maxPrefixWords, shortPrefixWords)
+        }
+        return configuration
+    }
 }

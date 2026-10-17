@@ -208,15 +208,30 @@ enum SuggestionRequestFactory {
         }
 
         guard maxCharacters > 0, maxWords > 0 else { return "" }
-        let characterWindow = String(precedingText.suffix(maxCharacters))
+        let stable = configuration.stablePrefixWindow
+        let characterWindow = String(precedingText.dropFirst(
+            droppedCount(total: precedingText.count, cap: maxCharacters, stable: stable)
+        ))
         let words = characterWindow.split(whereSeparator: { $0.isWhitespace })
         guard words.count > maxWords else { return characterWindow }
 
         // Substrings retain indices into the original string. Slice at the first retained word
         // instead of joining words: paragraph breaks, list indentation, and the exact whitespace
         // before the caret all carry meaning for continuation and token-boundary healing.
-        let firstKeptWord = words[words.count - maxWords]
+        let firstKeptWord = words[droppedCount(total: words.count, cap: maxWords, stable: stable)]
         return String(characterWindow[firstKeptWord.startIndex...])
+    }
+
+    /// How many leading items to drop so at most `cap` remain. A plain window drops exactly the
+    /// overflow, so its start slides with every keystroke and the prompt head (and the runtime's
+    /// cached prefix) changes each time. A stable window drops in half-cap steps: it keeps between
+    /// half and all of `cap`, and its start moves once per half-cap of typing instead of every key.
+    static func droppedCount(total: Int, cap: Int, stable: Bool) -> Int {
+        let overflow = total - cap
+        guard overflow > 0 else { return 0 }
+        guard stable else { return overflow }
+        let step = max(1, cap / 2)
+        return min(total - 1, (overflow + step - 1) / step * step)
     }
 
     private static func activeUserName(
