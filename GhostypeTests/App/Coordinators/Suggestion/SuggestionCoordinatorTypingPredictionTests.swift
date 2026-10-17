@@ -107,6 +107,10 @@ final class SuggestionCoordinatorTypingPredictionTests: XCTestCase {
 
     func testFinalBufferedDuringPauseStillSurvivesAnotherMatchingKey() async {
         let engine = ControlledTypingEngine()
+        // Since mid-word suggestions stopped waiting for a typing pause (`presentationDelay` is zero
+        // with "Suggest while typing a word" on), a final that covers the typed letters is shown at
+        // once instead of buffered. The invariant is the same: the next matching key types through
+        // that answer rather than discarding it for a new request.
         let rig = makeRig(engine)
         defer { rig.coordinator.stop(); engine.finishAll() }
         rig.coordinator.schedulePrediction()
@@ -115,10 +119,10 @@ final class SuggestionCoordinatorTypingPredictionTests: XCTestCase {
         type("y", in: rig)
         publish("I'll send y", in: rig)
         engine.finish("you the report")
-        await waitUntil { rig.coordinator.typingPrediction?.isFinal == true }
+        await waitUntil { rig.interactionState.activeSession?.remainingText == "ou the report" }
         type("o", in: rig)
         publish("I'll send yo", in: rig)
-        await waitUntil { rig.interactionState.activeSession != nil }
+        await waitUntil { rig.interactionState.activeSession?.remainingText == "u the report" }
         XCTAssertEqual(rig.interactionState.activeSession?.remainingText, "u the report")
         XCTAssertEqual(engine.requests.count, 1)
     }
