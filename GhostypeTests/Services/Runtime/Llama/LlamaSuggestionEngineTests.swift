@@ -56,40 +56,25 @@ final class LlamaSuggestionEngineTests: XCTestCase {
         XCTAssertEqual(runtime.prefilledOptions.count, 1)
     }
 
-    func test_successfulGeneration_primesHintAndGenuineFailureClearsIt() async throws {
+    /// The engine offers the whole prompt for reuse on every request; the native core decides how
+    /// much actually matches. A genuine failure still resets the native cache; a cancel does not.
+    func test_everyRequestOffersTheWholePromptAndOnlyFailuresReset() async throws {
         let runtime = RecordingRuntime()
         let engine = LlamaSuggestionEngine(runtimeManager: runtime)
         let first = CotabbyTestFixtures.suggestionRequest(prefixText: "Hello", prompt: "Hello")
         let extended = CotabbyTestFixtures.suggestionRequest(prefixText: "Hello wo", prompt: "Hello wo")
 
         _ = try await engine.generateSuggestion(for: first)
-        _ = try await engine.generateSuggestion(for: extended)
-
+        runtime.generateError = LlamaRuntimeError.cancelled
+        _ = try? await engine.generateSuggestion(for: extended)
+        XCTAssertEqual(runtime.resetCount, 0)
         runtime.generateError = LlamaRuntimeError.generationFailed("decode failed")
         _ = try? await engine.generateSuggestion(for: extended)
         runtime.generateError = nil
         _ = try await engine.generateSuggestion(for: extended)
 
-        XCTAssertEqual(runtime.cachedPrefixHints, [nil, "Hello".utf8.count, "Hello wo".utf8.count, nil])
+        XCTAssertEqual(runtime.cachedPrefixHints, [5, 8, 8, 8])
         XCTAssertEqual(runtime.resetCount, 1)
-    }
-
-    /// A cancelled generation neither records its prompt nor resets the cache, so the hint still
-    /// reflects the last prompt that actually completed.
-    func test_cancelledGeneration_keepsThePreviousHint() async throws {
-        let runtime = RecordingRuntime()
-        let engine = LlamaSuggestionEngine(runtimeManager: runtime)
-        let first = CotabbyTestFixtures.suggestionRequest(prefixText: "Hello", prompt: "Hello")
-        let cancelled = CotabbyTestFixtures.suggestionRequest(prefixText: "Hello there", prompt: "Hello there")
-
-        _ = try await engine.generateSuggestion(for: first)
-        runtime.generateError = LlamaRuntimeError.cancelled
-        _ = try? await engine.generateSuggestion(for: cancelled)
-        runtime.generateError = nil
-        _ = try await engine.generateSuggestion(for: cancelled)
-
-        XCTAssertEqual(runtime.cachedPrefixHints, [nil, "Hello".utf8.count, "Hello".utf8.count])
-        XCTAssertEqual(runtime.resetCount, 0)
     }
 }
 
