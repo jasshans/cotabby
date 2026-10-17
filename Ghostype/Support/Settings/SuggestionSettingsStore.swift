@@ -489,9 +489,11 @@ struct SuggestionSettingsStore {
         // Missing keys opt existing installations into prediction reuse; an explicit false survives reload.
         let resolvedPredictAheadWhileTyping =
             userDefaults.object(forKey: Self.predictAheadWhileTypingDefaultsKey) as? Bool ?? true
-        // Streaming is opt-in; prediction reuse works independently when a user hides partials.
+        // Streaming is on by default: with the type-on reveal (`GhostRevealPolicy`) the first words
+        // start writing at the caret while the rest decodes, instead of the whole phrase landing at
+        // once when generation ends. Prediction reuse works independently when a user hides partials.
         let resolvedStreamSuggestionsWhileGenerating =
-            userDefaults.object(forKey: Self.streamWhileGeneratingDefaultsKey) as? Bool ?? false
+            userDefaults.object(forKey: Self.streamWhileGeneratingDefaultsKey) as? Bool ?? true
         // Defaults to true: the gentle fade-in is the intended out-of-box feel. Users who prefer
         // ghost text to snap in instantly can turn it off, and the overlay suppresses it under
         // Reduce Motion regardless. Existing installs (no key) get the fade on the next launch.
