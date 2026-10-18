@@ -222,23 +222,20 @@ final class SuggestionCoordinatorPredictionTests: SuggestionCoordinatorRigTestCa
 
     // MARK: - Typo gate
 
-    func test_typoGate_suppressesGenerationForAMisspelledCurrentWord() async {
+    func test_typoGate_unknownWordWithoutCorrectionKeepsPredicting() async {
+        // Names and words the dictionary does not know used to hide every prediction after them.
         let rig = retained(makeCoordinatorRig(
             snapshot: CotabbyTestFixtures.focusedInputSnapshot(precedingText: "I typed qzxkvjw "),
             settingsSnapshot: CotabbyTestFixtures.settingsSnapshot(
                 debounceMilliseconds: 1,
-                suppressCompletionsOnTypo: true
+                suppressCompletionsOnTypo: true,
+                offerTypoCorrections: true
             )
         ))
 
         rig.coordinator.schedulePrediction()
-        await waitUntil("Typo gate never settled") { rig.coordinator.state == .idle }
-
-        XCTAssertTrue(rig.engine.requests.isEmpty, "A misspelled current word must skip generation")
-        XCTAssertEqual(
-            rig.overlayController.hideReasons.last,
-            "Overlay hidden because the current word looks misspelled."
-        )
+        await waitUntil("Prediction never ran") { !rig.engine.requests.isEmpty }
+        XCTAssertEqual(rig.engine.requests.first?.prefixText, "I typed qzxkvjw ")
     }
 
     func test_typoGate_offersACorrectionSessionInsteadOfGenerating() async {
@@ -264,7 +261,8 @@ final class SuggestionCoordinatorPredictionTests: SuggestionCoordinatorRigTestCa
         XCTAssertTrue(rig.coordinator.overlayState.isVisible)
     }
 
-    func test_typoGate_automaticallyFixesACompletedWordAfterSpace() async {
+    func test_typoGate_neverChangesTextWithoutTheAcceptKey() async {
+        // A stored "automatically fix" preference from older builds now only offers the fix.
         let rig = retained(makeCoordinatorRig(
             snapshot: CotabbyTestFixtures.focusedInputSnapshot(precedingText: "I typed recieve "),
             settingsSnapshot: CotabbyTestFixtures.settingsSnapshot(
@@ -276,11 +274,10 @@ final class SuggestionCoordinatorPredictionTests: SuggestionCoordinatorRigTestCa
         ))
 
         rig.coordinator.schedulePrediction()
-        await waitUntil("Automatic correction never ran") { !rig.inserter.replacements.isEmpty }
-
-        XCTAssertEqual(rig.inserter.replacements.count, 1)
-        XCTAssertEqual(rig.coordinator.state, .idle)
-        XCTAssertTrue(rig.engine.requests.allSatisfy { $0.prefixText == "I typed receive " })
+        await waitUntil("Correction was never offered") {
+            rig.interactionState.activeSession?.kind.isCorrection == true
+        }
+        XCTAssertTrue(rig.inserter.replacements.isEmpty)
     }
 
     // MARK: - Environment reconciliation

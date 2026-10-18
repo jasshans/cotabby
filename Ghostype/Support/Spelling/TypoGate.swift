@@ -6,60 +6,40 @@ import Foundation
 /// `NSSpellChecker` or a live AX snapshot: the coordinator passes the spell-check behaviors in as
 /// closures, and tests pass deterministic stubs.
 nonisolated enum TypoGateDecision: Equatable {
-    /// No actionable typo on the current word. Proceed with a normal continuation.
+    /// No correction to offer for the current word. Proceed with a normal continuation.
     case proceed
-    /// The current word looks misspelled and corrections are off (or none was available). Hide the
-    /// continuation so completions never pile on top of a broken word, but show nothing.
-    case suppress
-    /// The current word looks misspelled and a correction is available. Offer it as a replace-the-word
-    /// suggestion. `word` is the typo to replace; the accept path recomputes the edit from live text.
+    /// The just-finished word looks misspelled and a correction is available. Offer it as a
+    /// replace-the-word suggestion the user accepts with Tab; `word` is the typo to replace and the
+    /// accept path recomputes the edit from live text.
     case offerCorrection(word: String, correctedWord: String)
-    /// The user finished a misspelled word with Space and enabled automatic fixing. Apply the edit
-    /// immediately instead of creating an accept-key session.
-    case applyCorrection(word: String, correctedWord: String)
 }
 
 enum TypoGate {
-    /// The user settings that shape the gate decision, grouped so `resolve` takes one cohesive value
-    /// instead of three loose Bools (which also keeps it within the parameter-count budget).
+    /// The user settings that shape the gate decision.
     struct Settings {
-        let suppressCompletionsOnTypo: Bool
         let offerTypoCorrections: Bool
-        let automaticallyFixTypos: Bool
     }
 
     /// Resolves the gate decision for the trailing word of `precedingText`.
     ///
-    /// `isTypo` and `bestCorrection` are injected so this stays pure: in production they wrap
-    /// `CurrentWordSpellChecker`; in tests they are stubs. Automatic fixing takes precedence only
-    /// after a literal trailing Space. Before a delimiter, neither correction nor typo suppression
-    /// is eligible: a partial word must reach the completion engine unchanged.
+    /// A correction is only ever offered, never applied: Ghostype does not change the user's text
+    /// without Tab. A flagged word with no correction (a name, a word in another language) no longer
+    /// hides predictions either; it proceeds like any other word. `isTypo` and `bestCorrection` are
+    /// injected so this stays pure: in production they wrap `CurrentWordSpellChecker`; in tests they
+    /// are stubs. Before a delimiter nothing is eligible: a partial word reaches the engine unchanged.
     static func resolve(
         precedingText: String,
         settings: Settings,
         isTypo: (String) -> Bool,
         bestCorrection: (String) -> String?
     ) -> TypoGateDecision {
-        guard settings.suppressCompletionsOnTypo else {
+        // Tolerates one trailing space so a just-finished word keeps its green correction offer.
+        guard settings.offerTypoCorrections,
+              let current = CaretWordContext.committedWord(in: precedingText),
+              isTypo(current.word),
+              let corrected = bestCorrection(current.word) else {
             return .proceed
         }
-        // Tolerate one trailing space so a just-finished word remains actionable: automatic mode can
-        // apply it, while offer mode can keep the green correction alive after Space.
-        guard let current = CaretWordContext.committedWord(in: precedingText) else {
-            return .proceed
-        }
-        guard isTypo(current.word) else {
-            return .proceed
-        }
-        guard let corrected = bestCorrection(current.word) else {
-            return .suppress
-        }
-        if settings.automaticallyFixTypos, current.delimiter == " " {
-            return .applyCorrection(word: current.word, correctedWord: corrected)
-        }
-        if settings.offerTypoCorrections {
-            return .offerCorrection(word: current.word, correctedWord: corrected)
-        }
-        return .suppress
+        return .offerCorrection(word: current.word, correctedWord: corrected)
     }
 }

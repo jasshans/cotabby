@@ -70,48 +70,18 @@ struct WritingPaneView: View {
                 .settingsItem(.addSpaceAfterAccept)
             }
 
-            // Typo handling is a dependency chain, so the UI discloses it progressively rather than
-            // showing every control at once. The master gate ("Hide Suggestions on Typo") detects
-            // misspellings; the correction actions only function while it is on; the dictionaries
-            // only matter once an action can consume them. Revealing each level when it becomes
-            // relevant — instead of dimming dependents in place — makes the hierarchy unmistakable:
-            // turning the gate off removes the controls that depend on it. This is the established
-            // master/dependent idiom in this app (see `EmojiPaneView`). The earlier flat layout put
-            // all three toggles at the same visual level, so it was not obvious the gate governed the
-            // other two.
+            // Corrections are only ever offered: a green replacement the user takes with the accept
+            // key. Ghostype never changes text on its own, and a flagged word never hides predictions.
             Section("Typos") {
-                Toggle(isOn: suppressCompletionsOnTypoBinding) {
+                Toggle(isOn: offerTypoCorrectionsBinding) {
                     SettingsRowLabel(
-                        title: "Hide Suggestions on Typo",
-                        description: "Pauses normal completions when a finished word looks misspelled. " +
-                            "Turn this on to use the correction options.",
-                        systemImage: "eye.slash"
+                        title: "Offer Corrections on Typo",
+                        description: "After you finish a misspelled word, shows the corrected word in green. " +
+                            "Press your accept key to apply it; keep typing to ignore it.",
+                        systemImage: "checkmark.bubble"
                     )
                 }
-                .settingsItem(.hideSuggestionsOnTypo)
-            }
-
-            if suggestionSettings.suppressCompletionsOnTypo {
-                Section("Corrections") {
-                    Toggle(isOn: offerTypoCorrectionsBinding) {
-                        SettingsRowLabel(
-                            title: "Offer Corrections on Typo",
-                            description: "After you finish a word, shows a green replacement you can apply with your accept key.",
-                            systemImage: "checkmark.bubble"
-                        )
-                    }
-                    .settingsItem(.offerTypoCorrections)
-
-                    Toggle(isOn: automaticallyFixTyposBinding) {
-                        SettingsRowLabel(
-                            title: "Automatically Fix Typos",
-                            description: "After you press Space, replaces a misspelled word without requiring your accept key.",
-                            systemImage: "checkmark.circle"
-                        )
-                    }
-                    .settingsItem(.automaticallyFixTypos)
-                }
-
+                .settingsItem(.offerTypoCorrections)
             }
 
             // These local dictionaries also supply exact-prefix word endings when model output is
@@ -182,24 +152,10 @@ struct WritingPaneView: View {
         )
     }
 
-    private var suppressCompletionsOnTypoBinding: Binding<Bool> {
-        Binding(
-            get: { suggestionSettings.suppressCompletionsOnTypo },
-            set: { suggestionSettings.setSuppressCompletionsOnTypo($0) }
-        )
-    }
-
     private var offerTypoCorrectionsBinding: Binding<Bool> {
         Binding(
             get: { suggestionSettings.offerTypoCorrections },
             set: { suggestionSettings.setOfferTypoCorrections($0) }
-        )
-    }
-
-    private var automaticallyFixTyposBinding: Binding<Bool> {
-        Binding(
-            get: { suggestionSettings.automaticallyFixTypos },
-            set: { suggestionSettings.setAutomaticallyFixTypos($0) }
         )
     }
 
