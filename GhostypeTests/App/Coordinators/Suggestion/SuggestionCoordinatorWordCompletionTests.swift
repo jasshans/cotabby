@@ -158,34 +158,6 @@ final class SuggestionCoordinatorWordCompletionTests: XCTestCase {
         XCTAssertEqual(rig.interactionState.activeSession?.remainingText, " package")
     }
 
-    func testAXWrapperChurnCannotReapplyAnUnpublishedAutomaticCorrection() async {
-        // The endpoint engine prepares no continuation, so only the publication poll guards this edit.
-        let rig = makeCoordinatorRig(snapshot: CotabbyTestFixtures.focusedInputSnapshot(precedingText: "Please recieve "),
-            settingsSnapshot: CotabbyTestFixtures.settingsSnapshot(selectedEngine: .openAICompatible,
-                debounceMilliseconds: 1, suppressCompletionsOnTypo: true, automaticallyFixTypos: true))
-        defer { rig.coordinator.stop() }
-        rig.coordinator.symSpellCorrector.loadForTesting(contents: "receive 100\n")
-        rig.coordinator.schedulePrediction()
-        await waitUntil { !rig.inserter.replacements.isEmpty }
-        XCTAssertNil(rig.coordinator.preparedContinuation)
-
-        // Chromium can recycle the AX wrapper before the replacement publishes. The stale typo is
-        // the same edit, so it must not authorize a second replacement ("word " -> "wword ").
-        let churned = CotabbyTestFixtures.focusedInputSnapshot(elementIdentifier: "recycled-ax-token",
-                                                               precedingText: "Please recieve ")
-        rig.focusProvider.snapshot = FocusSnapshot(applicationName: churned.applicationName,
-            bundleIdentifier: churned.bundleIdentifier, capability: .supported, context: churned)
-        // Outlast the endpoint's debounce, but stay inside the 400 ms publication ceiling so the
-        // real publish below is still observed.
-        try? await Task.sleep(nanoseconds: 300_000_000)
-        XCTAssertEqual(rig.inserter.replacements.count, 1)
-
-        publishText("Please receive ", in: rig)
-        await waitUntil { !rig.engine.requests.isEmpty }
-        XCTAssertEqual(rig.engine.requests.map(\.prefixText), ["Please receive "])
-        XCTAssertEqual(rig.inserter.replacements.count, 1)
-    }
-
     func testTypingAfterAHeldTabKeepsItFromAcceptingTheNextSuggestion() async {
         let rig = makeCoordinatorRig(snapshot: CotabbyTestFixtures.focusedInputSnapshot(precedingText: "Please recieve "),
             settingsSnapshot: CotabbyTestFixtures.settingsSnapshot(debounceMilliseconds: 1,
@@ -244,18 +216,16 @@ final class SuggestionCoordinatorWordCompletionTests: XCTestCase {
     }
 
     func testCorrectionTimeoutNeverReoffersOrRepeatsAnUnpublishedReplacement() async {
+        // The stored automatic-fix setting is ignored: both runs offer the correction behind Tab.
         for automatic in [false, true] {
             let rig = makeCoordinatorRig(snapshot: CotabbyTestFixtures.focusedInputSnapshot(precedingText: "Please recieve "),
                 settingsSnapshot: CotabbyTestFixtures.settingsSnapshot(debounceMilliseconds: 1,
                     suppressCompletionsOnTypo: true, offerTypoCorrections: true, automaticallyFixTypos: automatic))
             rig.coordinator.schedulePrediction()
-            if automatic {
-                await waitUntil { !rig.inserter.replacements.isEmpty }
-            } else {
-                await waitUntil { rig.interactionState.activeSession?.kind.isCorrection == true }
-                XCTAssertTrue(rig.coordinator.acceptCurrentSuggestion())
-                XCTAssertTrue(rig.coordinator.acceptCurrentSuggestion())
-            }
+            await waitUntil { rig.interactionState.activeSession?.kind.isCorrection == true }
+            XCTAssertTrue(rig.inserter.replacements.isEmpty, "nothing changes before the accept key")
+            XCTAssertTrue(rig.coordinator.acceptCurrentSuggestion())
+            XCTAssertTrue(rig.coordinator.acceptCurrentSuggestion())
             // Keep AX frozen beyond its 400 ms publication ceiling. Neither manual nor automatic
             // correction may interpret this old word as permission to replace it a second time.
             try? await Task.sleep(nanoseconds: 500_000_000)
