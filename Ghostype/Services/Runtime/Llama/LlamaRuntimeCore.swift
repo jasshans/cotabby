@@ -47,6 +47,9 @@ nonisolated final class LlamaRuntimeCore: @unchecked Sendable {
     private let abortTargetLock = NSLock()
     private var abortTargetSequenceID: Int32 = -1
     private var abortTargetOperationID: UUID?
+    /// Set by `abortActiveOperation` until the following reset: any decode that publishes its
+    /// target meanwhile (one still tokenizing when the field changed) is cancelled at once.
+    private var abortAllRequested = false
     private var currentOperationID: UUID?
 
     /// A restoration miss describes one checkpoint/prefix, not a model family's permanent
@@ -268,13 +271,24 @@ nonisolated final class LlamaRuntimeCore: @unchecked Sendable {
         engine.cancelSequence(abortTargetSequenceID)
     }
 
+    /// Stops whatever decode is running, whichever request owns it. Used before a prompt-cache
+    /// reset (field change), where the stale prompt will never be reused. Keystroke cancellation
+    /// deliberately does not do this; see `LlamaRuntimeManager.generate`.
+    func abortActiveOperation() {
+        abortTargetLock.lock()
+        defer { abortTargetLock.unlock() }
+        abortAllRequested = true
+        if abortTargetSequenceID >= 0 { engine.cancelSequence(abortTargetSequenceID) }
+    }
+
     private func setAbortTarget(_ sequenceID: Int32) {
         abortTargetLock.lock()
         abortTargetSequenceID = sequenceID
         abortTargetOperationID = currentOperationID
-        // A cancellation can arrive during tokenization, before there is a native target. Close
-        // that gap when publishing the target so stale work cannot enter an entire prompt decode.
-        if Task.isCancelled { engine.cancelSequence(sequenceID) }
+        // A reset requested while this request was still tokenizing must not wait out its decode.
+        // A merely superseded request (Task cancelled by a keystroke) decodes on: that work is what
+        // the next request reuses.
+        if abortAllRequested { engine.cancelSequence(sequenceID) }
         abortTargetLock.unlock()
     }
 
@@ -513,6 +527,9 @@ nonisolated final class LlamaRuntimeCore: @unchecked Sendable {
         defer { autocompleteLock.unlock() }
 
         discardAutocompleteSequence()
+        abortTargetLock.lock()
+        abortAllRequested = false
+        abortTargetLock.unlock()
     }
 
     /// Called with autocompleteLock held. Clearing both native memory and its prompt description
@@ -545,6 +562,9 @@ nonisolated final class LlamaRuntimeCore: @unchecked Sendable {
                 "timeout_seconds": .string(timeoutSeconds.map { String(format: "%.1f", $0) } ?? "unbounded")
             ]
         )
+        // Keystroke cancels no longer abort prompt decodes, so stop any running one here rather
+        // than wait out a whole stale prompt before unloading.
+        abortActiveOperation()
         lifecycleCondition.lock()
         isShuttingDown = true
 

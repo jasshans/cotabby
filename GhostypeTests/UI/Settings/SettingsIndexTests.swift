@@ -61,7 +61,7 @@ final class SettingsIndexTests: XCTestCase {
             ("largest ghost text", .ghostTextSizeCeiling),
             ("terminal", .suggestInIntegratedTerminals),
             ("vscode", .suggestInIntegratedTerminals),
-            ("typo", .automaticallyFixTypos),
+            ("typo", .offerTypoCorrections),
             ("model status", .modelStatus),
             ("battery", .batteryModel),
             ("plugged", .pluggedInModel),

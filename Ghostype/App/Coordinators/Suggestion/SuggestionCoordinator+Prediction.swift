@@ -288,7 +288,7 @@ extension SuggestionCoordinator {
         ) else {
             return
         }
-        if settingsSnapshot.suppressCompletionsOnTypo,
+        if settingsSnapshot.offerTypoCorrections,
            let trailingWord = CaretWordContext.committedWord(in: optimistic.precedingText)?.word,
            spellChecker.isTypo(trailingWord) {
             return
@@ -602,17 +602,13 @@ extension SuggestionCoordinator {
         return liveContext.generation == partial.generation ? partial : nil
     }
 
-    /// Runs the typo gate for the current word. Returns `true` when it handled the cycle by suppressing,
-    /// offering, or applying a correction; `false` proceeds with a normal continuation. Kept separate
+    /// Runs the typo gate for the current word. Returns `true` when it offered a correction;
+    /// `false` proceeds with a normal continuation. Kept separate
     /// so `generateFromCurrentFocus` stays within the project's cyclomatic-complexity budget.
     private func handleTypoGate(rawContext: FocusedInputSnapshot, workID: UInt64) -> Bool {
         switch TypoGate.resolve(
             precedingText: rawContext.precedingText,
-            settings: TypoGate.Settings(
-                suppressCompletionsOnTypo: settingsSnapshot.suppressCompletionsOnTypo,
-                offerTypoCorrections: settingsSnapshot.offerTypoCorrections,
-                automaticallyFixTypos: settingsSnapshot.automaticallyFixTypos
-            ),
+            settings: TypoGate.Settings(offerTypoCorrections: settingsSnapshot.offerTypoCorrections),
             isTypo: { spellChecker.isTypo($0) },
             bestCorrection: {
                 bestCorrection(
@@ -623,33 +619,11 @@ extension SuggestionCoordinator {
         ) {
         case .proceed:
             return false
-        case .suppress:
-            clearSuggestion()
-            hideOverlay(reason: "Overlay hidden because the current word looks misspelled.")
-            state = .idle
-            logStage(
-                "typo-suppressed",
-                workID: workID,
-                message: "Skipped generation because the current word looks misspelled."
-            )
-            return true
         case let .offerCorrection(word, correctedWord):
             let context = interactionState.materializeContext(from: rawContext)
-            guard !wasDismissed(correctedWord, context: context) else {
-                clearSuggestion()
-                hideOverlay(reason: "Overlay hidden because this correction was explicitly dismissed.")
-                state = .idle
-                return true
-            }
+            // A dismissed correction falls through to a normal prediction rather than a blank ghost.
+            guard !wasDismissed(correctedWord, context: context) else { return false }
             presentCorrection(
-                typoWord: word,
-                correctedWord: correctedWord,
-                rawContext: rawContext,
-                workID: workID
-            )
-            return true
-        case let .applyCorrection(word, correctedWord):
-            applyAutomaticCorrection(
                 typoWord: word,
                 correctedWord: correctedWord,
                 rawContext: rawContext,
@@ -691,77 +665,6 @@ extension SuggestionCoordinator {
         return spellChecker.bestCorrection(for: word) == nil
             ? .uncorrectableTypo
             : .correctableTypo
-    }
-
-    /// Replaces a completed typo after Space without creating a visible correction session.
-    ///
-    /// Automatic mutation is intentionally limited to a committed word boundary. The shared planner
-    /// revalidates the exact trailing word and requires that Space to still be present, so a stale AX
-    /// snapshot or a user who resumed typing cannot make Ghostype delete an unrelated suffix.
-    private func applyAutomaticCorrection(
-        typoWord: String,
-        correctedWord: String,
-        rawContext: FocusedInputSnapshot,
-        workID: UInt64
-    ) {
-        let liveContext = interactionState.materializeContext(from: rawContext)
-        latestGenerationNumber = liveContext.generation
-        guard let replacement = TypoCorrectionReplacementPlanner.plan(
-            precedingText: rawContext.precedingText,
-            expectedTypo: typoWord,
-            correctedWord: correctedWord,
-            requiresTrailingSpace: true
-        ) else {
-            clearSuggestion()
-            hideOverlay(reason: "Overlay hidden because the automatic correction target changed.")
-            state = .idle
-            logStage(
-                "typo-auto-correction-stale",
-                workID: workID,
-                generation: liveContext.generation,
-                message: "Skipped automatic correction because the completed word no longer matched."
-            )
-            return
-        }
-
-        guard suggestionInserter.replace(
-            deletingUTF16Count: replacement.deletingUTF16Count,
-            with: replacement.replacementText
-        ) else {
-            let message = suggestionInserter.lastErrorMessage ?? "Automatic correction insertion failed."
-            cancelPredictionWork()
-            clearSuggestion(clearDiagnostics: true)
-            hideOverlay(reason: "Overlay hidden because automatic correction insertion failed.")
-            state = .idle
-            logStage(
-                "typo-auto-correction-failed",
-                workID: workID,
-                generation: liveContext.generation,
-                message: message,
-                normalizedOutput: correctedWord
-            )
-            return
-        }
-
-        focusModel.invalidateTransientCaretCaches()
-        cancelPredictionWork()
-        clearSuggestion(clearDiagnostics: false)
-        hideOverlay(reason: "Overlay hidden because Ghostype automatically fixed a typo.")
-        state = .idle
-        logStage(
-            "typo-auto-corrected",
-            workID: workID,
-            generation: liveContext.generation,
-            message: "Automatically replaced the completed misspelled word after Space.",
-            normalizedOutput: correctedWord
-        )
-        // Synthetic replacement is asynchronous from the host editor's perspective. Poll until AX
-        // publishes the corrected text before asking for the next continuation.
-        let correctedSession = ActiveSuggestionSession(baseContext: liveContext, fullText: correctedWord,
-            latency: 0, kind: .correction(typoWord: typoWord))
-        prepareContinuation(after: correctedSession, rawContext: rawContext)
-        markPreparedContinuationCommitted(after: correctedSession)
-        schedulePredictionAfterHostPublishDelay(requiresTextChange: true)
     }
 
     /// Presents a native spell-checker correction as a replace-the-word suggestion, with no model

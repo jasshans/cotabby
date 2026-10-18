@@ -232,8 +232,7 @@ final class PhrasePredictionEvalTests: XCTestCase {
             return .init(checkpoint: checkpoint, raw: "", shown: nil, suppression: "pre-generation-gate", latencyMilliseconds: 0, error: nil)
         }
         let typoDecision = TypoGate.resolve(precedingText: checkpoint.prefix,
-            settings: .init(suppressCompletionsOnTypo: settings.suppressCompletionsOnTypo,
-                            offerTypoCorrections: settings.offerTypoCorrections, automaticallyFixTypos: false),
+            settings: .init(offerTypoCorrections: settings.offerTypoCorrections),
             isTypo: { spellChecker.isTypo($0) }, bestCorrection: { spellChecker.bestCorrection(for: $0) })
         guard typoDecision == .proceed else {
             // Replacement offers cannot be scored as appended word continuations. The coordinator

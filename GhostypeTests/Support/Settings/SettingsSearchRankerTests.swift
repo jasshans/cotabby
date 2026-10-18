@@ -58,7 +58,7 @@ final class SettingsSearchRankerTests: XCTestCase {
     func test_summaryTextIsSearchable() {
         XCTAssertTrue(
             SettingsSearchRanker.rank("misspelled", in: SettingsItem.allCases)
-                .contains(.hideSuggestionsOnTypo),
+                .contains(.offerTypoCorrections),
             "summary phrasing should be matchable even when title and keywords miss"
         )
     }

@@ -150,7 +150,7 @@ final class LlamaSuggestionEvalTests: XCTestCase {
         // correction offer is not a continuation either.
         let typoDecision = TypoGate.resolve(
             precedingText: evalCase.precedingText,
-            settings: TypoGate.Settings(suppressCompletionsOnTypo: true, offerTypoCorrections: true, automaticallyFixTypos: false),
+            settings: TypoGate.Settings(offerTypoCorrections: true),
             isTypo: { spellChecker.isTypo($0) },
             bestCorrection: { spellChecker.bestCorrection(for: $0) }
         )

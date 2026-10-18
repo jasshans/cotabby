@@ -157,12 +157,14 @@ final class LlamaRuntimeManager: ObservableObject {
                 try Task.checkCancellation()
                 return partial
             } onCancel: {
+                // Stops sampling at the next token, and nothing else. A keystroke supersedes this
+                // request, but its prompt shares all but the last few tokens with the next one, so
+                // the prompt decode is left to finish and is reused (~50ms) by the next request.
+                // Aborting it natively destroyed the KV sequence: on hybrid models (Bonsai, Qwen3.5)
+                // a cold prompt could then only ever be rebuilt during a typing pause, which is why
+                // suggestions appeared mostly when the user stopped. Field changes still abort
+                // everything through `resetPromptCache`.
                 task.cancel()
-                // Task cancellation is only polled between sampled tokens, so an in-flight prompt
-                // prefill would otherwise run to completion while holding the autocomplete lock,
-                // making the superseding request wait out the whole stale decode. The engine-level
-                // flag stops before the next prompt batch; an already-submitted batch finishes.
-                core.abortInFlightGeneration(operationID: operationID)
             }
         } catch is CancellationError {
             CotabbyLogger.runtime.debug("Generation cancelled")
@@ -181,6 +183,9 @@ final class LlamaRuntimeManager: ObservableObject {
 
     /// Clears the native prompt KV cache without unloading the model.
     func resetPromptCache() {
+        // The editing context changed, so in-flight work is never reused: stop it first, or the
+        // reset (which needs the cache lock) would wait out a whole stale prompt decode.
+        core.abortActiveOperation()
         core.resetPromptCache()
     }
 
@@ -209,10 +214,9 @@ final class LlamaRuntimeManager: ObservableObject {
             try await task.value
             try Task.checkCancellation()
         } onCancel: {
+            // As in `generate`: the warmup's prompt decode is exactly what the superseding request
+            // reuses, so it finishes instead of being aborted.
             task.cancel()
-            // A prefill is superseded the moment a real generation arrives; abort its native
-            // work between batches so generation need not wait for the entire stale prompt.
-            core.abortInFlightGeneration(operationID: operationID)
         }
     }
 
