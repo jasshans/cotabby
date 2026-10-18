@@ -294,4 +294,24 @@ final class InputMonitorTests: XCTestCase {
         XCTAssertEqual(monitor.resolveAcceptKeyDown(InputMonitorKeyEvent(keyCode: Self.tab)), .consume)
         XCTAssertEqual(monitor.resolveAcceptKeyDown(InputMonitorKeyEvent(keyCode: 125)), .notHandled)
     }
+
+    /// Regression for `/today` committing as `/18 Oct 2026`: the consuming tap can see Tab before the
+    /// listen-only observer has routed it. The capture must still get to decide (consume) that Tab,
+    /// and the observer's later copy of the same key-down must not be routed a second time.
+    func test_consumingTapRoutesCaptureKeyTheObserverHasNotSeenYet() {
+        let monitor = makeMonitor()
+        monitor.captureInterceptionActive = true
+        var observed = 0
+        monitor.onEvent = { _ in observed += 1; return false }
+        // Like the macro controller: a decision exists only once the observer path has run.
+        monitor.emojiCaptureKeyDecider = { _ in observed > 0 ? .consume : .notHandled }
+        let tab = InputMonitorKeyEvent(keyCode: Self.tab)
+
+        XCTAssertEqual(monitor.resolveCaptureAwareKeyDown(tab, timestamp: 42), .consume)
+        XCTAssertEqual(observed, 1)
+        _ = monitor.resolveCaptureAwareKeyDown(tab, timestamp: 42)
+        XCTAssertEqual(observed, 1, "the same key-down is routed once")
+        _ = monitor.resolveCaptureAwareKeyDown(tab, timestamp: 43)
+        XCTAssertEqual(observed, 2)
+    }
 }
