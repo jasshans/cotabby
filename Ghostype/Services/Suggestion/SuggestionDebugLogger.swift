@@ -48,14 +48,20 @@ final class SuggestionDebugLogger {
     private let colorizedOutput: Bool
     private var lastLoggedMessage: String?
 
+    /// Eval-only tap on every coordinator stage name, called before the debug gate so the typing
+    /// replay (`TypingReplayEvalTests`) can say *why* no ghost was visible without on-disk logs.
+    /// The app never sets it; stage names are fixed identifiers and carry no typed text.
+    var stageObserver: (@MainActor (String) -> Void)?
+
     init(colorizedOutput: Bool? = nil) {
         let shouldUseColor = ProcessInfo.processInfo.environment["NO_COLOR"] == nil
         self.colorizedOutput = colorizedOutput ?? shouldUseColor
     }
 
-    // All stored state is thread-safe to release (a Bool and an optional String). The nonisolated
-    // deinit prevents Swift from scheduling the teardown through the back-deployment main-actor
-    // executor shim, which double-frees in app-hosted tests (see InputSuppressionController).
+    // All stored state is thread-safe to release (a Bool, an optional String, and an optional
+    // closure only tests set). The nonisolated deinit prevents Swift from scheduling the teardown
+    // through the back-deployment main-actor executor shim, which double-frees in app-hosted tests
+    // (see InputSuppressionController).
     nonisolated deinit {}
 
     /// Emits only the model-boundary artifacts that are useful for debugging suggestion quality.
@@ -72,6 +78,7 @@ final class SuggestionDebugLogger {
         rawOutput: String? = nil,
         normalizedOutput: String? = nil
     ) {
+        stageObserver?(stage)
         guard CotabbyDebugOptions.isEnabled else {
             return
         }

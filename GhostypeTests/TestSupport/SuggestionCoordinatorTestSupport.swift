@@ -54,7 +54,14 @@ final class RigLowPowerModeProvider: SuggestionLowPowerModeProviding {
 @MainActor
 final class RigFocusProvider: SuggestionFocusProviding {
     /// Tests can simulate a recent poll followed by a focus change discovered only on refresh.
-    var millisecondsSinceLastCapture: Int?
+    /// A replay host that captures on its own clock reports the live age through `captureAge`
+    /// instead, so `refreshIfStale` skips reads exactly when the production tracker would.
+    var millisecondsSinceLastCapture: Int? {
+        get { captureAge?() ?? fixedCaptureAge }
+        set { fixedCaptureAge = newValue }
+    }
+    var captureAge: (() -> Int?)?
+    private var fixedCaptureAge: Int?
     var onRefresh: (() -> Void)?
     var snapshot: FocusSnapshot
     private(set) var refreshCount = 0
@@ -153,6 +160,8 @@ final class RigInserter: SuggestionInserting {
     var insertedChunks: [String] = []
     var replacements: [(deleteCount: Int, text: String)] = []
     var shouldInsert = true
+    /// Lets a simulated editor apply Ghostype's synthetic replacements (typo fixes) to its text.
+    var onReplace: ((Int, String) -> Void)?
 
     func insert(_ suggestion: String) -> Bool {
         insertedChunks.append(suggestion)
@@ -161,6 +170,7 @@ final class RigInserter: SuggestionInserting {
 
     func replace(deletingUTF16Count: Int, with text: String) -> Bool {
         replacements.append((deletingUTF16Count, text))
+        if shouldInsert { onReplace?(deletingUTF16Count, text) }
         return shouldInsert
     }
 }

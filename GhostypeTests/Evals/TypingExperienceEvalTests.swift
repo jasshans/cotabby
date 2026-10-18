@@ -277,13 +277,16 @@ final class TypingExperienceEvalTests: XCTestCase {
 #if RUN_LLAMA_EVAL
 /// Counts the production engine's actual work without changing model output or delaying results.
 /// One instance belongs to one replay; records remain readable after cooperative cancellation.
+/// Shared with `TypingReplayEvalTests`, which drives the same engine through a keystroke replay.
 @MainActor
-private final class ExperienceRecordingEngine: SuggestionGenerating {
+final class ExperienceRecordingEngine: SuggestionGenerating {
     nonisolated struct RequestRecord: Encodable {
         let prefix: String
         var outcome = "running"
         var milliseconds: Double = 0
         var result: String?
+        /// Why the engine withheld text (normalizer rule or confidence floor), when it did.
+        var suppression: String?
     }
     private let engine: LlamaSuggestionEngine
     private(set) var records: [RequestRecord] = []
@@ -310,6 +313,7 @@ private final class ExperienceRecordingEngine: SuggestionGenerating {
             try Task.checkCancellation()
             records[index].outcome = "completed"
             records[index].result = result.text
+            records[index].suppression = result.suppressionReason
             return result
         } catch {
             records[index].outcome = Task.isCancelled ? "cancelled" : "failed: \(error.localizedDescription)"
