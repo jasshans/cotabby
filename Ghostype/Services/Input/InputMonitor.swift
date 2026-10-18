@@ -132,6 +132,22 @@ final class InputMonitor {
     /// Production only mutates this through `setCaptureInterceptionActive(_:)`.
     var captureInterceptionActive = false
 
+    /// Timestamps of the last few physical key-downs already routed through the observer path.
+    /// The listen-only observer does not hold events, so the consuming tap can see a key before the
+    /// observer has: with a `/today` or `:smile` capture open, the decider then had no decision for
+    /// that Tab, passed it to the host (which typed a tab), and the commit's first backspace deleted
+    /// that tab instead of the sigil (`/18 Oct 2026`). The consuming tap now routes such a key itself
+    /// and the observer skips it; both taps see the same event, so its timestamp identifies it.
+    private var routedKeyDownTimestamps: [UInt64] = []
+
+    /// Records `timestamp` as routed. Returns false when that key-down was already routed.
+    private func claimKeyDownRouting(_ timestamp: UInt64) -> Bool {
+        guard !routedKeyDownTimestamps.contains(timestamp) else { return false }
+        routedKeyDownTimestamps.append(timestamp)
+        if routedKeyDownTimestamps.count > 16 { routedKeyDownTimestamps.removeFirst() }
+        return true
+    }
+
     init(
         permissionProvider: @escaping @MainActor () -> Bool,
         suppressionController: InputSuppressionController
@@ -495,7 +511,7 @@ final class InputMonitor {
             // Short-circuit before classification when Ghostype won't act on events for the
             // current app. Even though this tap is listen-only, classification still does work
             // on the main actor that we should skip when nothing will use the result.
-            guard shouldProcessEventsProvider() else {
+            guard shouldProcessEventsProvider(), claimKeyDownRouting(event.timestamp) else {
                 return Unmanaged.passUnretained(event)
             }
 
@@ -570,10 +586,11 @@ final class InputMonitor {
             // those repeats as one long press instead of a second tap.
             let keyEvent = InputMonitorKeyEvent(
                 keyCode: keyCode(from: event),
+                characters: event.unicodeString,
                 flags: event.flags,
                 isAutorepeat: event.getIntegerValueField(.keyboardEventAutorepeat) != 0
             )
-            switch resolveAcceptKeyDown(keyEvent) {
+            switch resolveCaptureAwareKeyDown(keyEvent, timestamp: event.timestamp) {
             case .consume:
                 return nil
             case .notHandled, .passThrough:
@@ -583,6 +600,16 @@ final class InputMonitor {
         default:
             return Unmanaged.passUnretained(event)
         }
+    }
+
+    /// The consuming tap's entry for a physical key-down. While an emoji or macro capture is open, a
+    /// key the observer has not routed yet is routed here first, so the capture's decision exists
+    /// before the decider is asked (see `routedKeyDownTimestamps`).
+    func resolveCaptureAwareKeyDown(_ keyEvent: InputMonitorKeyEvent, timestamp: UInt64) -> InputMonitorAcceptTapDecision {
+        if captureInterceptionActive, claimKeyDownRouting(timestamp) {
+            _ = routeObserverKeyDown(keyEvent)
+        }
+        return resolveAcceptKeyDown(keyEvent)
     }
 
     /// Testable resolution of a keydown at the active tap: the emoji decider wins while a capture is
