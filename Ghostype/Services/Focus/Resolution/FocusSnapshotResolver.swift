@@ -129,6 +129,14 @@ struct FocusSnapshotResolver {
         let focusedElementIdentifier = AXHelper.elementIdentifier(
             for: focusedElement, bundleIdentifier: bundleIdentifier)
 
+        // A password field is recognized from its role and labels alone, before anything reads its
+        // value, selection or caret (or the debug dump below walks it): its contents never enter
+        // this process. The snapshot carries no context, so nothing downstream can hold them either.
+        if secureVerdict(for: focusedElement, identifier: focusedElementIdentifier, role: focusedRole,
+                         subrole: focusedSubrole, focusChangeSequence: focusChangeSequence) {
+            return Self.secureSnapshot(applicationName: applicationName, bundleIdentifier: bundleIdentifier)
+        }
+
         // Auto-dump the AX tree on debug builds for the configured bundle (currently Chrome),
         // debounced by focused-element identity. Lives in AXTreeDumpWriter so this resolver stays
         // focused on snapshot assembly rather than diagnostic disk I/O.
@@ -163,6 +171,12 @@ struct FocusSnapshotResolver {
                 capability: .unsupported(resolution.unsupportedReason),
                 context: nil
             )
+        }
+
+        // A password field found among the candidates (a Chromium wrapper's descendant) was never
+        // read either; it blocks with no context, same as a focused one.
+        if resolvedCandidate.isSecure {
+            return Self.secureSnapshot(applicationName: applicationName, bundleIdentifier: bundleIdentifier)
         }
 
         guard let rawSelection = resolvedCandidate.selection else {
@@ -670,7 +684,9 @@ struct FocusSnapshotResolver {
                 )
                 let evaluation = FocusCapabilityResolver.evaluate(candidate.resolverCandidate)
 
-                if evaluation.hasFullCapabilities {
+                // A password candidate is never read, so it never has full capabilities; it still
+                // wins, or a neighbour (the page around it) would stand in for it and be read.
+                if evaluation.hasFullCapabilities || candidate.isSecure {
                     return FocusCandidateResolution(
                         resolvedCandidate: candidate,
                         resolution: FocusCapabilityResolution(
@@ -1026,6 +1042,13 @@ struct FocusSnapshotResolver {
             role = AXHelper.stringValue(for: kAXRoleAttribute as CFString, on: element) ?? "Unknown"
             subrole = AXHelper.stringValue(for: kAXSubroleAttribute as CFString, on: element)
         }
+        let elementIdentifier = AXHelper.elementIdentifier(
+            for: element, bundleIdentifier: bundleIdentifier)
+        // Decided before any read of the field's text, selection or caret: a password field's
+        // contents are never requested (`readsContent` gates every such read below).
+        let isSecure = secureVerdict(for: element, identifier: elementIdentifier, role: role,
+                                     subrole: subrole, focusChangeSequence: focusChangeSequence)
+        let readsContent = !isSecure
         let supportedAttributes = Set(AXHelper.attributeNames(on: element))
         let supportedParameterizedAttributes = Set(
             AXHelper.parameterizedAttributeNames(on: element))
@@ -1051,7 +1074,7 @@ struct FocusSnapshotResolver {
             supportedAttributes: supportedAttributes
         )
         let isKnownReadOnlyRole = AXHelper.isKnownReadOnlyRole(role)
-        let canBeEditableTarget = hasStrongEditabilitySignal && !isKnownReadOnlyRole
+        let canBeEditableTarget = hasStrongEditabilitySignal && !isKnownReadOnlyRole && readsContent
         let nativeSelection =
             canBeEditableTarget && supportedAttributes.contains(kAXSelectedTextRangeAttribute as String)
             ? AXHelper.rangeValue(for: kAXSelectedTextRangeAttribute as CFString, on: element)
@@ -1185,7 +1208,7 @@ struct FocusSnapshotResolver {
         // directly for its line geometry — that is the only way to learn a document's text margin as
         // distinct from its page edge.
         let observedContentEdges = caretResult?.observedContentEdges
-            ?? lineContentEdges(
+            ?? (!readsContent ? nil : lineContentEdges(
                 for: LineEdgeLookup(
                     element: element,
                     // Only ask for line geometry when the offset means what the host thinks it means. A
@@ -1204,22 +1227,10 @@ struct FocusSnapshotResolver {
                         .allSatisfy(supportedParameterizedAttributes.contains)
                 ),
                 focusChangeSequence: focusChangeSequence
-            )
+            ))
         // Recorded from the already-fetched attribute list (no extra AX call) so snapshot
         // assembly can classify the field as web-rendered without touching the element again.
         let vendsDOMAttributes = WebContentFieldDetector.vendsDOMAttributes(supportedAttributes)
-        let elementIdentifier = AXHelper.elementIdentifier(
-            for: element, bundleIdentifier: bundleIdentifier)
-        // Secure-ness is invariant for an element's lifetime, and the three marker probes behind
-        // it (role description, title, description) are separate AX round trips otherwise paid on
-        // every poll tick. Session scoping keeps recycled element identities from ever serving a
-        // stale verdict to a different field.
-        let isSecure = secureFieldVerdictCache.value(
-            forKey: elementIdentifier,
-            focusChangeSequence: focusChangeSequence
-        ) {
-            isSecureElement(element: element, role: role, subrole: subrole)
-        }
         let resolverCandidate = FocusCapabilityCandidate(
             elementIdentifier: elementIdentifier,
             role: role,
@@ -1650,6 +1661,31 @@ struct FocusSnapshotResolver {
             lineRect: metrics?.lineRect,
             linePitch: pitch,
             lineRectIsFromTextMarkers: metrics?.lineRectIsFromTextMarkers ?? false
+        )
+    }
+
+    /// Secure-ness is invariant for an element's lifetime, and the three marker probes behind it
+    /// (role description, title, description) are separate AX round trips otherwise paid on every
+    /// poll tick. Session scoping keeps recycled element identities from ever serving a stale
+    /// verdict to a different field. None of the probes reads the field's value.
+    private func secureVerdict(
+        for element: AXUIElement,
+        identifier: String,
+        role: String,
+        subrole: String?,
+        focusChangeSequence: UInt64
+    ) -> Bool {
+        secureFieldVerdictCache.value(forKey: identifier, focusChangeSequence: focusChangeSequence) {
+            isSecureElement(element: element, role: role, subrole: subrole)
+        }
+    }
+
+    private static func secureSnapshot(applicationName: String, bundleIdentifier: String) -> FocusSnapshot {
+        FocusSnapshot(
+            applicationName: applicationName,
+            bundleIdentifier: bundleIdentifier,
+            capability: .blocked("Secure text input is active."),
+            context: nil
         )
     }
 

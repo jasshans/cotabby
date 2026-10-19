@@ -186,6 +186,17 @@ struct SuggestionConfiguration: Equatable, Sendable {
 /// The Speed pane's toggles. They are read straight from `UserDefaults` (like the coordinator's
 /// speculative-prefetch switch) and folded into the request configuration per request, so a toggle
 /// takes effect on the next keystroke without threading through the settings snapshot.
+/// "Match Text Size" (Settings → Appearance): ghost text takes exactly the size of the text it
+/// continues, ignoring the size multiplier and the smallest/largest limits. Read live by
+/// `OverlayController` at present time, like the other ghost-size settings.
+enum GhostTextSizeSettings {
+    static let matchTextSizeKey = "ghostypeMatchTextSize"
+
+    static func isMatchTextSizeEnabled(_ defaults: UserDefaults) -> Bool {
+        defaults.object(forKey: matchTextSizeKey) as? Bool ?? true
+    }
+}
+
 enum SpeedSettings {
     static let stablePrefixWindowKey = "ghostypeSpeedStablePrefixWindow"
     static let shortContextKey = "ghostypeSpeedShortContext"
