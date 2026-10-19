@@ -8,6 +8,7 @@ import SwiftUI
 struct AppearancePaneView: View {
     @ObservedObject var suggestionSettings: SuggestionSettingsModel
     @ObservedObject var dailyCompletionStats: DailyCompletionStats
+    @AppStorage(GhostTextSizeSettings.matchTextSizeKey) private var matchTextSize = true
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -143,7 +144,7 @@ struct AppearancePaneView: View {
                 GhostTextPreview(
                     ghostColor: resolvedGhostTextColor,
                     opacity: suggestionSettings.ghostTextOpacity,
-                    fontSize: GhostTextPreview.baseFontSize * CGFloat(suggestionSettings.ghostTextSizeMultiplier)
+                    fontSize: GhostTextPreview.baseFontSize * (matchTextSize ? 1 : CGFloat(suggestionSettings.ghostTextSizeMultiplier))
                 )
 
                 LabeledContent {
@@ -186,6 +187,16 @@ struct AppearancePaneView: View {
                 }
                 .settingsItem(.ghostTextOpacity)
 
+                Toggle(isOn: $matchTextSize) {
+                    SettingsRowLabel(
+                        title: "Match Text Size",
+                        description: "Draw suggestions at exactly the size of the text you're typing. Turn off to " +
+                            "scale them yourself with the size controls below.",
+                        systemImage: "textformat.alt"
+                    )
+                }
+                .settingsItem(.matchTextSize)
+
                 LabeledContent {
                     HStack(spacing: 10) {
                         TickMarkSlider(
@@ -210,6 +221,7 @@ struct AppearancePaneView: View {
                     )
                 }
                 .settingsItem(.ghostTextSize)
+                .disabled(matchTextSize)
 
                 LabeledContent {
                     HStack(spacing: 10) {
@@ -235,6 +247,7 @@ struct AppearancePaneView: View {
                     )
                 }
                 .settingsItem(.ghostTextSizeFloor)
+                .disabled(matchTextSize)
 
                 LabeledContent {
                     HStack(spacing: 10) {
@@ -260,6 +273,7 @@ struct AppearancePaneView: View {
                     )
                 }
                 .settingsItem(.ghostTextSizeCeiling)
+                .disabled(matchTextSize)
             }
         }
     }

@@ -142,7 +142,8 @@ final class FocusSnapshotResolverLiveTests: XCTestCase {
             return XCTFail("Expected blocked, got \(snapshot.capability.summary)")
         }
         XCTAssertTrue(reason.contains("Secure"), "Got: \(reason)")
-        XCTAssertEqual(snapshot.context?.isSecure, true)
+        // The verdict comes before any read of the field, so its contents never reach a snapshot.
+        XCTAssertNil(snapshot.context)
     }
 
     func test_resolveSnapshot_nonEditableElementHasDeterministicCapability() throws {
