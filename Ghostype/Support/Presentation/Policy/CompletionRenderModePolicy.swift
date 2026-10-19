@@ -7,7 +7,7 @@ import Foundation
 /// auto rule misfires for their host mix.
 ///
 /// The global preference is live (Appearance settings Picker); per-app overrides are not wired yet.
-/// Note that under `auto` a mid-line caret promotes inline to the card; see
+/// Note that a mid-line caret promotes inline to the card under every preference; see
 /// `CompletionRenderModePolicy.mode(for:bundleIdentifier:)`.
 enum MirrorPreference: String, Codable, CaseIterable, Identifiable, Equatable, Sendable {
     case auto
@@ -67,9 +67,11 @@ struct CompletionRenderModePolicy: Equatable, Sendable {
         // sit on top of it. Painting the ghost over an opaque band in the field's background color
         // was tried (2026-09-10) and read as the suggestion overwriting the user's text, so a
         // mid-line caret gets the card anchored under it instead; the card is a preview, not a
-        // forgery, and leaves the host's own characters alone. `alwaysInline` is an explicit
-        // request and keeps its inline pick; the controller still declines to paint over text.
-        if case .inline = preferred, !geometry.isCaretAtEndOfLine, effectivePreference(for: bundleIdentifier) != .alwaysInline {
+        // forgery, and leaves the host's own characters alone. This holds under `alwaysInline` too:
+        // nothing downstream can draw the ghost there without covering text (2026-10-19, Google
+        // Chat: an inline pin painted the ghost over the rest of the line). The pin still keeps
+        // end-of-line typing inline even when the caret geometry is only estimated.
+        if case .inline = preferred, !geometry.isCaretAtEndOfLine {
             return .mirror(reason: .caretMidLine)
         }
         return preferred
