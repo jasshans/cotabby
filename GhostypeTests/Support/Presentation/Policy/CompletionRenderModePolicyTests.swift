@@ -103,13 +103,12 @@ final class CompletionRenderModePolicyTests: XCTestCase {
                  expected: .mirror(reason: .caretMidLine)),
             Case(label: "auto derived", preference: .auto, quality: .derived, atEndOfLine: false,
                  expected: .mirror(reason: .caretMidLine)),
-            // An explicit inline pin is the user's call; the controller alone decides whether the
-            // ghost can be drawn there without covering the host's text.
+            // An inline pin cannot paint over the host's text either: nothing can draw it there.
             Case(label: "global inline pin", preference: .alwaysInline, bundle: nil, quality: .exact,
-                 atEndOfLine: false, expected: .inline),
+                 atEndOfLine: false, expected: .mirror(reason: .caretMidLine)),
             Case(label: "per-app inline pin", preference: .auto, overrides: [pinned: .alwaysInline],
                  bundle: pinned, quality: .exact, atEndOfLine: false,
-                 expected: .inline),
+                 expected: .mirror(reason: .caretMidLine)),
             // Already a card: the more specific original reason is retained, never relabeled.
             Case(label: "auto estimated", preference: .auto, quality: .estimated, atEndOfLine: false,
                  expected: .mirror(reason: .caretGeometryEstimated)),
