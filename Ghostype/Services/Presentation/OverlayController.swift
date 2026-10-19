@@ -1295,7 +1295,7 @@ final class OverlayController: SuggestionOverlayControlling {
 
     /// Measures the baseline for a ghost already on screen. When the answer differs from the policy
     /// value the visible rows move once, by at most one device pixel, onto the host's real baseline;
-    /// every later present on this line starts there.
+    /// every later present on this line starts there. A matched face waits for the next present.
     private func startCalibration(_ request: HostBaselineCalibrator.Request, for geometry: SuggestionOverlayGeometry) {
         baselineCalibrator?.calibrate(request) { [weak self] calibration in
             guard let self, var session = self.inlineSession,
@@ -1305,25 +1305,15 @@ final class OverlayController: SuggestionOverlayControlling {
             else {
                 return
             }
-            var changed = false
-            if session.geometry.pixelBaselineOffset == nil, abs(session.baselineOffsetFromTop - calibration.baselineOffset) > 0.01 {
-                session.baselineOffsetFromTop = calibration.baselineOffset
-                session.baselineSource = "calibrated"
-                changed = true
-            }
-            // The face goes through the path a present takes (`resolveFont`, which reads the match
-            // the calibrator just recorded), so the ghost re-rendered here is the one the next
-            // keystroke presents. Re-applying the fresh match to the session's own face skipped the
-            // size the field's caret advance had measured (`applyingHostAdvance`): Claude's Code
-            // composer, which reports no size, drew the match's raw 15.48 for a frame between 15.34
-            // frames after each of two matches two seconds apart (2026-09-11).
-            let renderer: GhostBaselinePolicy.HostRenderer = session.geometry.isWebContentField ? .webEngine : .textKit
-            let rematched = self.resolveFont(for: session.geometry, renderer: renderer)
-            if rematched.font != session.fontResolution.font {
-                session.fontResolution = rematched
-                changed = true
-            }
-            guard changed, let layout = self.makeLayout(for: session) else { return }
+            guard session.geometry.pixelBaselineOffset == nil,
+                  abs(session.baselineOffsetFromTop - calibration.baselineOffset) > 0.01 else { return }
+            session.baselineOffsetFromTop = calibration.baselineOffset
+            session.baselineSource = "calibrated"
+            // A face matched here is not swapped into the visible ghost: changing face or size under
+            // text the user is reading looked like the suggestion jumping. `resolveFont` reads the
+            // match the calibrator just recorded, so the next present (the next keystroke, when the
+            // ghost redraws anyway) picks it up through the same path as every other present.
+            guard let layout = self.makeLayout(for: session) else { return }
             session.layout = layout
             self.inlineSession = session
             self.renderInline(session)

@@ -7,7 +7,7 @@ import Logging
 /// Commits accepted suggestions back into the host app by synthesizing Unicode keyboard events.
 /// This keeps acceptance simple and app-agnostic, while pairing with suppression to avoid loops.
 ///
-/// `insert(_:)` types a continuation. `replace(deletingUTF16Count:with:)` first deletes a run of
+/// `insert(_:)` types a continuation. `replace(deletingCharacterCount:with:)` first deletes a run of
 /// already-typed characters (the `:query` the user typed before the emoji picker) and then types the
 /// replacement, which the emoji picker uses to swap `:smile` for its glyph.
 @MainActor
@@ -126,7 +126,9 @@ final class SuggestionInserter {
         return true
     }
 
-    /// Deletes `deletingUTF16Count` already-typed UTF-16 units, then types `text`. Used by the emoji
+    /// Deletes `deletingCharacterCount` already-typed characters, then types `text`. One backspace
+    /// removes one user-perceived character (an emoji is one press, not two), so callers count
+    /// `Character`s; `SyntheticReplacePlanner.characterCount(ofTrailingUTF16:in:)` converts an AX length. Used by the emoji
     /// picker to replace the literal `:query` (or `:query:`) run with the chosen glyph.
     ///
     /// All synthetic events are built first, then registered for suppression in a single call, then
@@ -134,8 +136,8 @@ final class SuggestionInserter {
     /// suppression token that would swallow the user's next real keystroke. Registering the whole
     /// burst once means every backspace and the insertion keydown fall inside one suppression window,
     /// so none of our own deletes are re-observed as user typing.
-    func replace(deletingUTF16Count: Int, with text: String) -> Bool {
-        let plan = SyntheticReplacePlanner.plan(deletingUTF16Count: deletingUTF16Count, text: text)
+    func replace(deletingCharacterCount: Int, with text: String) -> Bool {
+        let plan = SyntheticReplacePlanner.plan(deletingCharacterCount: deletingCharacterCount, text: text)
         guard !plan.isNoop else {
             lastErrorMessage = nil
             return true
@@ -341,10 +343,22 @@ struct SyntheticReplacePlan: Equatable {
 }
 
 enum SyntheticReplacePlanner {
-    static func plan(deletingUTF16Count: Int, text: String) -> SyntheticReplacePlan {
+    /// The number of characters (one backspace each) in the last `utf16Count` UTF-16 units of `text`.
+    /// Accessibility measures runs in UTF-16 units; an emoji is two of them but one backspace. A
+    /// count that splits a character still covers it, so the whole character is deleted.
+    static func characterCount(ofTrailingUTF16 utf16Count: Int, in text: String) -> Int {
+        guard utf16Count > 0 else { return 0 }
+        let utf16 = text.utf16
+        guard utf16Count < utf16.count else { return text.count + (utf16Count - utf16.count) }
+        let start = utf16.index(utf16.endIndex, offsetBy: -utf16Count)
+        let characterStart = text.rangeOfComposedCharacterSequence(at: start).lowerBound
+        return text[characterStart...].count
+    }
+
+    static func plan(deletingCharacterCount: Int, text: String) -> SyntheticReplacePlan {
         let normalized = text.replacingOccurrences(of: "\r", with: "")
         return SyntheticReplacePlan(
-            backspaceCount: max(deletingUTF16Count, 0),
+            backspaceCount: max(deletingCharacterCount, 0),
             insertUTF16: Array(normalized.utf16)
         )
     }

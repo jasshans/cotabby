@@ -219,6 +219,16 @@ final class SuggestionTextNormalizerTests: XCTestCase {
         }
     }
 
+    /// Multi-line mode allows line breaks, not unlimited length: the word-count preset still caps it.
+    func test_normalize_multiLineStillHonorsTheWordRange() {
+        let request = CotabbyTestFixtures.suggestionRequest(
+            prefixText: "Notes",
+            isMultiLineEnabled: true,
+            wordRange: SuggestionWordRange(lowWords: 2, highWords: 4)
+        )
+        XCTAssertEqual(SuggestionTextNormalizer.normalize(" one two\nthree four five six", for: request), " one two\nthree four")
+    }
+
     // MARK: - Reasoning-block stripping
 
     /// A completed block is removed in place (even across lines); a block cut off by the token

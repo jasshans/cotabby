@@ -159,8 +159,8 @@ final class RigInserter: SuggestionInserting {
         return shouldInsert
     }
 
-    func replace(deletingUTF16Count: Int, with text: String) -> Bool {
-        replacements.append((deletingUTF16Count, text))
+    func replace(deletingCharacterCount: Int, with text: String) -> Bool {
+        replacements.append((deletingCharacterCount, text))
         return shouldInsert
     }
 }

@@ -46,8 +46,10 @@ nonisolated struct TypingPredictionCandidate {
         accepts(snapshot) && snapshot.precedingText == context.precedingText + typedText
     }
 
-    /// A short grace period lets the first tokens catch up with typing. It starts at the first
-    /// uncovered key, not the latest one, so continuous typing cannot postpone a fresh request.
+    /// A short grace period lets the tokens catch up with typing. It starts at the first uncovered
+    /// key once the model has produced text, not the latest one, so continuous typing cannot postpone
+    /// a fresh request. Before the first tokens there is nothing to fall behind: the request is still
+    /// reading the prompt, and restarting it would throw that work away for a later, longer read.
     mutating func append(_ characters: String, in snapshot: FocusedInputSnapshot, at time: TimeInterval) -> Bool {
         guard time.isFinite, accepts(snapshot), !characters.isEmpty,
               characters.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) }),
@@ -65,7 +67,7 @@ nonisolated struct TypingPredictionCandidate {
         lastInputAt = time
         if prediction.hasPrefix(next) {
             behindSince = nil
-        } else if behindSince == nil {
+        } else if behindSince == nil, latestResult != nil {
             behindSince = time
         }
         return true
@@ -84,7 +86,13 @@ nonisolated struct TypingPredictionCandidate {
         guard result.text.hasPrefix(typedText) || (!final && typedText.hasPrefix(result.text)) else { return false }
         latestResult = result
         isFinal = final
-        if result.text.hasPrefix(typedText) { behindSince = nil }
+        if result.text.hasPrefix(typedText) {
+            behindSince = nil
+        } else if behindSince == nil {
+            // First text arrived behind keys typed while the prompt was read: the grace period
+            // starts now, counted from the latest of those keys.
+            behindSince = lastInputAt
+        }
         return true
     }
 

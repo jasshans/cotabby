@@ -167,8 +167,9 @@ enum SuggestionTextNormalizer {
             return SuggestionNormalizationResult(text: "", suppression: suppression(for: rejection))
         }
 
-        // Hold the suggestion to the user's word-count preset (see `SuggestionLengthPolicy`).
-        if let range = request.wordRange, !request.isMultiLineEnabled {
+        // Hold the suggestion to the user's word-count preset (see `SuggestionLengthPolicy`), in
+        // multi-line mode too: line breaks change the shape of a suggestion, not how long it may be.
+        if let range = request.wordRange {
             normalized = SuggestionLengthPolicy.trimmed(normalized, minimum: range.lowWords, maximum: range.highWords)
         }
 

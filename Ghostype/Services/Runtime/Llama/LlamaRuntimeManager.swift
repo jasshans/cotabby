@@ -28,6 +28,8 @@ final class LlamaRuntimeManager: ObservableObject {
     /// `selectModel`. Caching it keeps a main-actor filesystem walk off the per-keystroke path;
     /// failures are never cached, so a failed resolve still retries the walk next time.
     private var resolvedRuntimeCache: (filename: String?, resolved: ResolvedLlamaRuntime)?
+    /// The most recent generate/prefill and its prompt, until it returns; see `beginOperation`.
+    private var runningOperation: (id: UUID, prompt: String)?
 
     /// Read-only view of the model currently selected for autocomplete generation. Used by
     /// downstream observers (the performance metrics recorder) that want to label a recorded
@@ -130,6 +132,8 @@ final class LlamaRuntimeManager: ObservableObject {
 
         let core = self.core
         let operationID = UUID()
+        beginOperation(operationID, prompt: prompt)
+        defer { endOperation(operationID) }
         do {
             // `Task.detached` does not inherit the caller's cancellation, so an outer cancel
             // would otherwise leave `core.generate` running to its full prediction budget while
@@ -181,6 +185,22 @@ final class LlamaRuntimeManager: ObservableObject {
         }
     }
 
+    /// Records the request whose prompt is about to be decoded. A superseded request's decode is
+    /// normally left to finish because the next request reuses it; when this prompt diverges from
+    /// it early, that decode is aborted at its next batch instead of making this request wait for
+    /// work it cannot reuse (see `StalePromptDecodePolicy`).
+    private func beginOperation(_ operationID: UUID, prompt: String) {
+        if let running = runningOperation,
+           StalePromptDecodePolicy.shouldAbort(running: running.prompt, next: prompt) {
+            core.abortInFlightGeneration(operationID: running.id)
+        }
+        runningOperation = (operationID, prompt)
+    }
+
+    private func endOperation(_ operationID: UUID) {
+        if runningOperation?.id == operationID { runningOperation = nil }
+    }
+
     /// Clears the native prompt KV cache without unloading the model.
     func resetPromptCache() {
         // The editing context changed, so in-flight work is never reused: stop it first, or the
@@ -202,6 +222,8 @@ final class LlamaRuntimeManager: ObservableObject {
 
         let core = self.core
         let operationID = UUID()
+        beginOperation(operationID, prompt: prompt)
+        defer { endOperation(operationID) }
         let task = Task.detached {
             try core.prefill(
                 prompt: prompt,

@@ -120,6 +120,31 @@ final class MacroControllerTests: XCTestCase {
         XCTAssertEqual(harness.inserter.calls, [.init(deleteCount: 4, text: "2+2=4")])
     }
 
+    /// A word-accept binding that uses Cmd or Ctrl commits; those modifiers dismiss only other keys.
+    func test_commandModifiedAcceptBindingCommits() {
+        let harness = makeHarness()
+        harness.wordAcceptModifiers = [.command]
+        harness.type("/2+2")
+
+        harness.controller.observe(InlineFeatureKeys.key(InlineFeatureKeys.tab, flags: .maskCommand))
+        drainInlineFeatureMainQueue()
+
+        XCTAssertEqual(harness.inserter.calls, [.init(deleteCount: 4, text: "2+2=4")])
+    }
+
+    /// Focus moving to another field between the key and the deferred replace must not delete
+    /// that field's text.
+    func test_commitIsSkippedWhenFocusMovesBeforeTheReplace() {
+        let harness = makeHarness()
+        harness.type("/2+2")
+
+        harness.controller.observe(InlineFeatureKeys.key(InlineFeatureKeys.tab))
+        harness.focus.publish(focusChangeSequence: 2)
+        drainInlineFeatureMainQueue()
+
+        XCTAssertTrue(harness.inserter.calls.isEmpty)
+    }
+
     // MARK: - Other keys
 
     func test_escapeIsConsumedAndCancels() {
@@ -255,6 +280,11 @@ final class MacroControllerTests: XCTestCase {
             set { flags.wordAcceptKeyCode = newValue }
         }
 
+        var wordAcceptModifiers: ShortcutModifierMask {
+            get { flags.wordAcceptModifiers }
+            set { flags.wordAcceptModifiers = newValue }
+        }
+
         init(isSecure: Bool, acceptKeyLabel: String?) {
             // A fixed table keeps the evaluator out of the picture: only "2+2" has a result, and its
             // preview and insertion texts differ so tests can tell which one reached the field.
@@ -279,7 +309,10 @@ final class MacroControllerTests: XCTestCase {
                 isEnabled: { flags.enabled },
                 acceptKeyLabel: { acceptKeyLabel },
                 // Production wires this to the input monitor's binding check (Tab by default).
-                isWordAcceptKey: { $0.keyCode == flags.wordAcceptKeyCode }
+                isWordAcceptKey: {
+                    $0.keyCode == flags.wordAcceptKeyCode
+                        && ShortcutModifierMask(eventFlags: $0.flags) == flags.wordAcceptModifiers
+                }
             )
             controller.onCaptureStateChanged = { [weak self] in self?.captureStateChanges += 1 }
             controller.start()
@@ -298,4 +331,5 @@ final class MacroControllerTests: XCTestCase {
 private final class MacroHarnessFlags {
     var enabled = true
     var wordAcceptKeyCode: CGKeyCode = InlineFeatureKeys.tab
+    var wordAcceptModifiers: ShortcutModifierMask = []
 }

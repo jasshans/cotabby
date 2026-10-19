@@ -106,15 +106,16 @@ final class MacroController {
     }
 
     private func triggerInput(for event: CapturedInputEvent) -> MacroTriggerInput {
+        // Commit on the user's configured word-accept binding, matched the same way the suggestion
+        // accept path matches it, so the macro commit stays consistent with accepting a word.
+        // Checked before the Cmd/Ctrl dismissal so a binding that uses those modifiers still commits.
+        if isWordAcceptKey(InputMonitorKeyEvent(keyCode: event.keyCode, flags: event.flags)) {
+            return .commitKey
+        }
+
         let modifiers = ShortcutModifierMask(eventFlags: event.flags)
         if modifiers.contains(.command) || modifiers.contains(.control) {
             return .dismissExternally
-        }
-
-        // Commit on the user's configured word-accept binding, matched the same way the suggestion
-        // accept path matches it, so the macro commit stays consistent with accepting a word.
-        if isWordAcceptKey(InputMonitorKeyEvent(keyCode: event.keyCode, flags: event.flags)) {
-            return .commitKey
         }
 
         switch event.keyCode {
@@ -202,13 +203,23 @@ final class MacroController {
             cancelCapture()
             return
         }
-        let deleteCount = 1 + currentQuery.utf16.count   // "/" + query
+        let deleteCount = 1 + currentQuery.count   // "/" + query, one backspace per character
         let insertion = result.insertionText
-        CotabbyLogger.suggestion.debug("macro commit deleteUTF16=\(deleteCount) query=\"\(currentQuery)\"")
+        CotabbyLogger.suggestion.debug("macro commit deleteCharacters=\(deleteCount) query=\"\(currentQuery)\"")
+        let focusSequence = captureFocusSequence
         teardownCapture()
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            _ = self.inserter.replace(deletingUTF16Count: deleteCount, with: insertion)
+            // The backspaces land in whatever field has focus when they post. A click into another
+            // field between the key and this tick would delete that field's text, so commit only
+            // while focus is still the field the capture opened in. (Not the field's text: AX can
+            // lag the last keystroke, and a text check would abort legitimate commits.)
+            guard let focusSequence,
+                  self.focusModel.snapshot.context?.focusChangeSequence == focusSequence else {
+                CotabbyLogger.suggestion.debug("macro commit skipped: focus moved before the replace")
+                return
+            }
+            _ = self.inserter.replace(deletingCharacterCount: deleteCount, with: insertion)
             self.focusModel.refreshNow()
         }
     }

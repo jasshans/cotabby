@@ -39,13 +39,26 @@ final class TypingPredictionCandidateTests: XCTestCase {
     func testUncoveredTypingHasOneBoundedGracePeriod() {
         let source = snapshot("I'll send ")
         var candidate = candidate(source)
+        XCTAssertTrue(candidate.receive(result("y"), final: false))
         XCTAssertTrue(candidate.append("y", in: source, at: 1))
         XCTAssertTrue(candidate.append("o", in: source, at: 1.1))
-        XCTAssertEqual(candidate.expiration(in: snapshot("I'll send yo")), 1.15)
-        XCTAssertFalse(candidate.append("u", in: source, at: 1.16))
+        XCTAssertEqual(candidate.expiration(in: snapshot("I'll send yo")), 1.1 + TypingPredictionCandidate.catchUpWindow)
+        XCTAssertFalse(candidate.append("u", in: source, at: 1.26))
         XCTAssertTrue(candidate.receive(result("you the report"), final: false))
         XCTAssertNil(candidate.expiration(in: snapshot("I'll send yo")))
-        XCTAssertTrue(candidate.append("u", in: snapshot("I'll send yo"), at: 1.17))
+        XCTAssertTrue(candidate.append("u", in: snapshot("I'll send yo"), at: 1.27))
+    }
+
+    /// Before the model's first text there is nothing to fall behind: keys typed while the prompt
+    /// is read fold into the running request, and the grace period starts when text arrives behind them.
+    func testTypingBeforeTheFirstTokensKeepsTheRequest() {
+        let source = snapshot("I'll send ")
+        var candidate = candidate(source)
+        XCTAssertTrue(candidate.append("y", in: source, at: 1))
+        XCTAssertTrue(candidate.append("o", in: source, at: 1.3))
+        XCTAssertNil(candidate.expiration(in: snapshot("I'll send yo")))
+        XCTAssertTrue(candidate.receive(result("y"), final: false))
+        XCTAssertEqual(candidate.expiration(in: snapshot("I'll send yo")), 1.3 + TypingPredictionCandidate.catchUpWindow)
     }
 
     func testCoveredTypingWaitsOnlyForHostPublication() throws {
