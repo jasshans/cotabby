@@ -190,6 +190,7 @@ final class OverlayController: SuggestionOverlayControlling {
         // A caret inside a union-run paragraph is placed from the host's pixels (see
         // `pixelPlacedGeometry`); a presentation waiting for that capture returns here and runs again.
         guard let geometry = pixelPlacedGeometry(requestedGeometry, text: text) else { return }
+        if extendVisibleInline(with: text, geometry: geometry) { return }
 
         // Decide on the fade using the panel state captured *before* `state` is reassigned below, so
         // the animation plays only on a genuine appearance, never on a reposition or streamed update.
@@ -1355,6 +1356,51 @@ final class OverlayController: SuggestionOverlayControlling {
         let advancedCaret = predictedCaretRect(for: session)
         state = .visible(text: remainingText, geometry: session.geometry.withCaretRect(advancedCaret), mode: .inline)
         return true
+    }
+
+    /// Streams more words onto the ghost already on screen instead of re-anchoring it. After the user
+    /// types through part of a ghost, the session sits at its predicted caret (`advanceInline`); the
+    /// next streamed partial used to start a fresh session at the Accessibility caret, and any gap
+    /// between the two (a few points in web hosts) moved the text the user was reading. When the new
+    /// text only extends what is visible, in the same field and on the same line, the session keeps
+    /// its anchor, face and baseline and appends. Anything else falls through to a fresh present.
+    private func extendVisibleInline(with text: String, geometry: SuggestionOverlayGeometry) -> Bool {
+        guard !panelHeldForCapture, let session = inlineSession, session.consumedUTF16 > 0,
+              case .visible(let visibleText, _, .inline) = state,
+              session.geometry.focusedInputIdentityKey == geometry.focusedInputIdentityKey,
+              case .inline = currentRenderModePolicy.mode(for: geometry, bundleIdentifier: geometry.bundleIdentifier)
+        else { return false }
+        let predicted = predictedCaretRect(for: session)
+        guard Self.extendsVisibleGhost(visibleText: visibleText, newText: text,
+                                       predictedCaret: predicted, freshCaret: geometry.caretRect) else { return false }
+        let consumed = (session.fullText as NSString).substring(to: session.consumedUTF16)
+        var extended = InlineSession(
+            fullText: consumed + text,
+            consumedUTF16: session.consumedUTF16,
+            anchorCaretRect: session.anchorCaretRect,
+            geometry: session.geometry,
+            fontResolution: session.fontResolution,
+            baselineOffsetFromTop: session.baselineOffsetFromTop,
+            baselineSource: session.baselineSource,
+            layout: session.layout
+        )
+        guard let layout = makeLayout(for: extended) else { return false }
+        extended.layout = layout
+        inlineSession = extended
+        startReveal(from: revealedUTF16, length: (extended.fullText as NSString).length)
+        renderInline(extended)
+        state = .visible(text: text, geometry: session.geometry.withCaretRect(predicted), mode: .inline)
+        return true
+    }
+
+    /// Whether `newText` only grows the visible ghost at the caret it already sits at. Only a small
+    /// disagreement between the fresh caret and the predicted one is the host's jitter; a different
+    /// line or a jump means the field changed under the ghost (a wrap, a reflow), and a fresh present
+    /// follows it.
+    static func extendsVisibleGhost(visibleText: String, newText: String, predictedCaret: CGRect, freshCaret: CGRect) -> Bool {
+        newText.hasPrefix(visibleText)
+            && abs(predictedCaret.midY - freshCaret.midY) < predictedCaret.height / 2
+            && abs(predictedCaret.minX - freshCaret.minX) <= predictedCaret.height
     }
 
     /// Where the host's caret should be after the consumed prefix lands: the first visible row's pen.

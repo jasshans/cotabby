@@ -18,6 +18,21 @@ final class OverlayControllerTypefaceTests: XCTestCase {
     /// line where two lines had measured 23.5, and every first wrap after the first sat a point low.
     /// A remembered pitch within the box's rounding wins; one further off belongs to another
     /// line-height and does not; with none remembered the box stands.
+    /// Streamed words that only extend the visible ghost append in place when the fresh caret is
+    /// within jitter of where the ghost sits; another line, a jump, or different text re-anchors.
+    func testStreamedGrowthExtendsTheVisibleGhostOnlyWithinCaretJitter() {
+        let predicted = CGRect(x: 200, y: 100, width: 2, height: 18)
+        func extends(_ text: String, _ dx: CGFloat, _ dy: CGFloat) -> Bool {
+            OverlayController.extendsVisibleGhost(visibleText: "the report", newText: text,
+                                                  predictedCaret: predicted, freshCaret: predicted.offsetBy(dx: dx, dy: dy))
+        }
+        XCTAssertTrue(extends("the report tomorrow", 3, 0))
+        XCTAssertTrue(extends("the report", -2, 1))
+        XCTAssertFalse(extends("the reports", 40, 0))
+        XCTAssertFalse(extends("the report tomorrow", 0, 18))
+        XCTAssertFalse(extends("a different idea", 0, 0))
+    }
+
     func testAParagraphsBoxGivesWayToARememberedPitchWithinItsRounding() {
         XCTAssertEqual(OverlayController.pitch(fromParagraphBox: 24, remembered: 23.5), 23.5)
         XCTAssertEqual(OverlayController.pitch(fromParagraphBox: 33, remembered: 23.5), 33)
