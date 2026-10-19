@@ -252,17 +252,17 @@ protocol SuggestionInserting: AnyObject {
 
     func insert(_ suggestion: String) -> Bool
 
-    /// Deletes `deletingUTF16Count` already-typed units and types `text` in one suppressed synthetic
+    /// Deletes `deletingCharacterCount` already-typed characters and types `text` in one suppressed synthetic
     /// burst. The correction-acceptance path uses this to swap a typo'd word for the corrected word.
     /// `SuggestionInserter` already implements it (the emoji picker shares the same primitive).
-    func replace(deletingUTF16Count: Int, with text: String) -> Bool
+    func replace(deletingCharacterCount: Int, with text: String) -> Bool
 }
 
 /// The emoji picker's slice of the inserter: replace a run of already-typed characters (the literal
 /// `:query`) with the chosen glyph in one suppressed synthetic burst.
 @MainActor
 protocol EmojiTextInserting: AnyObject {
-    func replace(deletingUTF16Count: Int, with text: String) -> Bool
+    func replace(deletingCharacterCount: Int, with text: String) -> Bool
 }
 
 /// The emoji picker's slice of its floating panel: present/move/hide the match list. Behind a

@@ -389,7 +389,8 @@ final class EmojiPickerController {
         CotabbyLogger.suggestion.debug(
             "emoji replace glyph=\(glyph) deleteUTF16=\(deleteCount) measured=\(measured != nil)"
         )
-        _ = inserter.replace(deletingUTF16Count: deleteCount, with: glyph)
+        let characters = SyntheticReplacePlanner.characterCount(ofTrailingUTF16: deleteCount, in: preceding)
+        _ = inserter.replace(deletingCharacterCount: characters, with: glyph)
         // Let the focus pipeline re-read the field so any pending suggestion uses the post-insertion
         // text instead of the stale `:query` we just removed.
         focusModel.refreshNow()

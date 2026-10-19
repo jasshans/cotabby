@@ -127,7 +127,8 @@ enum CotabbyTestFixtures {
         clipboardContext: String? = nil,
         visualContextSummary: String? = nil,
         historyExamples: [String] = [],
-        isMultiLineEnabled: Bool = false
+        isMultiLineEnabled: Bool = false,
+        wordRange: SuggestionWordRange? = nil
     ) -> SuggestionRequest {
         let resolvedPrecedingText = precedingText ?? prefixText
         let context = focusedInputContext(
@@ -157,7 +158,8 @@ enum CotabbyTestFixtures {
             clipboardContext: clipboardContext,
             visualContextSummary: visualContextSummary,
             historyExamples: historyExamples,
-            isMultiLineEnabled: isMultiLineEnabled
+            isMultiLineEnabled: isMultiLineEnabled,
+            wordRange: wordRange
         )
     }
 

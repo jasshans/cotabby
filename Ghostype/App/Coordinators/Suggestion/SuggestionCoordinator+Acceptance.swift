@@ -465,7 +465,10 @@ extension SuggestionCoordinator {
         }
 
         guard suggestionInserter.replace(
-            deletingUTF16Count: replacement.deletingUTF16Count,
+            deletingCharacterCount: SyntheticReplacePlanner.characterCount(
+                ofTrailingUTF16: replacement.deletingUTF16Count,
+                in: rawContext.precedingText
+            ),
             with: replacement.replacementText
         ) else {
             let message = suggestionInserter.lastErrorMessage ?? "Correction insertion failed."

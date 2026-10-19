@@ -105,8 +105,8 @@ final class InlineFeatureRecordingInserter: EmojiTextInserting {
 
     private(set) var calls: [Call] = []
 
-    func replace(deletingUTF16Count: Int, with text: String) -> Bool {
-        calls.append(Call(deleteCount: deletingUTF16Count, text: text))
+    func replace(deletingCharacterCount: Int, with text: String) -> Bool {
+        calls.append(Call(deleteCount: deletingCharacterCount, text: text))
         return true
     }
 }
