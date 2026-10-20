@@ -339,8 +339,25 @@ enum AXHelper {
     ) -> ResolvedFieldStyle? {
         guard textLength > 0 else { return nil }
 
-        // Prefer the character just before the caret (the text the user is extending), then the
-        // first character. Clamp into range so an off-by-one caret never reads out of bounds.
+        // Read a short window of characters ending at the caret in one AX call and take the
+        // dominant text run's style. A single character before the caret is fragile: an emoji
+        // (rendered in the larger Apple Color Emoji fallback), a trailing space, or a differently
+        // sized run (a heading, a styled span) makes the ghost render too big or too small even
+        // though the text the user is actually extending has another size.
+        let windowEnd = min(max(caretLocation, 0), textLength)
+        let windowStart = max(windowEnd - Self.fieldStyleSampleWindow, 0)
+        if windowEnd > windowStart,
+           let attributed = parameterizedAttributedStringValue(
+               for: "AXAttributedStringForRange" as CFString,
+               range: NSRange(location: windowStart, length: windowEnd - windowStart),
+               on: element
+           ), attributed.length > 0,
+           let style = dominantFieldStyle(in: attributed) {
+            return style
+        }
+
+        // Fallback: the character just before the caret (the text the user is extending), then
+        // the first character. Clamp into range so an off-by-one caret never reads out of bounds.
         let clampedCaret = min(max(caretLocation - 1, 0), textLength - 1)
         let candidateIndices = clampedCaret == 0 ? [0] : [clampedCaret, 0]
 
@@ -360,6 +377,39 @@ enum AXHelper {
         }
 
         return nil
+    }
+
+    /// How many characters before the caret `resolveFieldStyle` samples in one read to find the
+    /// dominant text run.
+    static let fieldStyleSampleWindow = 8
+
+    /// Picks the style of the dominant text run in a sampled attributed string: the longest run
+    /// that is neither whitespace nor an emoji fallback font, preferring the run nearest the caret
+    /// (the string's end) on ties. When every run is whitespace or emoji, the last run's style is
+    /// returned so an emoji-only field still yields a size. Internal (not private) so the run
+    /// selection is unit-testable without live AX elements.
+    static func dominantFieldStyle(in attributed: NSAttributedString) -> ResolvedFieldStyle? {
+        var best: (style: ResolvedFieldStyle, length: Int, end: Int)?
+        var fallback: (style: ResolvedFieldStyle, end: Int)?
+        let fullRange = NSRange(location: 0, length: attributed.length)
+        attributed.enumerateAttributes(in: fullRange) { attributes, range, _ in
+            guard let style = fieldStyle(from: attributes) else { return }
+            let text = (attributed.string as NSString).substring(with: range)
+            let fontName = (attributes[.font] as? NSFont)?.fontName
+                ?? ((attributes[NSAttributedString.Key("AXFont")] as? [String: Any])?["AXFontName"] as? String)
+            let isEmoji = fontName?.localizedCaseInsensitiveContains("Emoji") ?? false
+            let isWhitespace = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            if !isEmoji && !isWhitespace {
+                let beatsBest = best.map { range.length > $0.length
+                    || (range.length == $0.length && range.upperBound > $0.end) } ?? true
+                if beatsBest {
+                    best = (style, range.length, range.upperBound)
+                }
+            } else if fallback.map({ range.upperBound > $0.end }) ?? true {
+                fallback = (style, range.upperBound)
+            }
+        }
+        return best?.style ?? fallback?.style
     }
 
     /// Picks the font face name to render with out of an `AXFont` dictionary, preferring the

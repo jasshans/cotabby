@@ -162,4 +162,26 @@ final class GhostWrapBandPolicyLineRightTests: XCTestCase {
         ))
         XCTAssertEqual(band.upperBound, 396, accuracy: 0.001)
     }
+
+    /// Regression: a line box ending a few points past the caret is the typed text's extent, not
+    /// the box's edge. Clamping to it wrapped the ghost onto the second row far too early.
+    func testALineBoxJustPastTheCaretDoesNotClampTheBand() {
+        let band = GhostWrapBandPolicy.band(GhostWrapBandPolicy.Input(
+            caretRect: CGRect(x: 250, y: 400, width: 1, height: 18),
+            elementFrame: CGRect(x: 100, y: 380, width: 500, height: 60),
+            inputFrame: nil, lineLeft: 104, screenVisibleFrame: screen, lineRight: 262
+        ))
+        XCTAssertEqual(band.upperBound, 596, accuracy: 0.001)
+    }
+
+    /// A caret near the box's edge produces a line box barely past the caret, but it lands on the
+    /// element's own edge — that is a real container edge and the ghost must wrap there.
+    func testAShortLineBoxLandingOnTheElementEdgeStillCapsTheBand() {
+        let band = GhostWrapBandPolicy.band(GhostWrapBandPolicy.Input(
+            caretRect: CGRect(x: 580, y: 400, width: 1, height: 18),
+            elementFrame: CGRect(x: 100, y: 380, width: 500, height: 60),
+            inputFrame: nil, lineLeft: 104, screenVisibleFrame: screen, lineRight: 596
+        ))
+        XCTAssertEqual(band.upperBound, 596, accuracy: 0.001)
+    }
 }

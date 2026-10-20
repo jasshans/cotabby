@@ -459,4 +459,46 @@ final class AXHelperTests: XCTestCase {
         )
         XCTAssertNil(AXHelper.faceName(fromAXFontDictionary: ["AXFontSize": 12]))
     }
+
+    // MARK: - Dominant field style
+
+    private func sampledString(_ runs: [(String, NSFont)]) -> NSAttributedString {
+        let result = NSMutableAttributedString()
+        for (text, font) in runs {
+            result.append(NSAttributedString(string: text, attributes: [.font: font]))
+        }
+        return result
+    }
+
+    /// An emoji before the caret renders in the larger Apple Color Emoji fallback; the ghost must
+    /// take the size of the text the user is extending, not the emoji's.
+    func testDominantStyleIgnoresAnEmojiRunBeforeTheCaret() {
+        let text = NSFont(name: "Helvetica", size: 13)!
+        let emoji = NSFont(name: "Apple Color Emoji", size: 18) ?? NSFont.systemFont(ofSize: 18)
+        let style = AXHelper.dominantFieldStyle(in: sampledString([("hello ", text), ("\u{1F600}", emoji)]))
+        XCTAssertEqual(style?.fontPointSize, 13)
+    }
+
+    /// A trailing space can carry a different size than the word before it; the word wins.
+    func testDominantStyleSkipsTrailingWhitespace() {
+        let text = NSFont(name: "Helvetica", size: 14)!
+        let space = NSFont(name: "Helvetica", size: 24)!
+        let style = AXHelper.dominantFieldStyle(in: sampledString([("hello", text), (" ", space)]))
+        XCTAssertEqual(style?.fontPointSize, 14)
+    }
+
+    /// The longest text run is dominant: a one-character styled span must not set the ghost's size.
+    func testDominantStylePrefersTheLongestTextRun() {
+        let body = NSFont(name: "Helvetica", size: 12)!
+        let styled = NSFont(name: "Helvetica", size: 20)!
+        let style = AXHelper.dominantFieldStyle(in: sampledString([("longer body", body), ("x", styled)]))
+        XCTAssertEqual(style?.fontPointSize, 12)
+    }
+
+    /// An emoji-only sample still yields a size rather than nothing.
+    func testDominantStyleFallsBackToTheLastRunWhenOnlyEmoji() {
+        let emoji = NSFont(name: "Apple Color Emoji", size: 18) ?? NSFont.systemFont(ofSize: 18)
+        let style = AXHelper.dominantFieldStyle(in: sampledString([("\u{1F600}", emoji)]))
+        XCTAssertEqual(style?.fontPointSize, 18)
+    }
 }
