@@ -17,10 +17,6 @@ import Foundation
 enum GhostCaretRefinement {
     /// Largest disagreement with the reported caret still attributable to rounding.
     static let maximumAdjustment: CGFloat = 1.5
-    /// When the text advance stays under this fraction of the line width, the paragraph cannot
-    /// have soft-wrapped, so a large disagreement means the reported caret is wrong (stale or
-    /// mismeasured), not that the text spans multiple visual lines.
-    static let noWrapFraction: CGFloat = 0.9
 
     struct Input {
         /// Left edge of the host's visual line box, in the same coordinates as `reportedCaretX`.
@@ -39,12 +35,9 @@ enum GhostCaretRefinement {
     /// The refined caret x, or nil when the line is wrapped, empty, right-to-left, or the
     /// typographic answer cannot be trusted.
     ///
-    /// Two cases return a value:
-    /// - The typographic x lands within `maximumAdjustment` of the reported x: rounding fix.
-    /// - The typographic x disagrees beyond rounding, but the text advance fits well inside the
-    ///   line width, ruling out a soft wrap: the reported caret is stale or mismeasured, so the
-    ///   typographic position (which must be right for unwrapped text in the host's own font)
-    ///   wins. Without this, a wrong AX caret paints the ghost over the user's typed text.
+    /// Only rounding-sized adjustments are safe. Fitting inside the field does not prove that
+    /// the line origin or font is current: using that as permission for a larger move can pull
+    /// an otherwise correct caret backward over already typed characters.
     static func caretX(_ input: Input) -> CGFloat? {
         guard !input.isRightToLeft, !input.paragraphTextBeforeCaret.isEmpty, input.lineWidth > 0 else { return nil }
         let attributed = NSAttributedString(string: input.paragraphTextBeforeCaret, attributes: [.font: input.font])
@@ -53,9 +46,7 @@ enum GhostCaretRefinement {
         guard advance > 0 else { return nil }
         let refined = input.lineLeft + advance
         let disagreement = abs(refined - input.reportedCaretX)
-        guard disagreement <= maximumAdjustment
-                || advance < input.lineWidth * noWrapFraction
-        else { return nil }
+        guard disagreement <= maximumAdjustment else { return nil }
         return refined
     }
 

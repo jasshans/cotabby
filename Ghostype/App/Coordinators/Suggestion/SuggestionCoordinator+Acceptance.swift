@@ -392,6 +392,16 @@ extension SuggestionCoordinator {
             return
         }
 
+        if GhostAnchorTrustPolicy.requiresFreshCaret(
+            isSingleLineField: liveContext.isSingleLineField,
+            hostNamesFace: liveContext.resolvedFieldStyle?.fontName != nil
+                || liveContext.resolvedFieldStyle?.fontFamily != nil
+        ) {
+            hideOverlay(reason: "Waiting for the host's measured caret after insertion.")
+            schedulePostInsertionRefresh()
+            return
+        }
+
         let isRTL = TextDirectionDetector.isRightToLeft(liveContext.precedingText)
         let predictedCaret = Self.predictedCaretRect(
             after: insertionChunk,
@@ -668,14 +678,11 @@ extension SuggestionCoordinator {
                 hideOverlay(reason: Self.hostMarkedTextHoldReason)
             }
         } else if !overlayController.advanceInline(to: advancedSession.remainingText, insertedText: typedCharacters) {
-            // Same slide as Tab acceptance; the user typed the next characters, so the caret
-            // traveled by exactly them. Fall back to the (session-start) caret anchor only if the
-            // slide can't apply.
-            presentOverlay(
-                text: advancedSession.remainingText,
-                at: session.baseContext.caretRect,
-                context: session.baseContext
-            )
+            // The key callback precedes host publication. The session-start caret is behind
+            // the characters just typed; painting from it would overlap them. Keep the tail
+            // alive but hidden until a reconciled snapshot can place it honestly.
+            hideOverlay(reason: "Waiting for the host's measured caret after typing.")
+            schedulePostInsertionRefresh()
         } else {
             recordSuggestionPresentation(context: session.baseContext)
         }

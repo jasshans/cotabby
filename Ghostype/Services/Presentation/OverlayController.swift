@@ -264,7 +264,8 @@ final class OverlayController: SuggestionOverlayControlling {
         guard let request = pixelCaretRequest(for: requestedGeometry) else { return requestedGeometry }
         let covered = panelCovers(request.runFrame)
         let measured = pixelCaretLocator.cachedMeasurement(for: request)
-            ?? (covered ? pixelCaretLocator.extrapolatedMeasurement(for: request) : nil)
+            ?? (covered && !Self.requiresFreshCaret(requestedGeometry)
+                ? pixelCaretLocator.extrapolatedMeasurement(for: request) : nil)
         if let measured {
             return requestedGeometry.withPixelMeasuredCaret(
                 measured.caretRect,
@@ -1344,6 +1345,9 @@ final class OverlayController: SuggestionOverlayControlling {
               var session = inlineSession, case .visible(_, _, let mode) = state, case .inline = mode else {
             return false
         }
+        // Chrome's address bar names no font; moving in the held stand-in can lag its typed
+        // characters. Let the coordinator wait for publication and remeasure instead.
+        guard !Self.requiresFreshCaret(session.geometry) else { return false }
         let full = session.fullText as NSString
         let insertedLength = (insertedText as NSString).length
         let newConsumed = session.consumedUTF16 + insertedLength
@@ -1378,6 +1382,7 @@ final class OverlayController: SuggestionOverlayControlling {
     /// its anchor, face and baseline and appends. Anything else falls through to a fresh present.
     private func extendVisibleInline(with text: String, geometry: SuggestionOverlayGeometry) -> Bool {
         guard !panelHeldForCapture, let session = inlineSession, session.consumedUTF16 > 0,
+              !Self.requiresFreshCaret(geometry),
               case .visible(let visibleText, _, .inline) = state,
               session.geometry.focusedInputIdentityKey == geometry.focusedInputIdentityKey,
               case .inline = currentRenderModePolicy.mode(for: geometry, bundleIdentifier: geometry.bundleIdentifier)
@@ -1412,7 +1417,14 @@ final class OverlayController: SuggestionOverlayControlling {
     static func extendsVisibleGhost(visibleText: String, newText: String, predictedCaret: CGRect, freshCaret: CGRect) -> Bool {
         newText.hasPrefix(visibleText)
             && abs(predictedCaret.midY - freshCaret.midY) < predictedCaret.height / 2
-            && abs(predictedCaret.minX - freshCaret.minX) <= predictedCaret.height
+            && abs(predictedCaret.minX - freshCaret.minX) <= GhostCaretRefinement.maximumAdjustment
+    }
+
+    private static func requiresFreshCaret(_ geometry: SuggestionOverlayGeometry) -> Bool {
+        GhostAnchorTrustPolicy.requiresFreshCaret(
+            isSingleLineField: geometry.isSingleLineField,
+            hostNamesFace: hostNamesFace(geometry)
+        )
     }
 
     /// Where the host's caret should be after the consumed prefix lands: the first visible row's pen.

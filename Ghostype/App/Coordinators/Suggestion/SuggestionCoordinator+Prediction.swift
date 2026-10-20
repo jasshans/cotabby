@@ -1107,6 +1107,12 @@ extension SuggestionCoordinator {
     ) {
         latestGenerationNumber = liveContext.generation
 
+        // A hidden tail must not reappear from an intentionally tolerated pre-input snapshot.
+        // The interaction state clears this sentinel only when the host publishes the append.
+        if !overlayState.isVisible, interactionState.isAwaitingPostInsertionSync {
+            return
+        }
+
         if reconciledSession.isExhausted {
             markPreparedContinuationCommitted(after: reconciledSession)
             completeActiveSuggestion(

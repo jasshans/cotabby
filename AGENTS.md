@@ -190,6 +190,7 @@ The Swift generation loop owns the maximum output-token budget.
 
 ## UI And Overlays
 
+- Caret refinement is limited to rounding-sized changes; unnamed-font single-line fields require a fresh caret after typing or accepting, because guessed advances and stale session anchors can overlap committed text.
 - `OverlayController` owns the ghost-text panel lifecycle and positioning. Ghost glyphs are laid
   out by `GhostTextLayout` in the font `GhostFontResolver` resolves, on the baseline
   `GhostBaselinePolicy` (or a `HostBaselineCalibrator` measurement) gives, wrapping onto the host's

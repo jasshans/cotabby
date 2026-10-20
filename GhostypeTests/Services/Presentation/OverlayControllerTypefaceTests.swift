@@ -26,8 +26,10 @@ final class OverlayControllerTypefaceTests: XCTestCase {
             OverlayController.extendsVisibleGhost(visibleText: "the report", newText: text,
                                                   predictedCaret: predicted, freshCaret: predicted.offsetBy(dx: dx, dy: dy))
         }
-        XCTAssertTrue(extends("the report tomorrow", 3, 0))
-        XCTAssertTrue(extends("the report", -2, 1))
+        XCTAssertTrue(extends("the report tomorrow", 1, 0))
+        XCTAssertTrue(extends("the report", -1, 1))
+        XCTAssertFalse(extends("the report tomorrow", 3, 0), "Three points can cover a typed character; re-anchor")
+        XCTAssertFalse(extends("the report tomorrow", 8, 0), "A stale anchor must not retain text over the screenshot prefix")
         XCTAssertFalse(extends("the reports", 40, 0))
         XCTAssertFalse(extends("the report tomorrow", 0, 18))
         XCTAssertFalse(extends("a different idea", 0, 0))
