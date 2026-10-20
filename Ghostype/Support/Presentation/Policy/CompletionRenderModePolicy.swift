@@ -63,6 +63,23 @@ struct CompletionRenderModePolicy: Equatable, Sendable {
         bundleIdentifier: String?
     ) -> CompletionRenderMode {
         let preferred = preferenceMode(for: geometry, bundleIdentifier: bundleIdentifier)
+        // A failed pixel read must not let an Inline pin paint from Chrome's guessed caret.
+        // Successful pixel reads promote quality to derived and retain the inline path.
+        if case .inline = preferred,
+           GhostAnchorTrustPolicy.requiresFreshCaret(
+               isSingleLineField: geometry.isSingleLineField,
+               hostNamesFace: geometry.resolvedFieldStyle?.fontName != nil
+                   || geometry.resolvedFieldStyle?.fontFamily != nil
+           ) {
+            switch geometry.caretQuality {
+            case .estimated:
+                return .mirror(reason: .caretGeometryEstimated)
+            case .layoutEstimated:
+                return .mirror(reason: .caretLayoutEstimated)
+            case .exact, .derived:
+                break
+            }
+        }
         // Text after the caret on its own line is the host's, and an inline ghost there can only
         // sit on top of it. Painting the ghost over an opaque band in the field's background color
         // was tried (2026-09-10) and read as the suggestion overwriting the user's text, so a
