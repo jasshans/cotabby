@@ -22,6 +22,12 @@ enum GhostWrapBandPolicy {
         let lineLeft: CGFloat?
         /// The screen's visible frame; rows never leave it.
         let screenVisibleFrame: CGRect
+        /// Right edge of the host's measured caret-line box, when it exposed one and the caret sits at
+        /// the end of its line. A line box that reaches well past the caret is the text container's
+        /// own width (TextKit line fragments, block-level web line boxes), so it caps the band: a
+        /// narrow box inside a wider reported element (Google Chat, Muse, a Chrome side panel)
+        /// otherwise let the ghost run straight out of the box instead of wrapping.
+        var lineRight: CGFloat? = nil
     }
 
     /// Horizontal padding assumed between a field's frame and its text when no line box says otherwise.
@@ -31,6 +37,9 @@ enum GhostWrapBandPolicy {
     static let screenMargin: CGFloat = 8
     /// Frames narrower than this are not text containers worth wrapping inside.
     static let minimumContainerWidth: CGFloat = 40
+    /// A line box must end at least this far past the caret to be read as the container's width
+    /// rather than the extent of the typed text (which ends at the caret).
+    static let minimumLineBoxReachPastCaret: CGFloat = 8
 
     static func band(_ input: Input) -> ClosedRange<CGFloat> {
         let screenLeft = input.screenVisibleFrame.minX + screenMargin
@@ -51,6 +60,11 @@ enum GhostWrapBandPolicy {
         } else if let frame = input.inputFrame?.standardized, frame.width > minimumContainerWidth {
             left = left ?? (frame.minX + defaultContentInset)
             right = frame.maxX - defaultContentInset
+        }
+        if let lineRight = input.lineRight,
+           lineRight >= input.caretRect.maxX + minimumLineBoxReachPastCaret,
+           lineRight - (left ?? input.caretRect.minX) > minimumContainerWidth {
+            right = min(right ?? lineRight, lineRight)
         }
         let bandLeft = min(max(left ?? input.caretRect.minX, screenLeft), screenRight)
         let bandRight = max(min(right ?? screenRight, screenRight), bandLeft + 1)

@@ -118,3 +118,48 @@ final class GhostWrapBandPolicyForeignLineTests: XCTestCase {
         XCTAssertEqual(band.upperBound, 621, accuracy: 0.001)
     }
 }
+
+/// The container's measured line box caps the band so the ghost wraps inside a narrow box.
+final class GhostWrapBandPolicyLineRightTests: XCTestCase {
+    private let screen = CGRect(x: 0, y: 0, width: 1512, height: 944)
+
+    /// A 300pt composer reported inside a 900pt element: rows must stop at the composer's edge.
+    func testAContainerWideLineBoxCapsTheRightEdge() {
+        let band = GhostWrapBandPolicy.band(GhostWrapBandPolicy.Input(
+            caretRect: CGRect(x: 250, y: 400, width: 1, height: 18),
+            elementFrame: CGRect(x: 100, y: 380, width: 900, height: 60),
+            inputFrame: nil, lineLeft: 108, screenVisibleFrame: screen, lineRight: 400
+        ))
+        XCTAssertEqual(band.lowerBound, 108, accuracy: 0.001)
+        XCTAssertEqual(band.upperBound, 400, accuracy: 0.001)
+    }
+
+    /// A line box ending at the caret is only the typed text's extent and must not shrink the band.
+    func testALineBoxEndingAtTheCaretIsIgnored() {
+        let band = GhostWrapBandPolicy.band(GhostWrapBandPolicy.Input(
+            caretRect: CGRect(x: 250, y: 400, width: 1, height: 18),
+            elementFrame: CGRect(x: 100, y: 380, width: 500, height: 60),
+            inputFrame: nil, lineLeft: 104, screenVisibleFrame: screen, lineRight: 252
+        ))
+        XCTAssertEqual(band.upperBound, 596, accuracy: 0.001)
+    }
+
+    /// Without an element frame the line box still beats running to the screen edge.
+    func testWithoutAnElementTheLineBoxBeatsTheScreenEdge() {
+        let band = GhostWrapBandPolicy.band(GhostWrapBandPolicy.Input(
+            caretRect: CGRect(x: 250, y: 400, width: 1, height: 18),
+            elementFrame: nil, inputFrame: nil, lineLeft: 100, screenVisibleFrame: screen, lineRight: 420
+        ))
+        XCTAssertEqual(band.upperBound, 420, accuracy: 0.001)
+    }
+
+    /// A line box can only narrow the band, never widen it past the element.
+    func testALineBoxWiderThanTheElementDoesNotWidenTheBand() {
+        let band = GhostWrapBandPolicy.band(GhostWrapBandPolicy.Input(
+            caretRect: CGRect(x: 250, y: 400, width: 1, height: 18),
+            elementFrame: CGRect(x: 100, y: 380, width: 300, height: 60),
+            inputFrame: nil, lineLeft: 104, screenVisibleFrame: screen, lineRight: 900
+        ))
+        XCTAssertEqual(band.upperBound, 396, accuracy: 0.001)
+    }
+}

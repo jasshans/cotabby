@@ -1525,7 +1525,10 @@ final class OverlayController: SuggestionOverlayControlling {
                 elementFrame: isCodeEditor ? nil : geometry.elementFrameRect,
                 inputFrame: geometry.inputFrameRect,
                 lineLeft: geometry.hostTextMetrics?.lineRect?.minX,
-                screenVisibleFrame: targetScreenVisibleFrame(for: geometry.caretRect)
+                screenVisibleFrame: targetScreenVisibleFrame(for: geometry.caretRect),
+                lineRight: geometry.isCaretAtEndOfLine && !isCodeEditor
+                    ? geometry.hostTextMetrics?.lineRect?.maxX
+                    : nil
             )
         )
     }
