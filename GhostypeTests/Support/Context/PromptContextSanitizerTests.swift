@@ -1,8 +1,8 @@
 import XCTest
 @testable import Ghostype
 
-/// Pure-function tests for the clipboard/OCR prompt-context sanitizer. `sanitize` reduces text to
-/// letters, digits, whitespace, `@`, and `.`; `sanitizeOCR` additionally scores each token and drops
+/// Pure-function tests for the clipboard/OCR prompt-context sanitizer. `sanitize` keeps prose and the
+/// punctuation facts are written with, dropping terminal and markup shapes; `sanitizeOCR` additionally scores each token and drops
 /// lines that are mostly OCR noise. Outputs are asserted exactly because whatever survives is
 /// copied verbatim into the prompt.
 final class PromptContextSanitizerTests: XCTestCase {
@@ -25,11 +25,44 @@ final class PromptContextSanitizerTests: XCTestCase {
 
     // MARK: - sanitize
 
-    /// Disallowed scalars become spaces (preserving word boundaries: `raw-output` -> `raw output`),
-    /// ANSI escapes are removed whole, whitespace runs collapse, and blank lines disappear.
+    /// The facts people copy from a screen or clipboard keep their punctuation: a time, a price, a
+    /// date, a product code, a contraction, a URL. Before 2026-10-21 everything but letters, digits,
+    /// `@` and `.` became a space, so a suggestion copied "6 15 PM" and "don t" into the field.
+    func test_sanitize_keepsThePunctuationFactsAreWrittenWith() {
+        let cases: [(input: String, expected: String)] = [
+            ("Departs 6:15 PM, Gate B22.", "Departs 6:15 PM, Gate B22."),
+            ("Total: $1,249.00 (incl. tax)", "Total: $1,249.00 (incl. tax)"),
+            ("Due 2024-10-21 — don't forget!", "Due 2024-10-21 — don't forget!"),
+            ("Sony WF-1000XM5 & case #2", "Sony WF-1000XM5 & case #2"),
+            ("https://zoom.us/j/98234571209", "https://zoom.us/j/98234571209"),
+            ("“Quoted,” she said; 50% off?", "“Quoted,” she said; 50% off?"),
+            ("東京、大阪。「会議」", "東京、大阪。「会議」")
+        ]
+        for testCase in cases {
+            XCTAssertEqual(PromptContextSanitizer.sanitize(testCase.input), testCase.expected, "input \(testCase.input.debugDescription)")
+        }
+    }
+
+    /// What the sanitizer exists for: terminal and markup shapes a small model copies back as text.
+    /// Code fences, angle/pipe/brace markup, box drawing and divider runs become spaces.
+    func test_sanitize_removesTerminalAndMarkupShapes() {
+        let cases: [(input: String, expected: String)] = [
+            ("```swift\nlet x = 1\n```", "swift\nlet x 1"),
+            ("<|im_start|>user", "im_start user"),
+            ("──────────\nStatus ═══ OK", "Status OK"),
+            ("-----\nNotes\n=====", "Notes"),
+            ("[09:27] priya: {ok}", "09:27 priya: ok"),
+            ("path\\to\\file | grep x ~ y ^ z", "path to file grep x y z")
+        ]
+        for testCase in cases {
+            XCTAssertEqual(PromptContextSanitizer.sanitize(testCase.input), testCase.expected, "input \(testCase.input.debugDescription)")
+        }
+    }
+
+    /// Whitespace runs collapse, blank lines disappear, and ANSI escapes are removed whole.
     func test_sanitize_normalizesToPromptSafeText() {
         let cases: [(input: String, expected: String)] = [
-            ("raw-output", "raw output"),
+            ("raw-output", "raw-output"),
             ("hello    world", "hello world"),
             ("a\t\tb", "a b"),
             ("first\n   \n\nsecond", "first\nsecond"),

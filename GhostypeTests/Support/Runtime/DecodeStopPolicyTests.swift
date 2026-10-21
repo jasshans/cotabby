@@ -18,6 +18,28 @@ final class DecodeStopPolicyTests: XCTestCase {
         XCTAssertNil(DecodeStopPolicy.verdict(accumulated: "first line\nsecond", tokensGenerated: 4))
     }
 
+    /// A budget that runs out inside a word lets decoding finish the word and cuts at the next
+    /// whitespace; a budget that ends at a word boundary stops right there.
+    func test_wordCompletion_finishesOnlyTheWordInProgress() {
+        typealias Completion = DecodeStopPolicy.WordCompletion
+        let atBudget = "Here it is: https://zoom.us/j/9823"
+        XCTAssertEqual(DecodeStopPolicy.wordCompletion(textAtBudget: atBudget, accumulated: atBudget, extraTokens: 0),
+                       Completion.keepDecoding)
+        XCTAssertEqual(DecodeStopPolicy.wordCompletion(textAtBudget: atBudget, accumulated: atBudget + "4571", extraTokens: 1),
+                       Completion.keepDecoding)
+        XCTAssertEqual(DecodeStopPolicy.wordCompletion(textAtBudget: atBudget, accumulated: atBudget + "4571209 and", extraTokens: 3),
+                       Completion.stop(atBudget + "4571209"))
+        // At a word boundary the next token starts a new word, which is dropped.
+        XCTAssertEqual(DecodeStopPolicy.wordCompletion(textAtBudget: "the updated report", accumulated: "the updated report please",
+                                                       extraTokens: 1), Completion.stop("the updated report"))
+        XCTAssertEqual(DecodeStopPolicy.wordCompletion(textAtBudget: "the report ", accumulated: "the report ", extraTokens: 0),
+                       Completion.stop("the report "))
+        // A runaway "word" still ends.
+        XCTAssertEqual(DecodeStopPolicy.wordCompletion(textAtBudget: "abc", accumulated: "abcdefgh",
+                                                       extraTokens: DecodeStopPolicy.maximumWordCompletionTokens),
+                       Completion.stop("abcdefgh"))
+    }
+
     func test_verdict_sentenceBoundaryDecisions() {
         // `minimumTokens` defaults to 2 unless a row overrides it.
         let cases: [(text: String, tokens: Int, minimum: Int?, expected: Reason?)] = [

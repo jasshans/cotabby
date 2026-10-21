@@ -57,6 +57,31 @@ nonisolated enum DecodeStopPolicy {
         return SentenceBoundaryClassifier.endsSentence(accumulated) ? .sentenceBoundary : nil
     }
 
+    /// What to do once the token budget is spent: keep decoding to finish the word in progress, or
+    /// stop with this text.
+    enum WordCompletion: Equatable {
+        case keepDecoding
+        case stop(String)
+    }
+
+    /// Extra tokens a word in progress may take past the budget: an 18-character tracking number or
+    /// a meeting link is several tokens long.
+    static let maximumWordCompletionTokens = 16
+
+    /// The budget is counted in tokens, so it can run out inside a word: the copied link stopped at
+    /// "https://zoom.us/j/9823" and a tracking number at "1Z999AA1012" (recall eval, 2026-10-21), and
+    /// accepting either types a wrong value. Past the budget, decoding continues only until the word
+    /// ends: the text is cut at the first whitespace the extra tokens bring. When the budget ends at
+    /// a word boundary, the one extra token starts the next word and is dropped.
+    static func wordCompletion(textAtBudget: String, accumulated: String, extraTokens: Int) -> WordCompletion {
+        guard let last = textAtBudget.last, !last.isWhitespace else { return .stop(textAtBudget) }
+        let start = accumulated.index(accumulated.startIndex, offsetBy: min(textAtBudget.count, accumulated.count))
+        if let boundary = accumulated[start...].firstIndex(where: \.isWhitespace) {
+            return .stop(String(accumulated[..<boundary]))
+        }
+        return extraTokens >= maximumWordCompletionTokens ? .stop(accumulated) : .keepDecoding
+    }
+
     private static func wordCount(of text: String) -> Int {
         text.split(whereSeparator: { $0.isWhitespace }).count
     }

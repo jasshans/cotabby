@@ -71,10 +71,10 @@ final class VisualContextExcerptSelectorTests: XCTestCase {
     }
 
     /// Prompt-shaped punctuation is replaced by spaces and collapsed, but digits survive.
-    func test_sanitizesPunctuationButKeepsNumbers() {
+    func test_keepsTheNumbersAndPunctuationOfAFact() {
         XCTAssertEqual(
             select([.init(text: "Invoice #42: $450!", confidence: 1)], budget: 4000),
-            "Invoice 42 450"
+            "Invoice #42: $450!"
         )
     }
 

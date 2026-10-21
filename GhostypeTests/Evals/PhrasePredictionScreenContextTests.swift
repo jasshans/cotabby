@@ -33,14 +33,13 @@ final class PhrasePredictionScreenContextTests: XCTestCase {
         let scenario = scene("Messages\nMorgan: The inspection is Tuesday at 14:30 in room B12.\n\u{FFFD}\u{FFFD}\u{FFFD}\n--- :: --- ::")
         let built = request(checkpoint, scenario, .screen)
         let excerpt = try XCTUnwrap(built.visualContextSummary)
-        // The production sanitizer replaces punctuation with spaces; the day, time components,
-        // and room identifier must survive even though the colon's typography does not.
-        XCTAssertTrue(excerpt.contains("Tuesday at 14 30"))
+        // The day, the time as written, and the room identifier all survive the production sanitizer.
+        XCTAssertTrue(excerpt.contains("Tuesday at 14:30"))
         XCTAssertTrue(excerpt.contains("B12"))
         XCTAssertFalse(excerpt.contains("Please confirm"))
         XCTAssertFalse(excerpt.contains("\u{FFFD}"))
         XCTAssertFalse(excerpt.contains("--- ::"))
-        XCTAssertTrue(built.prompt.contains("Tuesday at 14 30"))
+        XCTAssertTrue(built.prompt.contains("Tuesday at 14:30"))
     }
 
     func testOversizedScreenStillUsesProductionBudgets() {

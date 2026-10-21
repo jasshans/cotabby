@@ -399,5 +399,59 @@
       ]
     },
     "clipboardContext": "Shipment details\nCarrier: UPS\nTracking: 1Z999AA10123456784\nStatus: In transit\nExpected: Thursday"
+  },
+  {
+    "id": "screen-time-08",
+    "tags": [
+      "recall",
+      "screen"
+    ],
+    "applicationName": "Messages",
+    "bundleIdentifier": "com.apple.MobileSMS",
+    "precedingText": "Heads up, my flight departs at ",
+    "isMultiLineEnabled": true,
+    "expectation": {
+      "kind": "recall",
+      "mustContain": [
+        "6:15"
+      ]
+    },
+    "visualContextSummary": "Air Canada AC 8742. Toronto YYZ to Vancouver YVR. Departs 6:15 PM, Gate B22. Seat 14A."
+  },
+  {
+    "id": "clip-link-04",
+    "tags": [
+      "recall",
+      "clipboard"
+    ],
+    "applicationName": "Slack",
+    "bundleIdentifier": "com.tinyspeck.slackmacgap",
+    "precedingText": "Here's the link for the call: ",
+    "isMultiLineEnabled": true,
+    "expectation": {
+      "kind": "recall",
+      "mustContain": [
+        "zoom.us/j/98234571209"
+      ]
+    },
+    "clipboardContext": "https://zoom.us/j/98234571209"
+  },
+  {
+    "id": "screen-date-08",
+    "tags": [
+      "recall",
+      "screen"
+    ],
+    "applicationName": "Mail",
+    "bundleIdentifier": "com.apple.mail",
+    "precedingText": "Just a reminder that the invoice is due on ",
+    "isMultiLineEnabled": true,
+    "expectation": {
+      "kind": "recall",
+      "mustContain": [
+        "2024-11-03"
+      ]
+    },
+    "visualContextSummary": "Invoice INV-2291. Issued 2024-10-03. Due 2024-11-03. Amount due: €1,980.00."
   }
 ]

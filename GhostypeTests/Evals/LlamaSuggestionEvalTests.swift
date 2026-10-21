@@ -112,6 +112,13 @@ final class LlamaSuggestionEvalTests: XCTestCase {
             let want = result.evalCase.expectation.mustContain.joined(separator: "|")
             print("\(mark) \(result.evalCase.id) want=\(want) got=\(result.shownText ?? "<suppressed:\(result.suppressionStage ?? "none")>")")
         }
+        // Scoring folds punctuation away (a recalled "WF 1000XM5" counts), but accepting "6 15 PM"
+        // types the wrong text. Count the passes that carry every fact exactly as written.
+        let verbatim = results.filter { result in
+            guard result.outcome == .correctInsert, let shown = result.shownText?.lowercased() else { return false }
+            return result.evalCase.expectation.mustContain.allSatisfy { shown.contains($0.lowercased()) }
+        }.count
+        print("verbatim \(verbatim)/\(results.count)")
         try Self.writeArtifact(report)
 
         XCTAssertFalse(results.isEmpty)

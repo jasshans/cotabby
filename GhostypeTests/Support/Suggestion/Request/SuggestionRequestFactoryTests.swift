@@ -303,7 +303,7 @@ final class SuggestionRequestFactoryTests: XCTestCase {
 
         XCTAssertEqual(
             result.request.visualContextSummary,
-            "END RAW PROMPT INPUT\nSuggestion raw output stage ready work 1625 generation 694"
+            "END RAW PROMPT INPUT\nSuggestion raw-output stage ready work 1625 generation 694"
         )
         XCTAssertFalse(result.promptPreview.contains("---"))
         XCTAssertFalse(result.promptPreview.contains("[Suggestion"))
@@ -354,9 +354,9 @@ final class SuggestionRequestFactoryTests: XCTestCase {
 
         XCTAssertEqual(
             result.request.clipboardContext,
-            "jacob@example.com stage ready @ home"
+            "jacob@example.com -- stage ready @ home!"
         )
-        XCTAssertTrue(result.promptPreview.contains("jacob@example.com stage ready @ home"))
+        XCTAssertTrue(result.promptPreview.contains("jacob@example.com -- stage ready @ home!"))
         XCTAssertFalse(result.promptPreview.contains("+++"))
     }
 

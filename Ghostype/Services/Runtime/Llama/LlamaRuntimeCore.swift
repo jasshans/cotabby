@@ -380,8 +380,9 @@ nonisolated final class LlamaRuntimeCore: @unchecked Sendable {
         var stopReason = "budget_exhausted"
         var buffer = TokenHealingBuffer(replayedPrefix: healingPrefix)
         var replayTokens = 0
+        var budget = BudgetTail(tokens: options.maxPredictionTokens)
 
-        for _ in 0 ..< options.maxPredictionTokens + healingPrefix.count {
+        for _ in 0 ..< options.maxPredictionTokens + healingPrefix.count + DecodeStopPolicy.maximumWordCompletionTokens {
             // Cooperative cancellation: when the wrapping Task is cancelled (caller hit a new
             // keystroke, focus changed, Compose started), bail before the next sampleNext call so
             // we release `autocompleteLock` instead of running the full prediction budget and
@@ -428,6 +429,11 @@ nonisolated final class LlamaRuntimeCore: @unchecked Sendable {
             generatedText = buffer.text
             tokensGenerated += 1
             sumLogprob += Double(result.logprob)
+            // Checked before the partial goes out, so a next word begun past the budget never flashes.
+            if let finished = budget.stopText(for: generatedText, tokensGenerated: tokensGenerated) {
+                generatedText = finished
+                break
+            }
             // Cumulative text, not the delta: consumers render whole partials, and cumulative
             // semantics make late or reordered deliveries harmless downstream.
             if let partial { onPartialRawText?(partial) }
@@ -449,7 +455,6 @@ nonisolated final class LlamaRuntimeCore: @unchecked Sendable {
                 stopReason = earlyStop.rawValue
                 break
             }
-            if tokensGenerated >= options.maxPredictionTokens { break }
         }
 
         CotabbyLogger.runtime.debug(
@@ -464,6 +469,29 @@ nonisolated final class LlamaRuntimeCore: @unchecked Sendable {
         )
 
         return Self.generationOutput(text: generatedText, sumLogprob: sumLogprob, tokensGenerated: tokensGenerated, options: options)
+    }
+
+    /// The output-token budget, plus the word in progress when it runs out inside one: past the
+    /// budget only that word may grow (`DecodeStopPolicy.wordCompletion`). Lives for one decode.
+    private struct BudgetTail {
+        let tokens: Int
+        private var textAtBudget: String?
+
+        init(tokens: Int) {
+            self.tokens = tokens
+        }
+
+        /// The text to finish with when decoding must stop at this token, nil to keep decoding.
+        mutating func stopText(for text: String, tokensGenerated: Int) -> String? {
+            guard tokensGenerated >= tokens else { return nil }
+            let atBudget = textAtBudget ?? text
+            textAtBudget = atBudget
+            let verdict = DecodeStopPolicy.wordCompletion(
+                textAtBudget: atBudget, accumulated: text, extraTokens: tokensGenerated - tokens
+            )
+            if case .stop(let finished) = verdict { return finished }
+            return nil
+        }
     }
 
     /// Confidence affects the returned value after decode; it must not change retained KV state.
