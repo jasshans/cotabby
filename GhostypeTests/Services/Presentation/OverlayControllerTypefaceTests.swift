@@ -18,6 +18,20 @@ final class OverlayControllerTypefaceTests: XCTestCase {
     /// line where two lines had measured 23.5, and every first wrap after the first sat a point low.
     /// A remembered pitch within the box's rounding wins; one further off belongs to another
     /// line-height and does not; with none remembered the box stands.
+    /// Typing grows the text sample and the line box's width; neither moves the line, so neither
+    /// may stop streamed words from extending the ghost in place. A moved or re-pitched line does.
+    func testTypingDoesNotChangeTheLineLayoutAStreamedExtensionKeeps() {
+        let before = HostTextMetrics(sampleText: "I'll send yo", sampleWidth: 80,
+                                     lineRect: CGRect(x: 100, y: 200, width: 80, height: 18), linePitch: 22)
+        let typed = HostTextMetrics(sampleText: "I'll send you", sampleWidth: 87,
+                                    lineRect: CGRect(x: 100, y: 200, width: 87, height: 18), linePitch: 22)
+        let wrapped = HostTextMetrics(sampleText: "the", sampleWidth: 20,
+                                      lineRect: CGRect(x: 100, y: 178, width: 20, height: 18), linePitch: 22)
+        XCTAssertTrue(OverlayController.keepsLineLayout(before, typed))
+        XCTAssertFalse(OverlayController.keepsLineLayout(before, wrapped))
+        XCTAssertTrue(OverlayController.keepsLineLayout(nil, nil))
+    }
+
     /// Streamed words that only extend the visible ghost append in place when the fresh caret is
     /// within jitter of where the ghost sits; another line, a jump, or different text re-anchors.
     func testStreamedGrowthExtendsTheVisibleGhostOnlyWithinCaretJitter() {

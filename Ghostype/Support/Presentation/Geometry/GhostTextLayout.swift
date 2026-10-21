@@ -151,7 +151,10 @@ struct GhostTextLayout: Equatable {
               layout.rows.contains(where: { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }),
               layout.rows.allSatisfy({ row in
                   let top = row.baselineY + input.baselineOffsetFromTop
-                  return row.penX >= bounds.minX && row.penX + row.width <= bounds.maxX + 0.01
+                  // Only ink has to fit: CoreText ends a wrapped row after the space that broke it
+                  // and lets that space hang past the band, and `width` counts it.
+                  let inkRight = row.penX + row.width - trailingWhitespaceWidth(of: row.text, font: input.font)
+                  return row.penX >= bounds.minX && inkRight <= bounds.maxX + 0.01
                       && top <= bounds.maxY + 0.01 && top - input.boxHeight >= bounds.minY - 0.01
               })
         else { return nil }
@@ -160,6 +163,12 @@ struct GhostTextLayout: Equatable {
         }
         layout.visibleContentRect = bounds
         return layout
+    }
+
+    private static func trailingWhitespaceWidth(of text: String, font: NSFont) -> CGFloat {
+        guard text.last?.isWhitespace == true else { return 0 }
+        let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [.font: font]))
+        return CGFloat(CTLineGetTrailingWhitespaceWidth(line))
     }
 
     private static func makeRows(_ input: Input) -> GhostTextLayout? {

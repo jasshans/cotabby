@@ -1031,9 +1031,12 @@ struct FocusSnapshotResolver {
             guard let parent = AXHelper.parentElement(of: current) else { break }
             current = parent
             let role = AXHelper.stringValue(for: kAXRoleAttribute as CFString, on: parent)
-            if role == "AXScrollArea" || role == "AXWindow" || role == "AXWebArea" {
-                guard let clip = geometryResolver.resolveInputFrameRect(for: parent),
-                      AXHelper.rectHasFiniteComponents(clip), clip.width > 0, clip.height > 0 else { return nil }
+            // An ancestor that reports no usable frame clips nothing we can know about; skipping it
+            // keeps the field's own frame. Giving up instead left the field with no visible frame,
+            // which suppressed every inline ghost in it.
+            if role == "AXScrollArea" || role == "AXWindow" || role == "AXWebArea",
+               let clip = geometryResolver.resolveInputFrameRect(for: parent),
+               AXHelper.rectHasFiniteComponents(clip), clip.width > 0, clip.height > 0 {
                 visible = visible.intersection(clip)
                 guard !visible.isNull, !visible.isEmpty else { return nil }
             }

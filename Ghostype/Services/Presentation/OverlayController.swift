@@ -1398,7 +1398,7 @@ final class OverlayController: SuggestionOverlayControlling {
               session.geometry.elementFrameRect == geometry.elementFrameRect,
               session.geometry.inputFrameRect == geometry.inputFrameRect,
               session.geometry.resolvedFieldStyle == geometry.resolvedFieldStyle,
-              session.geometry.hostTextMetrics == geometry.hostTextMetrics,
+              Self.keepsLineLayout(session.geometry.hostTextMetrics, geometry.hostTextMetrics),
               session.geometry.hasTrailingContent == geometry.hasTrailingContent,
               case .inline = currentRenderModePolicy.mode(for: geometry, bundleIdentifier: geometry.bundleIdentifier)
         else { return false }
@@ -1433,6 +1433,17 @@ final class OverlayController: SuggestionOverlayControlling {
         newText.hasPrefix(visibleText)
             && abs(predictedCaret.midY - freshCaret.midY) < predictedCaret.height / 2
             && abs(predictedCaret.minX - freshCaret.minX) <= GhostCaretRefinement.maximumAdjustment
+    }
+
+    /// Whether the caret's line kept its place: left edge, top, height and pitch. The text sample
+    /// before the caret and the line box's width grow with every typed character, so comparing whole
+    /// metrics refused every extension after a type-through and re-anchored the ghost (the jump
+    /// `extendVisibleInline` exists to prevent).
+    static func keepsLineLayout(_ old: HostTextMetrics?, _ new: HostTextMetrics?) -> Bool {
+        old?.linePitch == new?.linePitch
+            && old?.lineRect?.minX == new?.lineRect?.minX
+            && old?.lineRect?.minY == new?.lineRect?.minY
+            && old?.lineRect?.height == new?.lineRect?.height
     }
 
     private static func requiresFreshCaret(_ geometry: SuggestionOverlayGeometry) -> Bool {
