@@ -28,21 +28,34 @@ nonisolated enum PromptContextSanitizer {
         }
         return regex.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: template)
     }
+    /// Letters, digits, whitespace, and the punctuation and currency signs facts are written with:
+    /// a time (6:15), a price ($1,249.00), a date (2024-10-21), a code (WF-1000XM5), a contraction
+    /// (don't), a URL, and CJK punctuation (、。「」). Only letters, digits, `@` and `.` used to pass,
+    /// so a suggestion copied from the screen read "6 15 PM" and "don t".
     private static let allowedCharacters = CharacterSet.alphanumerics
         .union(.whitespacesAndNewlines)
-        .union(CharacterSet(charactersIn: "@."))
+        .union(.punctuationCharacters)
+        .union(CharacterSet(charactersIn: "+$€£¥₹₩¢₽₺₪฿"))
+        // Markup and terminal shapes a small model copies back as text: brackets and braces of
+        // code and chat logs, backslashes, Markdown emphasis. Backticks, `<`, `>`, `|`, `=`, `~`
+        // and box drawing are symbols, never in the sets above.
+        .subtracting(CharacterSet(charactersIn: "[]{}\\*"))
     private static let replacementScalar = UnicodeScalar(" ")
+    /// Divider runs ("-----", "....", "___") are layout, not text.
+    private static let separatorRunPattern = "([^\\p{L}\\p{N}\\s])\\1{2,}"
+    private static let separatorRunRegex = try? NSRegularExpression(pattern: separatorRunPattern)
 
-    /// Returns prompt-safe context containing only letters, numbers, whitespace, `@`, and `.`.
+    /// Returns prompt-safe context: prose and the punctuation it is written with, without terminal
+    /// escapes, markup shapes, or divider runs.
     ///
-    /// Disallowed scalars become spaces instead of being deleted. That preserves word boundaries:
-    /// `raw-output` becomes `raw output`, not `rawoutput`. The final line pass collapses repeated
-    /// whitespace so stripped punctuation cannot still dominate the prompt through spacing noise.
+    /// Disallowed scalars become spaces instead of being deleted, which preserves word boundaries
+    /// (`a|b` becomes `a b`, not `ab`). The final line pass collapses repeated whitespace so stripped
+    /// symbols cannot still dominate the prompt through spacing noise.
     static func sanitize(_ rawText: String, maxCharacters: Int? = nil) -> String {
         let withoutANSIEscapes = Self.replacingMatches(
-            of: ansiEscapeRegex,
-            patternFallback: ansiEscapePattern,
-            in: rawText,
+            of: separatorRunRegex,
+            patternFallback: separatorRunPattern,
+            in: Self.replacingMatches(of: ansiEscapeRegex, patternFallback: ansiEscapePattern, in: rawText, with: " "),
             with: " "
         )
 
@@ -54,7 +67,8 @@ nonisolated enum PromptContextSanitizer {
         let normalizedLines = sanitizedText
             .components(separatedBy: .newlines)
             .map { collapseInlineWhitespace(in: $0) }
-            .filter { !$0.isEmpty }
+            // A line of punctuation alone (what is left of a divider) says nothing.
+            .filter { containsAlphanumericSignal($0) }
 
         let normalizedText = normalizedLines.joined(separator: "\n")
         let boundedText = maxCharacters.map {
