@@ -197,4 +197,15 @@ final class OverlayControllerTypefaceTests: XCTestCase {
         XCTAssertEqual(OverlayController.visibleWritingBounds(for: geometry), bounds)
     }
 
+    func testCodeEditorUsesVerifiedContainerNotItsHiddenTextareaOrWidenedContext() {
+        let container = CGRect(x: 100, y: 100, width: 600, height: 400)
+        let geometry = SuggestionOverlayGeometry(
+            caretRect: CGRect(x: 300, y: 200, width: 2, height: 16),
+            inputFrameRect: CGRect(x: 300, y: 200, width: 2, height: 16), caretQuality: .exact,
+            bundleIdentifier: "com.microsoft.VSCode", observedCharWidth: nil, isRightToLeft: false,
+            elementFrameRect: container
+        )
+        XCTAssertEqual(OverlayController.visibleWritingBounds(for: geometry), container)
+    }
+
 }

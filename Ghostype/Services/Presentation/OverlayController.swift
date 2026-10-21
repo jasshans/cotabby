@@ -1489,12 +1489,7 @@ final class OverlayController: SuggestionOverlayControlling {
     /// Only an actual field frame can authorize inline painting, never a screen-wide fallback.
     /// Hidden-textarea editors may use their reported editor container instead of the text run.
     static func visibleWritingBounds(for geometry: SuggestionOverlayGeometry) -> CGRect? {
-        let isCodeEditor = AppSurfaceClassifier.classify(
-            bundleIdentifier: geometry.bundleIdentifier, isIntegratedTerminal: false
-        ) == .codeEditor
-        let candidate = isCodeEditor
-            ? geometry.inputFrameRect.flatMap { input in geometry.elementFrameRect.map { input.intersection($0) } }
-            : geometry.elementFrameRect
+        let candidate = geometry.elementFrameRect
         guard let bounds = candidate?.standardized,
               AXHelper.rectHasFiniteComponents(bounds), bounds.width > 0, bounds.height > 0,
               bounds.contains(CGPoint(x: geometry.caretRect.minX, y: geometry.caretRect.midY))

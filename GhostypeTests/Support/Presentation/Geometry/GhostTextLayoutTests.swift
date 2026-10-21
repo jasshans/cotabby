@@ -71,7 +71,9 @@ final class GhostTextLayoutTests: XCTestCase {
         let text = " alpha bravo charlie delta echo foxtrot golf hotel"
         let layout = try XCTUnwrap(GhostTextLayout.make(input(text: text, anchor: CGPoint(x: 290, y: 200), pitch: nil)))
         XCTAssertEqual(layout.rows.count, 1)
-        XCTAssertEqual(layout.rows[0].text, " alpha bravo")
+        XCTAssertEqual(layout.rows[0].text, " alpha ")
+        XCTAssertLessThanOrEqual(layout.rows[0].penX + layout.rows[0].width, bounds.maxX)
+        XCTAssertGreaterThanOrEqual(layout.rows[0].baselineY + 13 - 16, bounds.minY)
         XCTAssertTrue(layout.isTruncated)
         XCTAssertLessThanOrEqual(layout.rows[0].penX + layout.rows[0].width, 400)
     }
@@ -200,7 +202,9 @@ final class GhostTextLayoutTests: XCTestCase {
         let bounds = CGRect(x: 100, y: 184, width: 300, height: 16)
         let layout = try XCTUnwrap(GhostTextLayout.make(boundedInput(" alpha bravo charlie delta echo", bounds: bounds)))
         XCTAssertEqual(layout.rows.count, 1)
-        XCTAssertEqual(layout.rows[0].text, " alpha bravo")
+        XCTAssertEqual(layout.rows[0].text, " alpha ")
+        XCTAssertLessThanOrEqual(layout.rows[0].penX + layout.rows[0].width, bounds.maxX)
+        XCTAssertGreaterThanOrEqual(layout.rows[0].baselineY + 13 - 16, bounds.minY)
         XCTAssertTrue(layout.isTruncated)
         XCTAssertEqual(layout.visibleContentRect, bounds)
     }

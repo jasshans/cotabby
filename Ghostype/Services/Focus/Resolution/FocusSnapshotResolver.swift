@@ -1163,7 +1163,10 @@ struct FocusSnapshotResolver {
             supportedAttributes.contains("AXFrame")
             ? geometryResolver.resolveInputFrameRect(for: element)
             : nil
-        let elementFrameRect = inputFrameRect
+        var elementFrameRect = inputFrameRect
+        let isCodeEditor = AppSurfaceClassifier.classify(
+            bundleIdentifier: bundleIdentifier, isIntegratedTerminal: false
+        ) == .codeEditor
 
         if let currentFrame = inputFrameRect {
             var finalWidth = currentFrame.width
@@ -1176,6 +1179,9 @@ struct FocusSnapshotResolver {
             if let parent = knownParent ?? AXHelper.parentElement(of: element),
                let parentFrame = AXHelper.rectValue(for: "AXFrame" as CFString, on: parent) {
                 let parentCocoa = AXHelper.cocoaRect(fromAccessibilityRect: parentFrame)
+                // Hidden-textarea editors paint in the actual parent container, not the textarea
+                // or the artificial 500-point context slice below. Clip that real container later.
+                if isCodeEditor { elementFrameRect = parentCocoa }
                 if parentCocoa.width > finalWidth {
                     finalWidth = parentCocoa.width
                     finalX = parentCocoa.minX
