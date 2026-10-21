@@ -130,14 +130,15 @@ struct FocusedInputContext: Equatable, Sendable {
 
     /// Presentation measurements belong to the current writing session, not a recycled AX node.
     /// FocusTracker preserves the sequence during composer growth and advances it on field changes.
-    /// Navigation facts also isolate fonts and baselines before a later focus poll updates it.
+    /// Stable navigation URL also isolates measurements without hashing mutable window titles.
     /// Frames and typed text are excluded so normal typing and wrapping remain visually stable.
     var focusedInputIdentityKey: UInt64 {
         var hasher = Hasher()
         hasher.combine(bundleIdentifier)
         hasher.combine(processIdentifier)
         hasher.combine(elementIdentifier)
-        hasher.combine(sessionIdentity)
+        hasher.combine(focusChangeSequence)
+        hasher.combine(focusedURLString)
         return UInt64(bitPattern: Int64(hasher.finalize()))
     }
 

@@ -117,37 +117,14 @@ nonisolated struct CaretAdvanceSampler: Equatable, Sendable {
         }
         // A reflow or vertical caret move invalidates even a same-offset observation. Otherwise
         // pending text can claim a different line's advance and resize the next ghost incorrectly.
-        guard abs(observation.lineY - previous.lineY) <= Self.lineTolerance else {
+        guard Self.isSameLine(observation, previous) else {
             startOver()
             return nil
         }
         let step = observation.documentCaret - previous.documentCaret
         let advance = observation.caretX - previous.caretX
         if step == 0 {
-            // Nothing typed since the last poll: the field is unchanged and so is the sample. Any
-            // other zero-step change (a character replaced in place) is not typing.
-            guard Self.spaceNormalized(observation.precedingText) == Self.spaceNormalized(previous.precedingText)
-            else {
-                startOver()
-                return nil
-            }
-            // The caret caught up with text already counted: its advance belongs to that text.
-            if advance > 0, !pendingText.isEmpty {
-                chunks.append(Sample(text: pendingText, width: advance))
-                pendingText = ""
-                return sample
-            }
-            // The caret moved ahead of its text: the text that arrives next claims the movement.
-            // A second such move before any text is not the host's lag; start over.
-            if advance > 0, unclaimedAdvance == 0 {
-                unclaimedAdvance = advance
-                return sample
-            }
-            guard abs(advance) < 0.01 else {
-                startOver()
-                return nil
-            }
-            return sample
+            return observeStationaryOffset(observation, previous: previous, advance: advance)
         }
         let next = Self.spaceNormalized(observation.precedingText)
         let typed = String(next.suffix(max(step, 0)))
@@ -175,6 +152,39 @@ nonisolated struct CaretAdvanceSampler: Equatable, Sendable {
             chunks.removeFirst()
         }
         return sample
+    }
+
+    private mutating func observeStationaryOffset(
+        _ observation: Observation, previous: Observation, advance: CGFloat
+    ) -> Sample? {
+        // Nothing typed since the last poll: the field is unchanged and so is the sample. Any
+        // other zero-step change (a character replaced in place) is not typing.
+        guard Self.spaceNormalized(observation.precedingText) == Self.spaceNormalized(previous.precedingText)
+        else {
+            startOver()
+            return nil
+        }
+        // The caret caught up with text already counted: its advance belongs to that text.
+        if advance > 0, !pendingText.isEmpty {
+            chunks.append(Sample(text: pendingText, width: advance))
+            pendingText = ""
+            return sample
+        }
+        // The caret moved ahead of its text: the text that arrives next claims the movement.
+        // A second such move before any text is not the host's lag; start over.
+        if advance > 0, unclaimedAdvance == 0 {
+            unclaimedAdvance = advance
+            return sample
+        }
+        guard abs(advance) < 0.01 else {
+            startOver()
+            return nil
+        }
+        return sample
+    }
+
+    private static func isSameLine(_ current: Observation, _ previous: Observation) -> Bool {
+        abs(current.lineY - previous.lineY) <= lineTolerance
     }
 
     private mutating func startOver() {

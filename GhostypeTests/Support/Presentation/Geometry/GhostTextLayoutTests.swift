@@ -211,10 +211,10 @@ final class GhostTextLayoutTests: XCTestCase {
     }
 
     func testKeycapOutsideRightEdgeIsDroppedWithoutRemovingFittingText() throws {
-        let bounds = CGRect(x: 100, y: 168, width: 300, height: 32)
-        let layout = try XCTUnwrap(GhostTextLayout.make(boundedInput(" alpha bravo", bounds: bounds, keycapWidth: 30)))
+        let bounds = CGRect(x: 100, y: 184, width: 300, height: 16)
+        let layout = try XCTUnwrap(GhostTextLayout.make(boundedInput(" alpha br", bounds: bounds, keycapWidth: 40)))
         XCTAssertNil(layout.keycapFrame)
-        XCTAssertEqual(layout.remainingText, " alpha bravo")
+        XCTAssertEqual(layout.remainingText, " alpha br")
     }
 
     func testRightToLeftTextIsTruncatedAtTheFieldsLeftEdge() throws {

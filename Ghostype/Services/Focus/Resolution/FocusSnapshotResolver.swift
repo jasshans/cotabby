@@ -318,19 +318,17 @@ struct FocusSnapshotResolver {
         // (see `FieldStyleCache`) and skipped for secure fields, which are never styled or assisted.
         let resolvedFieldStyle = resolveFieldStyle(
             for: resolvedCandidate,
-            processIdentifier: application.processIdentifier,
+            session: (application.processIdentifier, focusChangeSequence),
             selection: selection,
-            focusChangeSequence: focusChangeSequence,
             textLength: value.utf16.count,
             caretHeight: caretRect.height
         )
         let hostTextMetrics = resolveHostTextMetrics(
             for: resolvedCandidate,
-            processIdentifier: application.processIdentifier,
+            session: (application.processIdentifier, focusChangeSequence),
             text: value,
             selection: selection,
             caret: caret,
-            focusChangeSequence: focusChangeSequence,
             isBrowser: BrowserAppDetector.isBrowser(bundleIdentifier: bundleIdentifier)
         )
         // Recognize an xterm.js integrated terminal (VS Code / Cursor / web terminal) from the
@@ -510,16 +508,15 @@ struct FocusSnapshotResolver {
     /// per style run, plus one `AXStyleRangeForIndex` call only when the caret leaves the known run.
     private func resolveFieldStyle(
         for candidate: AXFocusCandidate,
-        processIdentifier: pid_t,
+        session: (processIdentifier: pid_t, focusChangeSequence: UInt64),
         selection: NSRange,
-        focusChangeSequence: UInt64,
         textLength: Int,
         caretHeight: CGFloat
     ) -> ResolvedFieldStyle? {
         guard !candidate.isSecure else {
             return nil
         }
-        let styleKey = "\(processIdentifier):\(candidate.elementIdentifier):\(focusChangeSequence)"
+        let styleKey = "\(session.processIdentifier):\(candidate.elementIdentifier):\(session.focusChangeSequence)"
         let documentCaret = candidate.documentCaretLocation ?? selection.location
         let supportsStyleRuns = candidate.supportedParameterizedAttributes.contains(
             kAXStyleRangeForIndexParameterizedAttribute as String
@@ -555,11 +552,10 @@ struct FocusSnapshotResolver {
     /// far its caret moves as the user types (`CaretAdvanceSampler`).
     private func resolveHostTextMetrics(
         for candidate: AXFocusCandidate,
-        processIdentifier: pid_t,
+        session: (processIdentifier: pid_t, focusChangeSequence: UInt64),
         text: String,
         selection: NSRange,
         caret: CaretGeometrySelector.Selected,
-        focusChangeSequence: UInt64,
         isBrowser: Bool = false
     ) -> HostTextMetrics? {
         guard !candidate.isSecure, !candidate.usesMarkerSelection else {
@@ -568,8 +564,7 @@ struct FocusSnapshotResolver {
         let caretRect = caret.rect
         let caretHeight = caretRect.height
         let caretAdvanceSample = observeCaretAdvance(
-            for: candidate, processIdentifier: processIdentifier, text: text, selection: selection, caret: caret,
-            focusChangeSequence: focusChangeSequence
+            for: candidate, session: session, text: text, selection: selection, caret: caret
         )
         // The caret box height changes when the line's font changes, and the measured line box
         // moves with the element, so a new height or a moved/resized frame re-measures. Without the
@@ -577,7 +572,7 @@ struct FocusSnapshotResolver {
         let frameKey = candidate.elementFrameRect.map {
             "\(Int($0.minX.rounded())),\(Int($0.minY.rounded())),\(Int($0.width.rounded())),\(Int($0.height.rounded()))"
         } ?? "-"
-        let fieldSessionKey = "\(processIdentifier):\(candidate.elementIdentifier):\(focusChangeSequence)"
+        let fieldSessionKey = "\(session.processIdentifier):\(candidate.elementIdentifier):\(session.focusChangeSequence)"
         let metricsKey = "\(fieldSessionKey):\(Int(caretHeight.rounded())):\(frameKey)"
         let measured = hostTextMetricsCache.metrics(forKey: metricsKey, caretLocation: selection.location) {
             HostTextMetricsProbe.measure(
@@ -618,11 +613,10 @@ struct FocusSnapshotResolver {
     /// Feeds this poll's caret to the field's advance sampler and returns its current sample.
     private func observeCaretAdvance(
         for candidate: AXFocusCandidate,
-        processIdentifier: pid_t,
+        session: (processIdentifier: pid_t, focusChangeSequence: UInt64),
         text: String,
         selection: NSRange,
-        caret: CaretGeometrySelector.Selected,
-        focusChangeSequence: UInt64
+        caret: CaretGeometrySelector.Selected
     ) -> CaretAdvanceSampler.Sample? {
         let nsText = text as NSString
         let offset = min(max(selection.location, 0), nsText.length)
@@ -632,7 +626,7 @@ struct FocusSnapshotResolver {
         let tailStart = max(0, offset - 64)
         let tailText = nsText.substring(with: NSRange(location: tailStart, length: offset - tailStart))
         return caretAdvanceSamples.sample(
-            forKey: "\(processIdentifier):\(candidate.elementIdentifier):\(focusChangeSequence)",
+            forKey: "\(session.processIdentifier):\(candidate.elementIdentifier):\(session.focusChangeSequence)",
             observation: CaretAdvanceSampler.Observation(
                 caretX: caret.rect.minX,
                 lineY: caret.rect.maxY,
@@ -1029,6 +1023,25 @@ struct FocusSnapshotResolver {
         }
     }
 
+    /// Intersect the writing field with host clipping ancestors; never expand its real edges.
+    private func visibleFieldFrame(for element: AXUIElement, frame: CGRect?) -> CGRect? {
+        guard var visible = frame else { return nil }
+        var current = element
+        for _ in 0..<16 {
+            guard let parent = AXHelper.parentElement(of: current) else { break }
+            current = parent
+            let role = AXHelper.stringValue(for: kAXRoleAttribute as CFString, on: parent)
+            if role == "AXScrollArea" || role == "AXWindow" || role == "AXWebArea" {
+                guard let clip = geometryResolver.resolveInputFrameRect(for: parent),
+                      AXHelper.rectHasFiniteComponents(clip), clip.width > 0, clip.height > 0 else { return nil }
+                visible = visible.intersection(clip)
+                guard !visible.isNull, !visible.isEmpty else { return nil }
+            }
+            if role == "AXWindow" { break }
+        }
+        return visible
+    }
+
     /// Extracts the AX properties Ghostype needs from one candidate element near the current focus.
     private func candidateSnapshot(
         for element: AXUIElement,
@@ -1265,7 +1278,7 @@ struct FocusSnapshotResolver {
             caretSourceDetail: caretResult?.sourceDetail,
             caretAllowsDeepSearch: caretResult?.allowsDeepSearch ?? true,
             inputFrameRect: inputFrameRect,
-            elementFrameRect: elementFrameRect,
+            elementFrameRect: visibleFieldFrame(for: element, frame: elementFrameRect),
             markedTextRange: markedTextRange,
             isSecure: isSecure,
             vendsDOMAttributes: vendsDOMAttributes,

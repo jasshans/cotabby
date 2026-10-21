@@ -51,6 +51,12 @@ final class FocusedInputContextTests: XCTestCase {
         XCTAssertEqual(chatA.suggestionSessionIdentityKey, chatAAfterTyping.suggestionSessionIdentityKey)
     }
 
+    func test_titleOnlyChangePreservesPresentationMeasurements() {
+        let first = CotabbyTestFixtures.focusedInputContext(windowTitle: "Inbox (1)")
+        let next = CotabbyTestFixtures.focusedInputContext(windowTitle: "Inbox (2)")
+        XCTAssertEqual(first.focusedInputIdentityKey, next.focusedInputIdentityKey)
+    }
+
     func test_sessionIdentity_matchesTheSnapshotItWasBuiltFrom() {
         let snapshot = CotabbyTestFixtures.focusedInputSnapshot(
             focusChangeSequence: 5,

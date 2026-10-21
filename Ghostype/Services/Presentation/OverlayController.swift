@@ -1492,7 +1492,9 @@ final class OverlayController: SuggestionOverlayControlling {
         let isCodeEditor = AppSurfaceClassifier.classify(
             bundleIdentifier: geometry.bundleIdentifier, isIntegratedTerminal: false
         ) == .codeEditor
-        let candidate = isCodeEditor ? geometry.inputFrameRect : geometry.elementFrameRect
+        let candidate = isCodeEditor
+            ? geometry.inputFrameRect.flatMap { input in geometry.elementFrameRect.map { input.intersection($0) } }
+            : geometry.elementFrameRect
         guard let bounds = candidate?.standardized,
               AXHelper.rectHasFiniteComponents(bounds), bounds.width > 0, bounds.height > 0,
               bounds.contains(CGPoint(x: geometry.caretRect.minX, y: geometry.caretRect.midY))
@@ -1607,6 +1609,7 @@ final class OverlayController: SuggestionOverlayControlling {
         // Last-resort guard: AppKit raises on a non-finite frame.
         guard AXHelper.rectHasFiniteComponents(frame), frame.width > 0, frame.height > 0 else {
             CotabbyLogger.suggestion.warning("Skipped inline overlay: computed a non-finite frame")
+            hide(reason: "invalid inline frame")
             return
         }
 
