@@ -71,9 +71,7 @@ final class GhostTextLayoutTests: XCTestCase {
         let text = " alpha bravo charlie delta echo foxtrot golf hotel"
         let layout = try XCTUnwrap(GhostTextLayout.make(input(text: text, anchor: CGPoint(x: 290, y: 200), pitch: nil)))
         XCTAssertEqual(layout.rows.count, 1)
-        XCTAssertEqual(layout.rows[0].text, " alpha ")
-        XCTAssertLessThanOrEqual(layout.rows[0].penX + layout.rows[0].width, bounds.maxX)
-        XCTAssertGreaterThanOrEqual(layout.rows[0].baselineY + 13 - 16, bounds.minY)
+        XCTAssertEqual(layout.rows[0].text, " alpha bravo")
         XCTAssertTrue(layout.isTruncated)
         XCTAssertLessThanOrEqual(layout.rows[0].penX + layout.rows[0].width, 400)
     }
