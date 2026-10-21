@@ -380,23 +380,27 @@ extension SuggestionCoordinator {
         // ghost-vs-host font error away from the next estimate and the settle showed up as a
         // post-accept jerk. Skip the slide so the estimator places the tail where the
         // post-publish estimate will also land; nothing moves afterwards.
-        let heldOverlayQuality: CaretGeometryQuality?
+        let heldGeometry: SuggestionOverlayGeometry?
         if case let .visible(_, geometry, _) = overlayState {
-            heldOverlayQuality = geometry.caretQuality
+            heldGeometry = geometry
         } else {
-            heldOverlayQuality = nil
+            heldGeometry = nil
         }
-        if heldOverlayQuality != .layoutEstimated,
+        if heldGeometry?.caretQuality != .layoutEstimated,
            overlayController.advanceInline(to: remainingText, insertedText: insertionChunk) {
             recordSuggestionPresentation(context: liveContext)
             return
         }
 
-        if GhostAnchorTrustPolicy.requiresFreshCaret(
-            isSingleLineField: liveContext.isSingleLineField,
-            hostNamesFace: liveContext.resolvedFieldStyle?.fontName != nil
-                || liveContext.resolvedFieldStyle?.fontFamily != nil
-        ) {
+        // Advance safety follows the geometry being replaced, not a possibly lagging AX snapshot.
+        let requiresFreshCaret = GhostAnchorTrustPolicy.requiresFreshCaret(
+            isSingleLineField: heldGeometry?.isSingleLineField ?? liveContext.isSingleLineField,
+            hostNamesFace: heldGeometry.map {
+                $0.resolvedFieldStyle?.fontName != nil || $0.resolvedFieldStyle?.fontFamily != nil
+            } ?? (liveContext.resolvedFieldStyle?.fontName != nil
+                || liveContext.resolvedFieldStyle?.fontFamily != nil)
+        )
+        if requiresFreshCaret {
             hideOverlay(reason: "Waiting for the host's measured caret after insertion.")
             schedulePostInsertionRefresh()
             return

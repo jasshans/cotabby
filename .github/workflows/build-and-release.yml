@@ -192,10 +192,10 @@ jobs:
         run: |
           set -euo pipefail
           APP="build/DerivedData/Build/Products/Release/Ghostype.app"
-          lipo -verify_arch arm64 x86_64 "$APP/Contents/MacOS/Ghostype"
+          lipo "$APP/Contents/MacOS/Ghostype" -verify_arch arm64 x86_64
           find "$APP/Contents/Frameworks" -type f | while IFS= read -r binary; do
             if file "$binary" | grep -q 'Mach-O'; then
-              lipo -verify_arch arm64 x86_64 "$binary"
+              lipo "$binary" -verify_arch arm64 x86_64
             fi
           done
 

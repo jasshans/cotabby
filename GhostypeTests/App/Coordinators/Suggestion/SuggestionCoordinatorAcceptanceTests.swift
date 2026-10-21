@@ -126,6 +126,25 @@ final class SuggestionCoordinatorAcceptanceTests: SuggestionCoordinatorRigTestCa
 
     // MARK: - Rapid successive accepts
 
+    func test_unknownFontSingleLineOverlayWaitsForPublishedCaretAfterAccept() {
+        let rig = retained(makeCoordinatorRig())
+        startVisibleSession(in: rig, fullText: " world again")
+        rig.overlayController.showSuggestion(
+            " world again",
+            geometry: SuggestionOverlayGeometry(
+                caretRect: CotabbyTestFixtures.overlayGeometry().caretRect,
+                isSingleLineField: true
+            )
+        )
+
+        XCTAssertTrue(rig.coordinator.acceptCurrentSuggestion())
+        XCTAssertEqual(rig.inserter.insertedChunks, [" world"])
+        XCTAssertEqual(rig.interactionState.activeSession?.remainingText, " again")
+        XCTAssertFalse(rig.coordinator.overlayState.isVisible)
+        rig.coordinator.reconcileActiveSession(with: rig.focusProvider.snapshot)
+        XCTAssertFalse(rig.coordinator.overlayState.isVisible)
+    }
+
     func test_rapidTabsAcceptEachWordWhileTheOverlayIsStillHoldingThePreviousPresent() {
         // Regression: the overlay controller can hold a presentation (pixel caret read, lagging
         // host caret) and leave `overlayState` on the pre-accept tail. A second Tab arriving in that
