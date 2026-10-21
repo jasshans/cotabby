@@ -27,7 +27,7 @@ enum GhostWrapBandPolicy {
         /// own width (TextKit line fragments, block-level web line boxes), so it caps the band: a
         /// narrow box inside a wider reported element (Google Chat, Muse, a Chrome side panel)
         /// otherwise let the ghost run straight out of the box instead of wrapping.
-        var lineRight: CGFloat? = nil
+        var lineRight: CGFloat?
     }
 
     /// Horizontal padding assumed between a field's frame and its text when no line box says otherwise.

@@ -23,12 +23,12 @@ concurrency:
 jobs:
   swiftlint:
     name: SwiftLint
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Use the prebuilt SwiftLint on macos-latest. The image ships a recent
+      # Use the prebuilt SwiftLint on macos-15-intel. The image ships a recent
       # version via Homebrew; calling `swiftlint version` in the log captures
       # which one actually ran, which matters when a rule behavior changes
       # between versions.

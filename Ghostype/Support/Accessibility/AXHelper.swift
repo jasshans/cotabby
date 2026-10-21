@@ -389,7 +389,7 @@ enum AXHelper {
     /// returned so an emoji-only field still yields a size. Internal (not private) so the run
     /// selection is unit-testable without live AX elements.
     static func dominantFieldStyle(in attributed: NSAttributedString) -> ResolvedFieldStyle? {
-        var best: (style: ResolvedFieldStyle, length: Int, end: Int)?
+        var best: (style: ResolvedFieldStyle, range: NSRange)?
         var fallback: (style: ResolvedFieldStyle, end: Int)?
         let fullRange = NSRange(location: 0, length: attributed.length)
         attributed.enumerateAttributes(in: fullRange) { attributes, range, _ in
@@ -400,10 +400,10 @@ enum AXHelper {
             let isEmoji = fontName?.localizedCaseInsensitiveContains("Emoji") ?? false
             let isWhitespace = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             if !isEmoji && !isWhitespace {
-                let beatsBest = best.map { range.length > $0.length
-                    || (range.length == $0.length && range.upperBound > $0.end) } ?? true
+                let beatsBest = best.map { range.length > $0.range.length
+                    || (range.length == $0.range.length && range.upperBound > $0.range.upperBound) } ?? true
                 if beatsBest {
-                    best = (style, range.length, range.upperBound)
+                    best = (style, range)
                 }
             } else if fallback.map({ range.upperBound > $0.end }) ?? true {
                 fallback = (style, range.upperBound)

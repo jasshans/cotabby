@@ -312,6 +312,8 @@ symptom → category map. Do not ask the user to re-explain symptoms before chec
 
 ## Builds And Validation
 
+- GitHub macOS workflows use explicit Intel runners to avoid ARM runner capacity stalls; production releases must build and verify both Mac architectures before signing and publication.
+
 Build, run, and test with Xcode as documented in
 [`CONTRIBUTING.md`](CONTRIBUTING.md). Prepare the pinned inference workspace with
 `scripts/prepare_cotabby_workspace.sh` first. Local launches use the developer's own signing
