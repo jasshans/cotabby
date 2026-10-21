@@ -37,7 +37,32 @@ final class OverlayController: SuggestionOverlayControlling {
     private(set) var state: OverlayState = .hidden(reason: "Overlay idle.") {
         didSet {
             onStateChange?(state)
+            let line = presentedLine(for: state)
+            if line != lastPresentedLine {
+                lastPresentedLine = line
+                onPresentedLineChange?(line)
+            }
         }
+    }
+
+    /// The line the suggestion on screen is on, for the field icon (`ActivationIndicatorController`),
+    /// nil when no suggestion is visible. Separate from `onStateChange`, which the coordinator owns.
+    var onPresentedLineChange: ((FieldIndicatorPlacement.LineAnchor?) -> Void)?
+    private var lastPresentedLine: FieldIndicatorPlacement.LineAnchor?
+
+    /// Where the visible suggestion's line starts (the band its rows wrap back to) and its vertical
+    /// centre: the first visible inline row's, or the caret's for the card.
+    private func presentedLine(for state: OverlayState) -> FieldIndicatorPlacement.LineAnchor? {
+        guard case let .visible(_, geometry, mode) = state else { return nil }
+        var caret = geometry.caretRect
+        if case .inline = mode, let session = inlineSession {
+            caret = predictedCaretRect(for: session)
+        }
+        let left = wrapBand(for: geometry)?.lowerBound
+            ?? geometry.hostTextMetrics?.lineRect?.minX
+            ?? geometry.elementFrameRect?.minX
+            ?? caret.minX
+        return FieldIndicatorPlacement.LineAnchor(left: left, midY: caret.midY)
     }
 
     /// The inline renderer, reused across presentations; only its `content` changes per show.
@@ -271,13 +296,7 @@ final class OverlayController: SuggestionOverlayControlling {
             ?? (covered && !Self.requiresFreshCaret(requestedGeometry)
                 ? pixelCaretLocator.extrapolatedMeasurement(for: request) : nil)
         if let measured {
-            return requestedGeometry.withPixelMeasuredCaret(
-                measured.caretRect,
-                lineRect: measured.lineRect,
-                linePitch: measured.linePitch,
-                baselineOffsetFromTop: measured.baselineOffsetFromTop,
-                lineInkWidth: measured.lineInkWidth
-            )
+            return Self.geometry(requestedGeometry, placedBy: measured)
         }
         guard !pixelCaretLocator.hasFailed(request) else { return requestedGeometry }
         if covered {
@@ -1194,23 +1213,54 @@ final class OverlayController: SuggestionOverlayControlling {
             wrappedRun: context.observedContentEdges?.wrappedRun
         )
         // The capture runs while the model generates, so the first ghost for this text already
-        // knows its caret and nothing is held at presentation time.
-        if let request = pixelCaretRequest(for: geometry),
-           pixelCaretLocator.cachedMeasurement(for: request) == nil, !pixelCaretLocator.hasFailed(request),
+        // knows its caret and nothing is held at presentation time. An estimated caret (a Chromium
+        // contenteditable's) is no line to measure a typeface on; the pixel read gives it one, so
+        // the typeface measurement chains onto that read instead of waiting for the presentation.
+        // Measured 2026-10-21 in Chrome at 80/100/110%: the measurement landed ~150 ms after every
+        // first ghost, which showed the caret-height estimate (13.5 for 14, 10.0 for 11.2) and only
+        // the next keystroke showed the measured size: a size change in every new field.
+        if let request = pixelCaretRequest(for: geometry), !pixelCaretLocator.hasFailed(request),
            !panelCovers(request.runFrame) {
-            pixelCaretLocator.locate(request) { _ in }
+            if let measured = pixelCaretLocator.cachedMeasurement(for: request) {
+                calibrateTypography(for: Self.geometry(geometry, placedBy: measured))
+            } else {
+                pixelCaretLocator.locate(request) { [weak self] measured in
+                    guard let self, let measured else { return }
+                    self.calibrateTypography(for: Self.geometry(geometry, placedBy: measured))
+                }
+            }
+            return
         }
-        let renderer: GhostBaselinePolicy.HostRenderer = context.isWebContentField ? .webEngine : .textKit
+        calibrateTypography(for: geometry)
+    }
+
+    /// Starts the host baseline and typeface measurement for `geometry` ahead of a presentation;
+    /// its result is cached for the presentation to read (see `applyingMatchedTypeface`).
+    private func calibrateTypography(for geometry: SuggestionOverlayGeometry) {
+        let renderer: GhostBaselinePolicy.HostRenderer = geometry.isWebContentField ? .webEngine : .textKit
         let fontResolution = resolveFont(for: geometry, renderer: renderer)
         let policyOffset = GhostBaselinePolicy.baselineOffsetFromTop(
             font: fontResolution.font,
-            boxHeight: context.caretRect.height,
+            boxHeight: geometry.caretRect.height,
             renderer: renderer
         )
         guard let request = calibrationRequest(for: geometry, resolution: fontResolution, policyOffset: policyOffset) else {
             return
         }
         baselineCalibrator?.calibrate(request) { _ in }
+    }
+
+    /// The geometry a presentation would use once a pixel read placed its caret (`pixelPlacedGeometry`).
+    private static func geometry(
+        _ geometry: SuggestionOverlayGeometry, placedBy measured: PixelCaretLocator.Measurement
+    ) -> SuggestionOverlayGeometry {
+        geometry.withPixelMeasuredCaret(
+            measured.caretRect,
+            lineRect: measured.lineRect,
+            linePitch: measured.linePitch,
+            baselineOffsetFromTop: measured.baselineOffsetFromTop,
+            lineInkWidth: measured.lineInkWidth
+        )
     }
 
     private func calibrationRequest(

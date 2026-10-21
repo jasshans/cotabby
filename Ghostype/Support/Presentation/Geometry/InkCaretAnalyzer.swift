@@ -126,6 +126,25 @@ enum InkCaretAnalyzer {
         return deltas.isEmpty ? nil : deltas[deltas.count / 2]
     }
 
+    /// The first and last inked columns within `rows`, by the ink rule the lines are found with;
+    /// nil when those rows hold no ink. Reads one band of a capture whose lines touched (see
+    /// `PixelCaretLocator.mergedLinesMeasurement`).
+    static func inkColumns(in bitmap: RGBABitmap, rows: ClosedRange<Int>) -> ClosedRange<Int>? {
+        let first = max(rows.lowerBound, 0)
+        let last = min(rows.upperBound, bitmap.height - 1)
+        guard bitmap.width > 0, first <= last else { return nil }
+        let mask = inkMask(bitmap)
+        var left = Int.max
+        var right = -1
+        for row in first...last {
+            for column in 0..<bitmap.width where mask.ink[row * bitmap.width + column] {
+                left = min(left, column)
+                right = max(right, column)
+            }
+        }
+        return right >= 0 ? left...right : nil
+    }
+
     private struct InkMask {
         let ink: [Bool]
         let rowInk: [Int]

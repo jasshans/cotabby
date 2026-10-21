@@ -94,6 +94,14 @@ final class AXTextGeometryResolverTests: XCTestCase {
 
     // MARK: - AXFrame-only estimated caret line
 
+    /// A caret is a thin line and a character box is narrower than tall; Chrome's whole-block
+    /// answer for a caret after a contenteditable's last text node is neither (2026-10-21).
+    func test_isCaretShaped_rejectsABlockBox() {
+        XCTAssertTrue(AXTextGeometryResolver.isCaretShaped(CGRect(x: 550, y: 1001, width: 0, height: 16)))
+        XCTAssertTrue(AXTextGeometryResolver.isCaretShaped(CGRect(x: 550, y: 1001, width: 8, height: 16)))
+        XCTAssertFalse(AXTextGeometryResolver.isCaretShaped(CGRect(x: 44, y: 908, width: 728, height: 90)))
+    }
+
     func test_estimatedCaretRect_centersSingleLineInsideFieldChrome() {
         let field = CGRect(x: 100, y: 200, width: 500, height: 54)
 

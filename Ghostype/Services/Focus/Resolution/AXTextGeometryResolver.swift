@@ -72,6 +72,15 @@ struct AXTextGeometryResolver {
     /// keep a ~300-node AX walk off every poll tick in Gmail-class hosts.
     private static let staticRunWalkThrottleInterval: TimeInterval = 0.1
 
+    /// A caret box is a thin line, and even a one-character box is narrower than it is tall. Chrome
+    /// answers the selected-marker query for a caret placed after a contenteditable's last text
+    /// node (a click past the text, a script's `selectNodeContents`) with the whole block's box:
+    /// 728x90 for a three-line composer at 110% (2026-10-21), which became a caret at the field's
+    /// left edge and a 76pt ghost solved from its height. Such a box is not a caret.
+    static func isCaretShaped(_ rect: CGRect) -> Bool {
+        rect.width <= rect.height
+    }
+
     func resolveCaretRect(
         for element: AXUIElement,
         selection: NSRange,
@@ -155,7 +164,8 @@ struct AXTextGeometryResolver {
         // when we ask for the caret via their internal AXTextMarkerRange objects. The caret box is
         // zero-width, so only its height is checked.
         if let markerRect = AXHelper.textMarkerCaretRect(on: element),
-            markerRect.height > 0, AXHelper.rectHasFiniteComponents(markerRect) {
+            markerRect.height > 0, AXHelper.rectHasFiniteComponents(markerRect),
+            Self.isCaretShaped(markerRect) {
             let cocoaRect = AXHelper.validatedCocoaTextRect(
                 fromAccessibilityRect: markerRect,
                 anchorFrame: cocoaAnchorFrame

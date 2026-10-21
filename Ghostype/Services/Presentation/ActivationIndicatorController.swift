@@ -3,18 +3,15 @@ import Foundation
 import SwiftUI
 
 /// File overview:
-/// Owns the tiny non-activating panel that marks supported inputs with Ghostype's icon near
-/// the field edge. Unlike the ghost-text overlay, this controller is focus-driven and toggled
-/// by a simple boolean.
+/// Owns the tiny non-activating panel that marks the line Ghostype is completing with its icon,
+/// just left of where that line starts. Placement and visibility rules live in
+/// `FieldIndicatorPlacement` and `FieldIndicatorVisibility`; this controller feeds them the focus
+/// polls (from `AppDelegate`) and the suggestion on screen (from `OverlayController`).
 ///
 /// Keeping this as a separate controller preserves the architectural split between:
 /// supported-field affordances and suggestion-specific UI.
 @MainActor
 final class ActivationIndicatorController {
-    /// Field-edge mode should visually touch the input's outside edge.
-    private let fieldEdgeGap: CGFloat = 0
-    private let screenInset: CGFloat = 2
-
     private lazy var contentView: NSHostingView<AnyView> = {
         NSHostingView(rootView: AnyView(EmptyView()))
     }()
@@ -40,112 +37,103 @@ final class ActivationIndicatorController {
 
     private var isVisible = false
     /// The chip's measured size, cached after the first layout: the view is fixed-size, so
-    /// repeat `show` calls can compute the frame (and hit the early-out) without re-measuring.
+    /// repeat placements can compute the frame (and hit the early-out) without re-measuring.
     private var cachedContentSize: CGSize?
 
-    /// Shows or hides the field-edge Ghostype icon indicator.
-    func show(
-        enabled: Bool,
-        caretRect: CGRect,
-        inputFrameRect: CGRect?
+    /// The latest focus poll's facts, kept so a recheck or a suggestion change decides again.
+    private var isEnabled = false
+    private var isSupported = false
+    private var bundleIdentifier: String?
+    private var focusLine: FieldIndicatorPlacement.LineAnchor?
+    /// The line of the suggestion on screen (from `OverlayController`), nil when none is.
+    private var presentedLine: FieldIndicatorPlacement.LineAnchor?
+    private var visibility = FieldIndicatorVisibility()
+    private var recheck: DispatchWorkItem?
+
+    /// One focus poll: whether the icon may show at all (Ghostype on for this field, indicator
+    /// enabled), whether the field is supported, and the caret's line. A poll without a line (an
+    /// unsupported read) keeps the last one for the same app, so a held icon does not move.
+    func update(
+        isEnabled: Bool,
+        isSupported: Bool,
+        bundleIdentifier: String?,
+        line: FieldIndicatorPlacement.LineAnchor?
     ) {
-        guard enabled else {
-            hide(reason: "Activation indicator hidden because it is disabled.")
-            return
+        if let line {
+            focusLine = line
+        } else if bundleIdentifier != self.bundleIdentifier {
+            focusLine = nil
         }
-
-        guard !caretRect.isEmpty else {
-            hide(reason: "Activation indicator hidden because the caret rect was empty.")
-            return
-        }
-
-        // Fast path: the chip is a fixed-size view, so once its size is measured, repeat
-        // shows at an unchanged frame skip the SwiftUI re-eval and forced layout entirely.
-        if let cachedSize = cachedContentSize {
-            let frame = CGRect(
-                origin: fieldEdgeIconOrigin(
-                    caretRect: caretRect,
-                    inputFrameRect: inputFrameRect,
-                    contentSize: cachedSize
-                ),
-                size: cachedSize
-            ).integral
-            if isVisible, panel.frame == frame, panel.isVisible {
-                return
-            }
-        }
-
-        contentView.rootView = AnyView(FieldEdgeIconIndicatorView())
-        contentView.layoutSubtreeIfNeeded()
-        let contentSize = contentView.fittingSize
-        cachedContentSize = contentSize
-        let origin = fieldEdgeIconOrigin(
-            caretRect: caretRect,
-            inputFrameRect: inputFrameRect,
-            contentSize: contentSize
-        )
-
-        let frame = CGRect(origin: origin, size: contentSize).integral
-        if isVisible, panel.frame == frame, panel.isVisible {
-            return
-        }
-
-        panel.setFrame(frame, display: true)
-        panel.orderFrontRegardless()
-        isVisible = true
+        self.isEnabled = isEnabled
+        self.isSupported = isSupported
+        self.bundleIdentifier = bundleIdentifier
+        decide()
     }
 
-    /// Hides the indicator when Ghostype is not actively supporting the current field.
+    /// The suggestion on screen moved to `line`, or went away (nil). While one is visible the icon
+    /// marks its line, which the overlay knows exactly even where the focus poll only estimates
+    /// the caret (a Chromium contenteditable).
+    func followPresentedLine(_ line: FieldIndicatorPlacement.LineAnchor?) {
+        presentedLine = line
+        decide()
+    }
+
+    /// Hides the indicator now (app termination); the next focus poll decides again.
     func hide(reason _: String) {
+        recheck?.cancel()
         panel.orderOut(nil)
         isVisible = false
     }
 
-    /// Places Ghostype's icon just outside the text area's left edge. When the field is flush against
-    /// the screen edge we fall back to the right side so the icon stays fully visible.
-    private func fieldEdgeIconOrigin(
-        caretRect: CGRect,
-        inputFrameRect: CGRect?,
-        contentSize: CGSize
-    ) -> CGPoint {
-        let anchorRect = if let inputFrameRect, !inputFrameRect.isEmpty {
-            inputFrameRect
+    private func decide() {
+        recheck?.cancel()
+        recheck = nil
+        let decision = visibility.decide(
+            isEnabled: isEnabled,
+            isSupported: isSupported,
+            bundleIdentifier: bundleIdentifier,
+            suggestionVisible: presentedLine != nil,
+            time: ProcessInfo.processInfo.systemUptime
+        )
+        switch decision {
+        case .show:
+            place(at: presentedLine ?? focusLine)
+        case let .hold(until):
+            // Keep what is on screen; a held icon still follows the suggestion's line.
+            if isVisible, let presentedLine {
+                place(at: presentedLine)
+            }
+            let work = DispatchWorkItem { [weak self] in self?.decide() }
+            recheck = work
+            let delay = max(until - ProcessInfo.processInfo.systemUptime, 0.01)
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+        case .hide:
+            panel.orderOut(nil)
+            isVisible = false
+        }
+    }
+
+    private func place(at line: FieldIndicatorPlacement.LineAnchor?) {
+        // No line known yet (a first poll without geometry): leave the icon where it is.
+        guard let line else { return }
+        let size: CGSize
+        if let cachedContentSize {
+            size = cachedContentSize
         } else {
-            caretRect
+            contentView.rootView = AnyView(FieldEdgeIconIndicatorView())
+            contentView.layoutSubtreeIfNeeded()
+            size = contentView.fittingSize
+            cachedContentSize = size
         }
-
-        // Horizontal placement follows the field's edge, but vertical placement follows the *caret*.
-        // Centering vertically on the field only reads as "beside this input" when the field is
-        // about one line tall. In a document-shaped text area it is badly wrong: Word publishes the
-        // whole page as one `AXTextArea` (846pt tall), so the icon landed halfway down an empty page,
-        // hundreds of points below the line being typed. The caret is always on the active line, and
-        // for single-line fields it sits at the field's own centre anyway, so short inputs are
-        // unaffected. Falls back to the field when the caret rect is empty.
-        let verticalAnchor = caretRect.isEmpty ? anchorRect : caretRect
-
-        let preferredLeftX = anchorRect.minX - contentSize.width - fieldEdgeGap
-        let fallbackRightX = anchorRect.maxX + fieldEdgeGap
-        let centeredY = verticalAnchor.midY - (contentSize.height / 2)
-
-        guard let screen = screen(for: anchorRect) else {
-            return CGPoint(x: preferredLeftX, y: centeredY)
+        let lineStart = CGRect(x: line.left, y: line.midY, width: 0, height: 0)
+        let origin = FieldIndicatorPlacement.origin(for: line, size: size, visibleFrame: screen(for: lineStart)?.visibleFrame)
+        let frame = CGRect(origin: origin, size: size).integral
+        if isVisible, panel.frame == frame, panel.isVisible {
+            return
         }
-
-        let visibleFrame = screen.visibleFrame
-        let preferredX = preferredLeftX >= visibleFrame.minX + screenInset
-            ? preferredLeftX
-            : fallbackRightX
-
-        let clampedX = min(
-            max(preferredX, visibleFrame.minX + screenInset),
-            visibleFrame.maxX - contentSize.width - screenInset
-        )
-        let clampedY = min(
-            max(centeredY, visibleFrame.minY + screenInset),
-            visibleFrame.maxY - contentSize.height - screenInset
-        )
-
-        return CGPoint(x: clampedX, y: clampedY)
+        panel.setFrame(frame, display: true)
+        panel.orderFrontRegardless()
+        isVisible = true
     }
 
     /// Chooses the screen that currently contains the given rect's center point.
