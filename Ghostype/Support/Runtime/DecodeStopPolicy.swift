@@ -4,12 +4,14 @@ import Foundation
 /// early, and why.
 ///
 /// The shipping decoder otherwise samples up to a fixed token budget and trims afterward, which lets
-/// the model ramble past the point a suggestion is useful. Two early stops apply:
+/// the model ramble past the point a suggestion is useful. Three early stops apply:
 ///
 /// - **Sentence boundary**: the accumulated text ends at a natural sentence end. A short
 ///   minimum-token guard avoids degenerate instant stops (for example, the model's first token being
 ///   a lone period). `SentenceBoundaryClassifier` already rejects decimals, abbreviations, and list
 ///   markers, so this never truncates "e.g.", "3.14", or a numbered "1." mid-thought.
+/// - **Line break** (single-line suggestions only): the model ended the line, so the suggestion
+///   ends there too.
 /// - **Scaffolding marker**: the accumulated text contains a chat-template stop marker
 ///   (`<|im_end|>` and friends). The normalizer already truncates the visible text at the first such
 ///   marker, so everything generated past it is guaranteed-discarded work; stopping at decode time
@@ -24,16 +26,23 @@ nonisolated enum DecodeStopPolicy {
     enum StopReason: String {
         case sentenceBoundary = "sentence_boundary"
         case scaffoldingMarker = "scaffolding_marker"
+        case lineBreak = "line_break"
     }
 
     static func verdict(
         accumulated: String,
         tokensGenerated: Int,
         minimumTokens: Int = 2,
-        minimumWords: Int = 0
+        minimumWords: Int = 0,
+        stopsAtLineBreak: Bool = false
     ) -> StopReason? {
         if containsScaffoldingStopMarker(accumulated) {
             return .scaffoldingMarker
+        }
+        // A single-line suggestion ends where the model ends the line, however short: what follows
+        // a line break is the next line's content, never this line's continuation.
+        if stopsAtLineBreak, accumulated.contains(where: \.isNewline) {
+            return .lineBreak
         }
 
         guard tokensGenerated >= minimumTokens else {

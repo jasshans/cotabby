@@ -10,8 +10,9 @@ import Foundation
 ///   would produce "Best ," and the rest is guesswork.
 /// - Scaffolding: forum/chat UI residue ("[User 0001]", "12:03 PM · 1 min read · Reply"), stray
 ///   HTML in prose, and the model talking back about the prompt ("I'm not sure what you mean by…").
-/// - Repetition: a short word sequence looping back to back (". Hi S. Hi S. Hi S.") is the model
-///   stuck, not a continuation. Measured live on a small base model mid-word: it happens on short
+/// - Repetition: a short word sequence looping back to back (". Hi S. Hi S. Hi S."), or a few
+///   characters looping in text written without spaces ("夜は夜は夜は"), is the model stuck, not a
+///   continuation. Measured live on a small base model mid-word: it happens on short
 ///   partial words with thin context.
 /// - Copying: the completion restarts the words the user just wrote (". Hi Sarah, thanks for s"
 ///   right after "Hi Sarah, thanks for s"). Only the tail before the caret counts: a document that
@@ -64,14 +65,38 @@ enum CompletionContentPolicy {
         return nil
     }
 
-    /// True when a sequence of one to three words repeats itself three or more times in a row.
+    /// True when a sequence of one to three words repeats itself three or more times in a row, or a
+    /// run written without spaces loops on a few characters (see `repeatsCharacterUnit`).
     static func isRepetitive(_ completion: String) -> Bool {
         let words = completion.split(whereSeparator: \.isWhitespace).map { $0.lowercased() }
+        if words.contains(where: { repeatsCharacterUnit(Array($0)) }) {
+            return true
+        }
         for period in 1...3 where words.count >= period * 3 {
             var run = 0
             for index in period..<words.count {
                 run = words[index] == words[index - period] ? run + 1 : 0
                 if run >= period * 2 {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    /// Japanese and Chinese are written without spaces, so a whole clause is one "word" above and a
+    /// loop ("夜は夜は夜は…", "李四，李四，李四…", measured on Bonsai 2B) is invisible to the word rule. This
+    /// finds a unit of 2–24 characters, carrying a letter, repeated three times back to back. The
+    /// letter requirement keeps "10.10.10.10" and similar numbers out; English words that trip it
+    /// ("hahaha") are loops anyway.
+    static func repeatsCharacterUnit(_ characters: [Character]) -> Bool {
+        let longestUnit = min(24, characters.count / 3)
+        guard longestUnit >= 2 else { return false }
+        for period in 2...longestUnit {
+            var run = 0
+            for index in period..<characters.count {
+                run = characters[index] == characters[index - period] ? run + 1 : 0
+                if run >= period * 2, characters[(index - period + 1)...index].contains(where: \.isLetter) {
                     return true
                 }
             }

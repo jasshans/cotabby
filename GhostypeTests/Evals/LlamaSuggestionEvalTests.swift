@@ -171,13 +171,18 @@ final class LlamaSuggestionEvalTests: XCTestCase {
             precedingText: evalCase.precedingText,
             trailingText: evalCase.trailingText
         )
+        // The suite's baseline is multi-line 12–20-word suggestions. `COTABBY_PHRASE_WORD_COUNT`
+        // (also read by `LlamaEvalRuntime.configuration`) and `COTABBY_EVAL_SINGLE_LINE=1` score the
+        // same cases under a user's own settings instead, so a change is judged on what they see.
+        let environment = ProcessInfo.processInfo.environment
         let settings = CotabbyTestFixtures.settingsSnapshot(
             selectedEngine: .llamaOpenSource,
-            selectedWordCountPreset: .twelveToTwenty,
+            selectedWordCountPreset: environment["COTABBY_PHRASE_WORD_COUNT"]
+                .flatMap(SuggestionWordCountPreset.init(rawValue:)) ?? .twelveToTwenty,
             // Only a case that supplies clipboard text turns the section on, so the ordinary
             // continuation cases keep the exact prompt shape they have always been scored against.
             isClipboardContextEnabled: evalCase.clipboardContext != nil,
-            isMultiLineEnabled: evalCase.isMultiLineEnabled
+            isMultiLineEnabled: evalCase.isMultiLineEnabled && environment["COTABBY_EVAL_SINGLE_LINE"] != "1"
         )
         let request = SuggestionRequestFactory.buildRequest(
             context: context,

@@ -8,6 +8,16 @@ import XCTest
 final class DecodeStopPolicyTests: XCTestCase {
     private typealias Reason = DecodeStopPolicy.StopReason
 
+    /// A single-line suggestion stops at the model's first line break, even before the word or token
+    /// minimums; a multi-line one does not.
+    func test_verdict_singleLineStopsAtTheFirstLineBreak() {
+        XCTAssertEqual(DecodeStopPolicy.verdict(accumulated: "invite.\n", tokensGenerated: 3, minimumWords: 4,
+                                                stopsAtLineBreak: true), .lineBreak)
+        XCTAssertEqual(DecodeStopPolicy.verdict(accumulated: "\n", tokensGenerated: 1, stopsAtLineBreak: true), .lineBreak)
+        XCTAssertNil(DecodeStopPolicy.verdict(accumulated: "still on this line", tokensGenerated: 4, stopsAtLineBreak: true))
+        XCTAssertNil(DecodeStopPolicy.verdict(accumulated: "first line\nsecond", tokensGenerated: 4))
+    }
+
     func test_verdict_sentenceBoundaryDecisions() {
         // `minimumTokens` defaults to 2 unless a row overrides it.
         let cases: [(text: String, tokens: Int, minimum: Int?, expected: Reason?)] = [

@@ -208,6 +208,10 @@ struct LlamaGenerationOptions: Equatable, Sendable {
 
     /// Masks line-break tokens so single-line fields never receive a multi-line completion.
     var singleLine: Bool = false
+    /// Ends the completion at the model's first line break instead (single-line suggestions). A line
+    /// break is the model saying this line is finished; masking it made the model carry on into the
+    /// next line's content on the same line ("invite. What is the best way to…").
+    var stopAtLineBreak: Bool = false
     /// Constrains the first generated token to continue the current word (mid-word carets only).
     var forceWordContinuation: Bool = false
 
