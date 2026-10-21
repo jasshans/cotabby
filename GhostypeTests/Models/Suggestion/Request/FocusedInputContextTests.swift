@@ -3,17 +3,17 @@ import XCTest
 @testable import Ghostype
 
 /// Tests for the two identity keys a `FocusedInputContext` derives. They deliberately answer
-/// different questions: the field key must survive a self-resizing composer (so ghost-font
-/// stabilization does not jitter), while the session key must change on navigation even when the
-/// host reuses the same AX element (so prediction memory cannot leak across conversations).
+/// scoped to a writing session: both survive self-resizing and typing, and both change when a
+/// recycled AX node belongs to a newly focused field or conversation. Measurements and prediction
+/// memory must not leak across those sessions.
 final class FocusedInputContextTests: XCTestCase {
-    func test_focusedInputIdentityKey_survivesTextFrameAndSequenceChangesButNotAFieldSwitch() {
+    func test_focusedInputIdentityKey_survivesGrowthWithinTheSameSession() {
         let base = CotabbyTestFixtures.focusedInputContext(elementIdentifier: "composer")
         let grown = CotabbyTestFixtures.focusedInputContext(
             elementIdentifier: "composer",
             inputFrameRect: CGRect(x: 0, y: 0, width: 240, height: 64),
             precedingText: "Hello there, this wrapped onto a second line",
-            focusChangeSequence: 9
+            focusChangeSequence: 1
         )
 
         XCTAssertEqual(base.focusedInputIdentityKey, grown.focusedInputIdentityKey)
@@ -43,9 +43,9 @@ final class FocusedInputContextTests: XCTestCase {
             focusedURLString: "https://chat.example.com/c/a"
         )
 
-        // Same AX element, so the geometry key is shared...
-        XCTAssertEqual(chatA.focusedInputIdentityKey, chatB.focusedInputIdentityKey)
-        // ...but a different conversation must not reuse prediction memory.
+        // Reusing the same AX node on a different page must not reuse font or baseline measurements.
+        XCTAssertNotEqual(chatA.focusedInputIdentityKey, chatB.focusedInputIdentityKey)
+        // A different conversation must not reuse prediction memory either.
         XCTAssertNotEqual(chatA.suggestionSessionIdentityKey, chatB.suggestionSessionIdentityKey)
         // Typing inside one conversation is still the same session.
         XCTAssertEqual(chatA.suggestionSessionIdentityKey, chatAAfterTyping.suggestionSessionIdentityKey)
@@ -64,4 +64,10 @@ final class FocusedInputContextTests: XCTestCase {
         XCTAssertEqual(context.sessionIdentity, snapshot.sessionIdentity)
         XCTAssertEqual(context.generation, 2)
     }
+    func test_newSessionOnRecycledElementDiscardsPresentationIdentity() {
+        let first = CotabbyTestFixtures.focusedInputContext(elementIdentifier: "recycled", focusChangeSequence: 1)
+        let second = CotabbyTestFixtures.focusedInputContext(elementIdentifier: "recycled", focusChangeSequence: 2)
+        XCTAssertNotEqual(first.focusedInputIdentityKey, second.focusedInputIdentityKey)
+    }
+
 }

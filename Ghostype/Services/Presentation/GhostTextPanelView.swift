@@ -67,6 +67,11 @@ final class GhostTextPanelView: NSView {
         // device pixel off the host's.
 
         let origin = content.panelOrigin
+        context.saveGState()
+        defer { context.restoreGState() }
+        if let bounds = content.layout.visibleContentRect {
+            context.clip(to: bounds.offsetBy(dx: -origin.x, dy: -origin.y))
+        }
         let attributes: [NSAttributedString.Key: Any] = [
             .font: content.layout.font,
             .foregroundColor: content.textColor

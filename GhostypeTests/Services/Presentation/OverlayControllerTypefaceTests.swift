@@ -174,4 +174,27 @@ final class OverlayControllerTypefaceTests: XCTestCase {
         XCTAssertFalse(takes(.caretDerived, web: false, singleLine: true))
         XCTAssertFalse(takes(.hostFace, singleLine: true), "a face the host named is its own")
     }
+    func testOnlyExplicitPopupChoicesPermitAnOutOfFieldCard() {
+        XCTAssertTrue(CompletionRenderMode.mirror(reason: .userPreference).permitsPopup)
+        XCTAssertTrue(CompletionRenderMode.mirror(reason: .perAppOverride).permitsPopup)
+        for reason in [CompletionRenderMode.MirrorReason.caretGeometryEstimated, .caretLayoutEstimated, .caretMidLine, .inlineLayoutUnavailable] {
+            XCTAssertFalse(CompletionRenderMode.mirror(reason: reason).permitsPopup)
+        }
+        XCTAssertFalse(CompletionRenderMode.inline.permitsPopup)
+    }
+
+    func testMissingRealFieldBoundsNeverAuthorizeScreenWideInlineText() {
+        XCTAssertNil(OverlayController.visibleWritingBounds(for: CotabbyTestFixtures.overlayGeometry()))
+    }
+
+    func testWritingBoundsAreTheRealElementNotTheWidenedPopupFrame() {
+        let bounds = CGRect(x: 100, y: 100, width: 200, height: 32)
+        let geometry = SuggestionOverlayGeometry(
+            caretRect: CGRect(x: 200, y: 110, width: 2, height: 16),
+            inputFrameRect: CGRect(x: 0, y: 0, width: 900, height: 900), caretQuality: .exact,
+            observedCharWidth: nil, isRightToLeft: false, elementFrameRect: bounds
+        )
+        XCTAssertEqual(OverlayController.visibleWritingBounds(for: geometry), bounds)
+    }
+
 }

@@ -18,7 +18,7 @@ final class ContextBufferNavigationTests: XCTestCase {
         let navigated = buffer.materialize(from: CotabbyTestFixtures.focusedInputSnapshot(focusChangeSequence: 2))
         XCTAssertGreaterThan(navigated.generation, first.generation)
         XCTAssertNotEqual(first.suggestionSessionIdentityKey, navigated.suggestionSessionIdentityKey)
-        XCTAssertEqual(first.focusedInputIdentityKey, navigated.focusedInputIdentityKey, "Font geometry remains stable")
+        XCTAssertNotEqual(first.focusedInputIdentityKey, navigated.focusedInputIdentityKey, "A new field session must remeasure fonts")
     }
 
     func test_surfaceChangeRejectsStaleGenerationEvenBeforeSequenceChanges() {

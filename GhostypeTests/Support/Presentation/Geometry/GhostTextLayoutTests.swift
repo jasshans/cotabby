@@ -188,4 +188,43 @@ final class GhostTextLayoutTests: XCTestCase {
         XCTAssertEqual(layout?.rows.count, 1)
         XCTAssertEqual(layout?.remainingText, " jumps")
     }
+    private func boundedInput(_ text: String, bounds: CGRect, keycapWidth: CGFloat = 0, rtl: Bool = false) -> GhostTextLayout.Input {
+        GhostTextLayout.Input(
+            fullText: text, consumedUTF16: 0, font: menlo, anchorTopLeft: CGPoint(x: 300, y: 200),
+            boxHeight: 16, baselineOffsetFromTop: 13, linePitch: 16, wrapBand: 100...400,
+            isRightToLeft: rtl, keycapWidth: keycapWidth, visibleContentRect: bounds
+        )
+    }
+
+    func testBottomEdgeShowsFittingHeadWithoutPaintingNextRowOutsideField() throws {
+        let bounds = CGRect(x: 100, y: 184, width: 300, height: 16)
+        let layout = try XCTUnwrap(GhostTextLayout.make(boundedInput(" alpha bravo charlie delta echo", bounds: bounds)))
+        XCTAssertEqual(layout.rows.count, 1)
+        XCTAssertEqual(layout.rows[0].text, " alpha bravo")
+        XCTAssertTrue(layout.isTruncated)
+        XCTAssertEqual(layout.visibleContentRect, bounds)
+    }
+
+    func testNoRoomForAWholeWordDeclinesInsteadOfUsingAnotherLineOutsideField() {
+        let bounds = CGRect(x: 100, y: 184, width: 300, height: 16)
+        XCTAssertNil(GhostTextLayout.make(boundedInput(" extraordinary", bounds: bounds)))
+    }
+
+    func testKeycapOutsideRightEdgeIsDroppedWithoutRemovingFittingText() throws {
+        let bounds = CGRect(x: 100, y: 168, width: 300, height: 32)
+        let layout = try XCTUnwrap(GhostTextLayout.make(boundedInput(" alpha bravo", bounds: bounds, keycapWidth: 30)))
+        XCTAssertNil(layout.keycapFrame)
+        XCTAssertEqual(layout.remainingText, " alpha bravo")
+    }
+
+    func testRightToLeftTextIsTruncatedAtTheFieldsLeftEdge() throws {
+        let bounds = CGRect(x: 100, y: 184, width: 300, height: 16)
+        let layout = try XCTUnwrap(GhostTextLayout.make(boundedInput(
+            "שלום עולם שלום עולם שלום עולם שלום עולם שלום עולם", bounds: bounds, rtl: true
+        )))
+        XCTAssertTrue(layout.isTruncated)
+        XCTAssertGreaterThanOrEqual(layout.rows[0].penX, 100)
+        XCTAssertLessThanOrEqual(layout.rows[0].penX + layout.rows[0].width, 300.01)
+    }
+
 }

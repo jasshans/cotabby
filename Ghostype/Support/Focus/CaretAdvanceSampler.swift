@@ -115,6 +115,12 @@ nonisolated struct CaretAdvanceSampler: Equatable, Sendable {
             startOver()
             return nil
         }
+        // A reflow or vertical caret move invalidates even a same-offset observation. Otherwise
+        // pending text can claim a different line's advance and resize the next ghost incorrectly.
+        guard abs(observation.lineY - previous.lineY) <= Self.lineTolerance else {
+            startOver()
+            return nil
+        }
         let step = observation.documentCaret - previous.documentCaret
         let advance = observation.caretX - previous.caretX
         if step == 0 {
@@ -146,7 +152,6 @@ nonisolated struct CaretAdvanceSampler: Equatable, Sendable {
         let next = Self.spaceNormalized(observation.precedingText)
         let typed = String(next.suffix(max(step, 0)))
         guard step >= 1, step <= Self.maximumStep,
-              abs(observation.lineY - previous.lineY) <= Self.lineTolerance,
               advance >= 0,
               typed.count == step,
               !typed.contains(where: \.isNewline),

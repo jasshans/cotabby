@@ -412,5 +412,16 @@ final class HostTextMetricsProbeMarkerLineTests: XCTestCase {
         XCTAssertFalse(AXHelper.isEarlierFragment(CGRect(x: 393, y: 205, width: 411, height: 45), ofLineStartingAt: first),
                        "a block three lines tall")
     }
+    func testRecycledElementInNewSessionDiscardsOldLineAndPitch() {
+        let cache = HostTextMetricsCache()
+        let old = HostTextMetrics(sampleText: "hello", sampleWidth: 40, lineRect: CGRect(x: 0, y: 100, width: 300, height: 16), linePitch: 16)
+        _ = cache.metrics(forKey: "123:recycled:1", caretLocation: 5) { old }
+        let new = HostTextMetrics(sampleText: "hello", sampleWidth: 70, lineRect: CGRect(x: 0, y: 40, width: 300, height: 28), linePitch: 28)
+        let measured = cache.metrics(forKey: "123:recycled:2", caretLocation: 5) { new }
+        XCTAssertEqual(measured?.sampleWidth, 70)
+        XCTAssertEqual(measured?.lineRect?.minY, 40)
+        XCTAssertEqual(measured?.linePitch, 28)
+    }
+
 }
 

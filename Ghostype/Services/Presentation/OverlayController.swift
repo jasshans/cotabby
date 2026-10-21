@@ -200,7 +200,7 @@ final class OverlayController: SuggestionOverlayControlling {
             reduceMotionEnabled: reduceMotionEnabled
         )
 
-        var mode = currentRenderModePolicy.mode(
+        let mode = currentRenderModePolicy.mode(
             for: geometry,
             bundleIdentifier: geometry.bundleIdentifier
         )
@@ -228,10 +228,14 @@ final class OverlayController: SuggestionOverlayControlling {
         switch mode {
         case .inline:
             if let reason = showInline(text: text, geometry: geometry) {
-                mode = .mirror(reason: reason)
-                showMirror(text: text, geometry: geometry, reason: reason)
+                hide(reason: "Inline suggestion suppressed: \(reason.rawValue).")
+                return
             }
         case .mirror(let reason):
+            guard mode.permitsPopup else {
+                hide(reason: "Inline suggestion suppressed: \(reason.rawValue).")
+                return
+            }
             inlineSession = nil
             showMirror(text: text, geometry: geometry, reason: reason)
         }
@@ -709,7 +713,9 @@ final class OverlayController: SuggestionOverlayControlling {
               geometry.resolvedFieldStyle?.fontName == fontName,
               GhostFontResolver.font(named: fontName, size: 12) != nil
         else { return }
-        _ = showInline(text: text, geometry: geometry)
+        if let reason = showInline(text: text, geometry: geometry) {
+            hide(reason: "Font refresh suppressed: \(reason.rawValue).")
+        }
     }
 
     /// A pixel-matched face in a web field that reports no size, or a single-line field's stand-in
@@ -1311,8 +1317,9 @@ final class OverlayController: SuggestionOverlayControlling {
     /// value the visible rows move once, by at most one device pixel, onto the host's real baseline;
     /// every later present on this line starts there. A matched face waits for the next present.
     private func startCalibration(_ request: HostBaselineCalibrator.Request, for geometry: SuggestionOverlayGeometry) {
+        let presentationToken = pixelCaretShowToken
         baselineCalibrator?.calibrate(request) { [weak self] calibration in
-            guard let self, var session = self.inlineSession,
+            guard let self, self.pixelCaretShowToken == presentationToken, var session = self.inlineSession,
                   case .visible(_, _, let mode) = self.state, case .inline = mode,
                   session.geometry.focusedInputIdentityKey == geometry.focusedInputIdentityKey,
                   session.anchorCaretRect.maxY == geometry.caretRect.maxY
@@ -1327,7 +1334,10 @@ final class OverlayController: SuggestionOverlayControlling {
             // text the user is reading looked like the suggestion jumping. `resolveFont` reads the
             // match the calibrator just recorded, so the next present (the next keystroke, when the
             // ghost redraws anyway) picks it up through the same path as every other present.
-            guard let layout = self.makeLayout(for: session) else { return }
+            guard let layout = self.makeLayout(for: session) else {
+                self.hide(reason: "Calibrated text no longer fits the writing field.")
+                return
+            }
             session.layout = layout
             self.inlineSession = session
             self.renderInline(session)
@@ -1385,6 +1395,11 @@ final class OverlayController: SuggestionOverlayControlling {
               !Self.requiresFreshCaret(geometry),
               case .visible(let visibleText, _, .inline) = state,
               session.geometry.focusedInputIdentityKey == geometry.focusedInputIdentityKey,
+              session.geometry.elementFrameRect == geometry.elementFrameRect,
+              session.geometry.inputFrameRect == geometry.inputFrameRect,
+              session.geometry.resolvedFieldStyle == geometry.resolvedFieldStyle,
+              session.geometry.hostTextMetrics == geometry.hostTextMetrics,
+              session.geometry.hasTrailingContent == geometry.hasTrailingContent,
               case .inline = currentRenderModePolicy.mode(for: geometry, bundleIdentifier: geometry.bundleIdentifier)
         else { return false }
         let predicted = predictedCaretRect(for: session)
@@ -1442,6 +1457,10 @@ final class OverlayController: SuggestionOverlayControlling {
 
     private func makeLayout(for session: InlineSession) -> GhostTextLayout? {
         let geometry = session.geometry
+        guard let bounds = Self.visibleWritingBounds(for: geometry), let band = wrapBand(for: geometry) else { return nil }
+        let left = max(bounds.minX, band.lowerBound)
+        let right = min(bounds.maxX, band.upperBound)
+        guard right > left else { return nil }
         let acceptanceHintLabel = suggestionSettings.acceptanceHintLabel(
             forBundleIdentifier: geometry.bundleIdentifier
         )
@@ -1455,15 +1474,30 @@ final class OverlayController: SuggestionOverlayControlling {
                 boxHeight: session.anchorCaretRect.height,
                 baselineOffsetFromTop: session.baselineOffsetFromTop,
                 linePitch: linePitch(for: geometry, fontSize: session.fontResolution.font.pointSize),
-                wrapBand: wrapBand(for: geometry),
+                wrapBand: left...right,
                 isRightToLeft: geometry.isRightToLeft,
                 // A second row would paint over the host's own following lines; with text below
                 // the caret the ghost keeps to the caret row and reveals the rest as it is accepted.
                 // A single-line field has no line below at all: its text scrolls sideways.
                 allowsMultipleRows: !geometry.hasTrailingContent && !geometry.isSingleLineField,
-                keycapWidth: keycapWidth
+                keycapWidth: keycapWidth,
+                visibleContentRect: CGRect(x: left, y: bounds.minY, width: right - left, height: bounds.height)
             )
         )
+    }
+
+    /// Only an actual field frame can authorize inline painting, never a screen-wide fallback.
+    /// Hidden-textarea editors may use their reported editor container instead of the text run.
+    static func visibleWritingBounds(for geometry: SuggestionOverlayGeometry) -> CGRect? {
+        let isCodeEditor = AppSurfaceClassifier.classify(
+            bundleIdentifier: geometry.bundleIdentifier, isIntegratedTerminal: false
+        ) == .codeEditor
+        let candidate = isCodeEditor ? geometry.inputFrameRect : geometry.elementFrameRect
+        guard let bounds = candidate?.standardized,
+              AXHelper.rectHasFiniteComponents(bounds), bounds.width > 0, bounds.height > 0,
+              bounds.contains(CGPoint(x: geometry.caretRect.minX, y: geometry.caretRect.midY))
+        else { return nil }
+        return bounds
     }
 
     /// Vertical distance between the host's lines: measured when the host let us (line APIs, a

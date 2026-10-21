@@ -194,10 +194,14 @@ The Swift generation loop owns the maximum output-token budget.
 - `OverlayController` owns the ghost-text panel lifecycle and positioning. Ghost glyphs are laid
   out by `GhostTextLayout` in the font `GhostFontResolver` resolves, on the baseline
   `GhostBaselinePolicy` (or a `HostBaselineCalibrator` measurement) gives, wrapping onto the host's
-  next lines at the measured pitch. A caret with text after it on its line gets the card under the
-  caret instead (`CompletionRenderModePolicy`): a ghost painted over the host's own characters
-  reads as overwriting them. Change those pure helpers and their tests rather than nudging offsets
-  in the controller.
+  next lines at the measured pitch. Automatic geometry or fitting failures suppress the ghost;
+  only an explicit Popup preference permits a card. GhostTextLayout truncates at verified field
+  bounds and GhostTextPanelView clips ink and hints there, because typographic widths do not bound
+  italic overhang. Change pure helpers and their tests rather than nudging controller offsets.
+- Presentation typography and resolver caches are scoped to the writing session, not recycled AX
+  nodes; real field switches discard measurements while composer growth preserves them.
+- Stable publication runs lint and the native regression suite before packaging, so failed checks
+  cannot put an untested correction into the existing updater.
 - `SuggestionOverlayPresenter` decides whether a suggestion should be shown or hidden.
 - `ActivationIndicatorController` owns the optional caret/field-edge indicator.
 - `FocusDebugOverlayController` is for developer visibility and should stay gated behind debug

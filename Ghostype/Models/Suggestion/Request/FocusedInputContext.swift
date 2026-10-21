@@ -128,18 +128,16 @@ struct FocusedInputContext: Equatable, Sendable {
         (hostMarkedTextRange?.length ?? 0) > 0
     }
 
-    /// Stable per-process key for the focused field, intentionally NOT including the input frame
-    /// rect. The polling signature in `FocusTracker` bumps `focusChangeSequence` whenever the
-    /// field's frame changes (e.g., a chat composer growing taller as the user types wraps onto a
-    /// second line). For consumers that should treat self-resizing as "same field" — chief among
-    /// them ghost-font stabilization — this key gives them a session identity that survives field
-    /// growth. `hashValue` is randomized per process, which is fine: the key is only ever compared
-    /// within one process's lifetime.
+    /// Presentation measurements belong to the current writing session, not a recycled AX node.
+    /// FocusTracker preserves the sequence during composer growth and advances it on field changes.
+    /// Navigation facts also isolate fonts and baselines before a later focus poll updates it.
+    /// Frames and typed text are excluded so normal typing and wrapping remain visually stable.
     var focusedInputIdentityKey: UInt64 {
         var hasher = Hasher()
         hasher.combine(bundleIdentifier)
         hasher.combine(processIdentifier)
         hasher.combine(elementIdentifier)
+        hasher.combine(sessionIdentity)
         return UInt64(bitPattern: Int64(hasher.finalize()))
     }
 
@@ -152,7 +150,7 @@ struct FocusedInputContext: Equatable, Sendable {
     }
 
     /// Prediction memory must expire on navigation even when the host reuses the AX element.
-    /// Keep this separate from the geometry/style key, whose stability prevents font jitter.
+    /// Both prediction and presentation measurements are scoped to the same writing session.
     var suggestionSessionIdentityKey: UInt64 {
         var hasher = Hasher()
         hasher.combine(focusedInputIdentityKey)

@@ -215,4 +215,37 @@ final class CaretAdvanceSamplerTests: XCTestCase {
         XCTAssertEqual(sample?.text, String(long.suffix(CaretAdvanceSampler.maximumLength)))
         XCTAssertEqual(sample?.width ?? 0, 7.5 * CGFloat(CaretAdvanceSampler.maximumLength), accuracy: 0.001)
     }
+    func testSameOffsetVerticalMoveDiscardsExistingWidthSample() {
+        var sampler = CaretAdvanceSampler()
+        let x = typed("the user writes", after: "as", from: 500, advance: 7.5, into: &sampler)
+        XCTAssertNotNil(sampler.sample)
+        sampler.observe(observation("asthe user writes", x: x, y: 80))
+        XCTAssertNil(sampler.sample)
+    }
+
+    func testVerticalMoveDoesNotAssignAnotherLinesAdvanceToPendingText() {
+        var sampler = CaretAdvanceSampler()
+        let x = typed("the user writes", after: "as", from: 500, advance: 7.5, into: &sampler)
+        sampler.observe(observation("asthe user writesx", x: x))
+        XCTAssertEqual(sampler.pendingCharacterCount, 1)
+        sampler.observe(observation("asthe user writesx", x: x + 80, y: 80))
+        XCTAssertEqual(sampler.pendingCharacterCount, 0)
+        XCTAssertNil(sampler.sample)
+    }
+
+    func testVerticalMoveClearsCaretAdvanceSeenBeforeItsText() {
+        var sampler = CaretAdvanceSampler()
+        sampler.observe(observation("as", x: 500))
+        sampler.observe(observation("as", x: 580))
+        sampler.observe(observation("as", x: 580, y: 80))
+        var text = "as"
+        var x: CGFloat = 580
+        for character in "the user writes" {
+            text.append(character)
+            x += 7.5
+            sampler.observe(observation(text, x: x, y: 80))
+        }
+        XCTAssertEqual(sampler.sample?.width ?? 0, 112.5, accuracy: 0.001)
+    }
+
 }

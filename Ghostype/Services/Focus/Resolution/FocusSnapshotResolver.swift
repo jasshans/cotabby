@@ -320,6 +320,7 @@ struct FocusSnapshotResolver {
             for: resolvedCandidate,
             processIdentifier: application.processIdentifier,
             selection: selection,
+            focusChangeSequence: focusChangeSequence,
             textLength: value.utf16.count,
             caretHeight: caretRect.height
         )
@@ -329,6 +330,7 @@ struct FocusSnapshotResolver {
             text: value,
             selection: selection,
             caret: caret,
+            focusChangeSequence: focusChangeSequence,
             isBrowser: BrowserAppDetector.isBrowser(bundleIdentifier: bundleIdentifier)
         )
         // Recognize an xterm.js integrated terminal (VS Code / Cursor / web terminal) from the
@@ -510,13 +512,14 @@ struct FocusSnapshotResolver {
         for candidate: AXFocusCandidate,
         processIdentifier: pid_t,
         selection: NSRange,
+        focusChangeSequence: UInt64,
         textLength: Int,
         caretHeight: CGFloat
     ) -> ResolvedFieldStyle? {
         guard !candidate.isSecure else {
             return nil
         }
-        let styleKey = "\(processIdentifier):\(candidate.elementIdentifier)"
+        let styleKey = "\(processIdentifier):\(candidate.elementIdentifier):\(focusChangeSequence)"
         let documentCaret = candidate.documentCaretLocation ?? selection.location
         let supportsStyleRuns = candidate.supportedParameterizedAttributes.contains(
             kAXStyleRangeForIndexParameterizedAttribute as String
@@ -556,6 +559,7 @@ struct FocusSnapshotResolver {
         text: String,
         selection: NSRange,
         caret: CaretGeometrySelector.Selected,
+        focusChangeSequence: UInt64,
         isBrowser: Bool = false
     ) -> HostTextMetrics? {
         guard !candidate.isSecure, !candidate.usesMarkerSelection else {
@@ -564,7 +568,8 @@ struct FocusSnapshotResolver {
         let caretRect = caret.rect
         let caretHeight = caretRect.height
         let caretAdvanceSample = observeCaretAdvance(
-            for: candidate, processIdentifier: processIdentifier, text: text, selection: selection, caret: caret
+            for: candidate, processIdentifier: processIdentifier, text: text, selection: selection, caret: caret,
+            focusChangeSequence: focusChangeSequence
         )
         // The caret box height changes when the line's font changes, and the measured line box
         // moves with the element, so a new height or a moved/resized frame re-measures. Without the
@@ -572,7 +577,8 @@ struct FocusSnapshotResolver {
         let frameKey = candidate.elementFrameRect.map {
             "\(Int($0.minX.rounded())),\(Int($0.minY.rounded())),\(Int($0.width.rounded())),\(Int($0.height.rounded()))"
         } ?? "-"
-        let metricsKey = "\(processIdentifier):\(candidate.elementIdentifier):\(Int(caretHeight.rounded())):\(frameKey)"
+        let fieldSessionKey = "\(processIdentifier):\(candidate.elementIdentifier):\(focusChangeSequence)"
+        let metricsKey = "\(fieldSessionKey):\(Int(caretHeight.rounded())):\(frameKey)"
         let measured = hostTextMetricsCache.metrics(forKey: metricsKey, caretLocation: selection.location) {
             HostTextMetricsProbe.measure(
                 HostTextMetricsProbe.Input(
@@ -615,7 +621,8 @@ struct FocusSnapshotResolver {
         processIdentifier: pid_t,
         text: String,
         selection: NSRange,
-        caret: CaretGeometrySelector.Selected
+        caret: CaretGeometrySelector.Selected,
+        focusChangeSequence: UInt64
     ) -> CaretAdvanceSampler.Sample? {
         let nsText = text as NSString
         let offset = min(max(selection.location, 0), nsText.length)
@@ -625,7 +632,7 @@ struct FocusSnapshotResolver {
         let tailStart = max(0, offset - 64)
         let tailText = nsText.substring(with: NSRange(location: tailStart, length: offset - tailStart))
         return caretAdvanceSamples.sample(
-            forKey: "\(processIdentifier):\(candidate.elementIdentifier)",
+            forKey: "\(processIdentifier):\(candidate.elementIdentifier):\(focusChangeSequence)",
             observation: CaretAdvanceSampler.Observation(
                 caretX: caret.rect.minX,
                 lineY: caret.rect.maxY,

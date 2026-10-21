@@ -94,4 +94,14 @@ final class FieldStyleCacheTests: XCTestCase {
         XCTAssertEqual(body, menlo)
         XCTAssertEqual(reads, 2)
     }
+    func testRecycledElementInNewSessionReadsNewSizeImmediately() {
+        let cache = FieldStyleCache()
+        var reads = 0
+        let large = ResolvedFieldStyle(fontName: "Helvetica", fontPointSize: 24, colorHex: nil)
+        _ = read(cache, key: "123:recycled:1", run: wholeField, reads: &reads, style: menlo)
+        let second = read(cache, key: "123:recycled:2", run: wholeField, reads: &reads, style: large)
+        XCTAssertEqual(second?.fontPointSize, 24)
+        XCTAssertEqual(reads, 2)
+    }
+
 }

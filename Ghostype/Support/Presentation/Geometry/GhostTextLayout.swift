@@ -55,6 +55,8 @@ struct GhostTextLayout: Equatable {
         let allowsMultipleRows: Bool
         /// Width reserved after the text for the accept-key pill (0 when hidden).
         let keycapWidth: CGFloat
+        /// Verified visible writing rectangle; nil is reserved for pure legacy layout callers.
+        let visibleContentRect: CGRect?
 
         init(
             fullText: String,
@@ -67,7 +69,8 @@ struct GhostTextLayout: Equatable {
             wrapBand: ClosedRange<CGFloat>? = nil,
             isRightToLeft: Bool = false,
             allowsMultipleRows: Bool = true,
-            keycapWidth: CGFloat = 0
+            keycapWidth: CGFloat = 0,
+            visibleContentRect: CGRect? = nil
         ) {
             self.fullText = fullText
             self.consumedUTF16 = consumedUTF16
@@ -80,6 +83,7 @@ struct GhostTextLayout: Equatable {
             self.isRightToLeft = isRightToLeft
             self.allowsMultipleRows = allowsMultipleRows
             self.keycapWidth = keycapWidth
+            self.visibleContentRect = visibleContentRect
         }
 
         /// The same input with no room reserved for the accept-key pill.
@@ -95,7 +99,8 @@ struct GhostTextLayout: Equatable {
                 wrapBand: wrapBand,
                 isRightToLeft: isRightToLeft,
                 allowsMultipleRows: allowsMultipleRows,
-                keycapWidth: 0
+                keycapWidth: 0,
+                visibleContentRect: visibleContentRect
             )
         }
     }
@@ -112,6 +117,8 @@ struct GhostTextLayout: Equatable {
     let isTruncated: Bool
     /// Union of every row's glyph box and the keycap: what the panel must cover.
     let contentBounds: CGRect
+    /// The painter clips every glyph and hint to these verified field bounds.
+    var visibleContentRect: CGRect?
 
     /// Pixel height of the accept-key pill; matches the drawn keycap in `GhostTextPanelView`.
     static let keycapHeight: CGFloat = 16
@@ -126,14 +133,33 @@ struct GhostTextLayout: Equatable {
     }
 
     static func make(_ input: Input) -> GhostTextLayout? {
-        let withKeycap = makeRows(input)
+        let withKeycap = contained(makeRows(input), in: input)
         // The text fits but the accept-key pill after it does not, or the pill's width is what cuts
         // the text short (a narrow single-line field such as an editor's search box): the ghost
         // matters more than its hint, so lay out again without the pill.
         guard input.keycapWidth > 0, withKeycap == nil || withKeycap?.isTruncated == true else {
             return withKeycap
         }
-        return makeRows(input.withoutKeycap()) ?? withKeycap
+        let withoutKeycap = input.withoutKeycap()
+        return contained(makeRows(withoutKeycap), in: withoutKeycap) ?? withKeycap
+    }
+
+    private static func contained(_ candidate: GhostTextLayout?, in input: Input) -> GhostTextLayout? {
+        guard var layout = candidate else { return nil }
+        guard let bounds = input.visibleContentRect else { return layout }
+        guard bounds.width > 0, bounds.height > 0,
+              layout.rows.contains(where: { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }),
+              layout.rows.allSatisfy({ row in
+                  let top = row.baselineY + input.baselineOffsetFromTop
+                  return row.penX >= bounds.minX && row.penX + row.width <= bounds.maxX + 0.01
+                      && top <= bounds.maxY + 0.01 && top - input.boxHeight >= bounds.minY - 0.01
+              })
+        else { return nil }
+        if let hint = layout.keycapFrame, !bounds.contains(hint) {
+            return nil
+        }
+        layout.visibleContentRect = bounds
+        return layout
     }
 
     private static func makeRows(_ input: Input) -> GhostTextLayout? {
@@ -201,7 +227,14 @@ struct GhostTextLayout: Equatable {
         var penX = firstPenX
         var baselineY = firstBaselineY
         while start < total {
-            guard rows.count < maximumRows else { return nil }
+            let top = baselineY + input.baselineOffsetFromTop
+            let exceedsField = input.visibleContentRect.map {
+                top > $0.maxY + 0.01 || top - input.boxHeight < $0.minY - 0.01
+            } ?? false
+            if rows.count >= maximumRows || exceedsField {
+                return rows.contains(where: { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
+                    ? WrappedRows(rows: rows, isTruncated: true) : nil
+            }
             let budget: CGFloat
             if let band = input.wrapBand {
                 budget = max(0, band.upperBound - penX - (canWrap ? 0 : input.keycapWidth))
@@ -310,7 +343,15 @@ struct GhostTextLayout: Equatable {
         firstBaselineY: CGFloat
     ) -> GhostTextLayout? {
         let total = attributed.length
-        let range = NSRange(location: input.consumedUTF16, length: total - input.consumedUTF16)
+        var range = NSRange(location: input.consumedUTF16, length: total - input.consumedUTF16)
+        if let band = input.wrapBand {
+            let typesetter = CTTypesetterCreateWithAttributedString(attributed)
+            let budget = max(0, input.anchorTopLeft.x - band.lowerBound - input.keycapWidth)
+            let suggested = range.location + CTTypesetterSuggestLineBreak(typesetter, range.location, Double(budget))
+            let end = wordBoundedBreak(attributed.string as NSString, from: range.location, suggested: suggested)
+            guard end > range.location else { return nil }
+            range.length = end - range.location
+        }
         let text = (attributed.string as NSString).substring(with: range)
         guard !text.contains(where: \.isNewline) else { return nil }
         let line = CTLineCreateWithAttributedString(attributed.attributedSubstring(from: range))
@@ -330,7 +371,7 @@ struct GhostTextLayout: Equatable {
             boxHeight: input.boxHeight,
             baselineOffsetFromTop: input.baselineOffsetFromTop,
             keycapFrame: keycapFrame,
-            isTruncated: false,
+            isTruncated: NSMaxRange(range) < total,
             contentBounds: contentBounds(rows: [row], keycapFrame: keycapFrame, input: input)
         )
     }

@@ -131,6 +131,18 @@ jobs:
       - name: Prepare matching inference dependency
         run: scripts/prepare_cotabby_workspace.sh
 
+      # A signed update must never publish before its native regression suite passes.
+      - name: Verify release regression checks
+        run: |
+          set -euo pipefail
+          if ! command -v swiftlint >/dev/null; then
+            brew install swiftlint
+          fi
+          swiftlint --strict --reporter github-actions-logging
+          python3 -m unittest discover -s scripts/tests
+          xcodebuild test             -workspace "${WORKSPACE}"             -scheme Ghostype             -destination 'platform=macOS'             -derivedDataPath build/TestDerivedData             -skip-testing:GhostypeTests/FoundationModelDriftEvalTests             CODE_SIGNING_ALLOWED=NO
+          rm -rf build/TestDerivedData
+
       # Optional stable signing identity: if the CODESIGN_P12_BASE64 secret is set (see
       # scripts/setup-codesign.sh), import it into a throwaway keychain and sign this
       # release with it. A stable certificate gives the app a stable designated
@@ -285,4 +297,4 @@ jobs:
 
       - name: Clean up key material and build cache
         if: always()
-        run: rm -rf build/sparkle build/DerivedData
+        run: rm -rf build/sparkle build/DerivedData build/TestDerivedData

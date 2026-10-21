@@ -62,6 +62,16 @@ nonisolated enum CompletionRenderMode: Equatable, Sendable {
         }
     }
 
+    /// Popups require an explicit preference; automatic safety failures suppress the ghost.
+    var permitsPopup: Bool {
+        switch self {
+        case .inline:
+            return false
+        case .mirror(let reason):
+            return reason == .userPreference || reason == .perAppOverride
+        }
+    }
+
     var isMirror: Bool {
         if case .mirror = self {
             return true
