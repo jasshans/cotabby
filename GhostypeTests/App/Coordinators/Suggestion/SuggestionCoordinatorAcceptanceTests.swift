@@ -133,6 +133,10 @@ final class SuggestionCoordinatorAcceptanceTests: SuggestionCoordinatorRigTestCa
             " world again",
             geometry: SuggestionOverlayGeometry(
                 caretRect: CotabbyTestFixtures.overlayGeometry().caretRect,
+                inputFrameRect: CotabbyTestFixtures.overlayGeometry().inputFrameRect,
+                caretQuality: .exact,
+                observedCharWidth: nil,
+                isRightToLeft: false,
                 isSingleLineField: true
             )
         )
