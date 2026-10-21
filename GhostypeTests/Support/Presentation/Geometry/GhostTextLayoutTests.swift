@@ -207,6 +207,21 @@ final class GhostTextLayoutTests: XCTestCase {
         XCTAssertEqual(layout.visibleContentRect, bounds)
     }
 
+    /// CoreText ends a wrapped row after the space that broke it and lets that space hang past the
+    /// band; only ink has to fit the field. Counting the space dropped every such multi-row ghost.
+    func testAHangingSpaceAtAWrappedRowsEndDoesNotDropTheGhost() throws {
+        let edge = 300 + width(" alpha bravo") + 4
+        let bounds = CGRect(x: 100, y: 168, width: edge - 100, height: 32)
+        let layout = try XCTUnwrap(GhostTextLayout.make(GhostTextLayout.Input(
+            fullText: " alpha bravo charlie delta", consumedUTF16: 0, font: menlo, anchorTopLeft: CGPoint(x: 300, y: 200),
+            boxHeight: 16, baselineOffsetFromTop: 13, linePitch: 16, wrapBand: 100...edge,
+            isRightToLeft: false, keycapWidth: 0, visibleContentRect: bounds
+        )))
+        XCTAssertEqual(layout.rows.count, 2)
+        XCTAssertEqual(layout.rows[0].text.trimmingCharacters(in: .whitespaces), "alpha bravo")
+        XCTAssertEqual(layout.rows[1].text, "charlie delta")
+    }
+
     func testNoRoomForAWholeWordDeclinesInsteadOfUsingAnotherLineOutsideField() {
         let bounds = CGRect(x: 100, y: 184, width: 300, height: 16)
         XCTAssertNil(GhostTextLayout.make(boundedInput(" extraordinary", bounds: bounds)))
