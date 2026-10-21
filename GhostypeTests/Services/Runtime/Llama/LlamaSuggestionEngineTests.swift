@@ -34,11 +34,15 @@ final class LlamaSuggestionEngineTests: XCTestCase {
         XCTAssertEqual(midWord.minP, 0.08)
         XCTAssertEqual(midWord.repetitionPenalty, 1.05)
         XCTAssertEqual(midWord.seed, 42)
-        XCTAssertTrue(midWord.singleLine, "Single-line fields must mask line-break tokens")
+        // Single-line suggestions end at the model's line break instead of masking it, so the
+        // model never carries the next line's content onto this one.
+        XCTAssertFalse(midWord.singleLine)
+        XCTAssertTrue(midWord.stopAtLineBreak, "A single-line suggestion must end at the model's line break")
         XCTAssertTrue(midWord.forceWordContinuation, "A caret between letters must continue the word")
 
         let afterSpace = try XCTUnwrap(runtime.generatedOptions.last)
         XCTAssertFalse(afterSpace.singleLine)
+        XCTAssertFalse(afterSpace.stopAtLineBreak)
         XCTAssertFalse(afterSpace.forceWordContinuation)
     }
 

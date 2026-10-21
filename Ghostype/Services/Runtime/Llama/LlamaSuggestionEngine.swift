@@ -268,7 +268,10 @@ final class LlamaSuggestionEngine {
             minP: request.minP,
             repetitionPenalty: request.repetitionPenalty,
             seed: request.randomSeed,
-            singleLine: !request.isMultiLineEnabled,
+            // A single-line suggestion stops at the model's line break rather than masking it: see
+            // `LlamaGenerationOptions.stopAtLineBreak`. The normalizer keeps only the first line.
+            singleLine: false,
+            stopAtLineBreak: !request.isMultiLineEnabled,
             forceWordContinuation: MidWordContinuationPolicy.shouldForceContinuation(
                 precedingText: request.context.precedingText,
                 trailingText: request.context.trailingText

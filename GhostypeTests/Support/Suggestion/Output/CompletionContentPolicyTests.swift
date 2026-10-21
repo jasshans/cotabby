@@ -41,6 +41,12 @@ final class CompletionContentPolicyTests: XCTestCase {
         XCTAssertEqual(policy.rejection(for: "over and over and over and over", precedingText: "again "), .repetitiveContent)
         XCTAssertNil(CompletionContentPolicy.rejection(for: "very very good", precedingText: "it was "), "two copies are emphasis")
         XCTAssertNil(CompletionContentPolicy.rejection(for: "day after day, week after week", precedingText: "it went on "))
+        // Text written without spaces loops in its characters (Bonsai 2B eval, 2026-10-21).
+        XCTAssertEqual(policy.rejection(for: "夜は夜は夜は夜は夜は", precedingText: "夜は"), .repetitiveContent)
+        XCTAssertEqual(policy.rejection(for: "玩吧。我，李四，李四，李四，李四", precedingText: "我们一起去"), .repetitiveContent)
+        XCTAssertNil(policy.rejection(for: "散歩に行きましょう。", precedingText: "天気が良いので、"))
+        XCTAssertNil(policy.rejection(for: "at 10.10.10.10 now", precedingText: "the server is "), "numbers are not a loop")
+        XCTAssertNil(policy.rejection(for: "Mississippi", precedingText: "down the "))
     }
 
     func testCompletionsCopiedFromTheRecentTextAreRejected() {

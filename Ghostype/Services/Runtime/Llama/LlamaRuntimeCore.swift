@@ -443,7 +443,8 @@ nonisolated final class LlamaRuntimeCore: @unchecked Sendable {
                 accumulated: generatedText,
                 tokensGenerated: tokensGenerated,
                 minimumTokens: options.sentenceStopMinimumTokens,
-                minimumWords: options.sentenceStopMinimumWords
+                minimumWords: options.sentenceStopMinimumWords,
+                stopsAtLineBreak: options.stopAtLineBreak
             ) {
                 stopReason = earlyStop.rawValue
                 break
