@@ -279,7 +279,9 @@ final class PixelCaretLocator {
                     InkCaretAnalyzer.measure(captured.bitmap)
                 }.value
                 if let analysis {
-                    measurement = Self.measurement(from: analysis, scale: captured.scale, region: region, request: request)
+                    measurement = Self.mergedLinesMeasurement(
+                        of: analysis, bitmap: captured.bitmap, scale: captured.scale, region: region, request: request
+                    ) ?? Self.measurement(from: analysis, scale: captured.scale, region: region, request: request)
                     failure = measurement == nil ? "geometry" : ""
                 } else {
                     failure = "no-ink"
@@ -391,6 +393,65 @@ final class PixelCaretLocator {
         let reportedPitch: CGFloat?
         let lineCount: Int
         let lineBox: CGFloat
+    }
+
+    /// Lines a wrapped paragraph's text needs in `frame`: the fewest whose line box (the frame's
+    /// height shared among them) sets the text, in the system face at that box's size, within that
+    /// many widths. A rough face is enough: counts step by whole lines.
+    nonisolated static func linesHolding(_ text: String, in frame: CGRect) -> Int {
+        guard frame.width > 0, frame.height > 0, !text.isEmpty else { return 1 }
+        for count in 1...maximumMergedLines {
+            let pointSize = frame.height / CGFloat(count) / 1.2
+            let width = (text as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: pointSize)]).width
+            if width <= frame.width * CGFloat(count) * 1.1 {
+                return count
+            }
+        }
+        return maximumMergedLines
+    }
+
+    static let maximumMergedLines = 12
+
+    /// A wrapped paragraph whose lines touch under a tight line height: the analyzer sees one inked
+    /// block, and `measurement(from:scale:region:request:)` took the whole frame for the caret's line
+    /// and the first line's right edge for the caret. Measured 2026-10-21 in Chrome at 80%: 14px
+    /// Helvetica (two lines in a 510x25 frame) read as one 25pt line, and the ghost stood at the end
+    /// of the paragraph's first line at 21pt. When the text needs more lines than the pixels
+    /// separate, the frame is shared among them and the caret is read from the last line's letter
+    /// bodies alone: the middle of its box, clear of the line above's descenders and its own.
+    nonisolated static func mergedLinesMeasurement(
+        of analysis: InkCaretAnalyzer.Measurement,
+        bitmap: RGBABitmap,
+        scale: CGFloat,
+        region: CGRect,
+        request: Request
+    ) -> Measurement? {
+        guard analysis.lines.count == 1, analysis.pitchRows == nil, request.singleLineCaretHeight == nil,
+              request.siblingLinePitch == nil, !request.caretIsMidLine, scale > 0 else { return nil }
+        let frame = request.runFrame
+        let count = linesHolding(request.paragraphTextBeforeCaret, in: frame)
+        guard count > 1 else { return nil }
+        let pitch = frame.height / CGFloat(count)
+        let bandTop = frame.minY + pitch * 0.75
+        let bandBottom = frame.minY + pitch * 0.25
+        let topRow = Int(((region.maxY - bandTop) * scale).rounded(.down))
+        let bottomRow = Int(((region.maxY - bandBottom) * scale).rounded(.up))
+        guard topRow <= bottomRow,
+              let columns = InkCaretAnalyzer.inkColumns(in: bitmap, rows: topRow...bottomRow) else { return nil }
+        let line = InkCaretAnalyzer.Line(
+            topRow: topRow, bottomRow: bottomRow, inkLeftColumn: columns.lowerBound, inkRightColumn: columns.upperBound
+        )
+        let caretX = caretX(on: line, region: region, scale: scale, request: request)
+        guard caretX >= frame.minX - 1, caretX <= frame.maxX + request.spaceAdvance * 2 + 1 else { return nil }
+        return Measurement(
+            caretRect: CGRect(x: caretX, y: frame.minY, width: 2, height: pitch),
+            lineRect: CGRect(x: frame.minX, y: frame.minY, width: frame.width, height: pitch),
+            linePitch: nil,
+            lineIndex: count - 1,
+            lineCount: count,
+            baselineOffsetFromTop: nil,
+            lineInkWidth: CGFloat(columns.upperBound - columns.lowerBound + 1) / scale
+        )
     }
 
     /// The mid-line counterpart of `measurement(from:scale:region:request:)`: the caret's line and x

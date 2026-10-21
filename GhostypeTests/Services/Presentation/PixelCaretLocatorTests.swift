@@ -486,3 +486,69 @@ final class OneLineRunReadFrameTests: XCTestCase {
         XCTAssertEqual(clamped.maxX, textEnd, accuracy: 0.001, "never past the field's own edge")
     }
 }
+
+/// A wrapped paragraph whose two lines touch under a tight line height reads as one inked block;
+/// the caret must still land after the LAST line's text, on the last line's box.
+final class PixelCaretLocatorMergedLinesTests: XCTestCase {
+    private let scale: CGFloat = 2
+    private let frame = CGRect(x: 100, y: 500, width: 510, height: 24)
+    private var region: CGRect { frame.insetBy(dx: -PixelCaretLocator.padding, dy: -PixelCaretLocator.padding) }
+    private let font = NSFont(name: "Helvetica", size: 11.2)!
+
+    /// Two lines of 11.2pt Helvetica 12pt apart, drawn at 2x where the capture would hold them.
+    private func render(_ lines: [String]) -> RGBABitmap? {
+        let width = Int(region.width * scale)
+        let height = Int(region.height * scale)
+        guard let context = CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
+        ) else { return nil }
+        context.setFillColor(CGColor(gray: 1, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        context.scaleBy(x: scale, y: scale)
+        let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor(white: 0.12, alpha: 1)]
+        for (index, text) in lines.enumerated() {
+            // Line boxes 12pt tall from the frame's top; each baseline 9.4pt below its box top.
+            let boxTop = frame.maxY - CGFloat(index) * 12
+            context.textPosition = CGPoint(x: frame.minX - region.minX, y: boxTop - 9.4 - region.minY)
+            CTLineDraw(CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attributes)), context)
+        }
+        guard let image = context.makeImage() else { return nil }
+        return RGBABitmap(image)
+    }
+
+    func testTouchingLinesStillPutTheCaretAfterTheLastLine() throws {
+        let first = "Thanks for the update on the project, I will send the final report to the team by tomorrow so we"
+        let second = "can go through it typing"
+        let bitmap = try XCTUnwrap(render([first, second]))
+        let analysis = try XCTUnwrap(InkCaretAnalyzer.measure(bitmap))
+        XCTAssertEqual(analysis.lines.count, 1, "the two lines touch: the analyzer sees one block")
+        let request = PixelCaretLocator.Request(
+            focusedInputIdentityKey: 1, runFrame: frame, paragraphTextBeforeCaret: first + " " + second,
+            siblingLinePitch: nil, siblingLineBoxHeight: nil, spaceAdvance: 3.1
+        )
+        let measured = try XCTUnwrap(PixelCaretLocator.mergedLinesMeasurement(
+            of: analysis, bitmap: bitmap, scale: scale, region: region, request: request
+        ))
+        let secondWidth = CTLineGetTypographicBounds(
+            CTLineCreateWithAttributedString(NSAttributedString(string: second, attributes: [.font: font])), nil, nil, nil
+        )
+        XCTAssertEqual(measured.lineCount, 2)
+        XCTAssertEqual(measured.caretRect.minX, frame.minX + secondWidth + PixelCaretLocator.inkToCaretGap, accuracy: 1.5)
+        XCTAssertEqual(measured.caretRect.height, 12, accuracy: 0.01)
+        XCTAssertEqual(measured.caretRect.minY, frame.minY, accuracy: 0.01)
+    }
+
+    /// A paragraph that fits its frame on one line is not split.
+    func testAOneLineParagraphIsNotSplit() throws {
+        let bitmap = try XCTUnwrap(render(["short line"]))
+        let analysis = try XCTUnwrap(InkCaretAnalyzer.measure(bitmap))
+        let request = PixelCaretLocator.Request(
+            focusedInputIdentityKey: 1, runFrame: CGRect(x: 100, y: 512, width: 510, height: 12),
+            paragraphTextBeforeCaret: "short line", siblingLinePitch: nil, siblingLineBoxHeight: nil, spaceAdvance: 3.1
+        )
+        XCTAssertNil(PixelCaretLocator.mergedLinesMeasurement(of: analysis, bitmap: bitmap, scale: scale, region: region, request: request))
+        XCTAssertEqual(PixelCaretLocator.linesHolding("short line", in: request.runFrame), 1)
+    }
+}

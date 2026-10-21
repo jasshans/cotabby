@@ -179,6 +179,10 @@ final class CotabbyAppEnvironment {
             faceMemoryDefaults: .standard
         )
         let activationIndicatorController = ActivationIndicatorController()
+        // While a suggestion is on screen the icon marks its line, which the overlay knows exactly.
+        overlayController.onPresentedLineChange = { [weak activationIndicatorController] line in
+            activationIndicatorController?.followPresentedLine(line)
+        }
         let clipboardContextProvider = ClipboardContextProvider()
         let clipboardRelevanceFilter = ClipboardRelevanceFilter()
         let screenshotContextGenerator = ScreenshotContextGenerator()

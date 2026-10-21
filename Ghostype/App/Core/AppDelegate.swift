@@ -279,27 +279,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         runtimeModel.shutdownSync(timeoutSeconds: 1.5)
     }
 
-    /// Shows or hides the field-edge Ghostype icon based on focus state, global enable, per-app
-    /// disable rules, and the user's indicator toggle.
+    /// Feeds one focus poll to the field icon: whether it may show (global enable, pause, per-app
+    /// disable, the user's indicator toggle), whether the field is supported, and the caret's line.
+    /// The icon itself rides out transient unsupported reads (see `FieldIndicatorVisibility`).
     private func updateActivationIndicator(
         for snapshot: FocusSnapshot,
         settings: SuggestionSettingsSnapshot? = nil
     ) {
         let settings = settings ?? suggestionSettings.snapshot
-        guard settings.isGloballyEnabled,
-              !settings.isTemporarilyPaused,
-              !settings.disabledAppBundleIdentifiers.contains(snapshot.bundleIdentifier ?? ""),
-              case .supported = snapshot.capability,
-              let context = snapshot.context
-        else {
-            activationIndicatorController.hide(reason: "Activation indicator hidden.")
-            return
+        let isEnabled = suggestionSettings.showIndicator
+            && settings.isGloballyEnabled
+            && !settings.isTemporarilyPaused
+            && !settings.disabledAppBundleIdentifiers.contains(snapshot.bundleIdentifier ?? "")
+        let context = snapshot.context
+        var isSupported = false
+        if case .supported = snapshot.capability, context != nil {
+            isSupported = true
         }
-
-        activationIndicatorController.show(
-            enabled: suggestionSettings.showIndicator,
-            caretRect: context.caretRect,
-            inputFrameRect: context.inputFrameRect
+        let line = context.flatMap {
+            FieldIndicatorPlacement.lineAnchor(
+                caretRect: $0.caretRect,
+                caretIsEstimated: $0.caretQuality == .estimated,
+                hostLineRect: $0.hostTextMetrics?.lineRect,
+                contentLeft: $0.observedContentEdges?.leftX,
+                fieldFrame: $0.elementFrameRect ?? $0.inputFrameRect
+            )
+        }
+        activationIndicatorController.update(
+            isEnabled: isEnabled,
+            isSupported: isSupported,
+            bundleIdentifier: snapshot.bundleIdentifier,
+            line: line
         )
     }
 

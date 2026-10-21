@@ -37,7 +37,32 @@ final class OverlayController: SuggestionOverlayControlling {
     private(set) var state: OverlayState = .hidden(reason: "Overlay idle.") {
         didSet {
             onStateChange?(state)
+            let line = presentedLine(for: state)
+            if line != lastPresentedLine {
+                lastPresentedLine = line
+                onPresentedLineChange?(line)
+            }
         }
+    }
+
+    /// The line the suggestion on screen is on, for the field icon (`ActivationIndicatorController`),
+    /// nil when no suggestion is visible. Separate from `onStateChange`, which the coordinator owns.
+    var onPresentedLineChange: ((FieldIndicatorPlacement.LineAnchor?) -> Void)?
+    private var lastPresentedLine: FieldIndicatorPlacement.LineAnchor?
+
+    /// Where the visible suggestion's line starts (the band its rows wrap back to) and its vertical
+    /// centre: the first visible inline row's, or the caret's for the card.
+    private func presentedLine(for state: OverlayState) -> FieldIndicatorPlacement.LineAnchor? {
+        guard case let .visible(_, geometry, mode) = state else { return nil }
+        var caret = geometry.caretRect
+        if case .inline = mode, let session = inlineSession {
+            caret = predictedCaretRect(for: session)
+        }
+        let left = wrapBand(for: geometry)?.lowerBound
+            ?? geometry.hostTextMetrics?.lineRect?.minX
+            ?? geometry.elementFrameRect?.minX
+            ?? caret.minX
+        return FieldIndicatorPlacement.LineAnchor(left: left, midY: caret.midY)
     }
 
     /// The inline renderer, reused across presentations; only its `content` changes per show.
