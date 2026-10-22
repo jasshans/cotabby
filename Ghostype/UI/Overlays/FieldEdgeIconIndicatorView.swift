@@ -14,11 +14,12 @@ struct FieldEdgeIconIndicatorView: View {
         ZStack {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(Color(red: 0.18, green: 0.19, blue: 0.21))
-            HStack(alignment: .center, spacing: 1) {
+            // The "a" sits on the bottom of the I-beam: its baseline aligns with the beam's foot.
+            HStack(alignment: .bottom, spacing: 1) {
                 Text("a")
                     .font(UncialAntiquaFont.font(size: 10))
                     .foregroundStyle(.white)
-                    .baselineOffset(1)
+                    .alignmentGuide(.bottom) { dimensions in dimensions[.firstTextBaseline] }
                 IBeamGlyph()
                     .fill(Color(red: 0.18, green: 0.19, blue: 0.21))
                     .overlay(IBeamGlyph().stroke(Color.white, lineWidth: 0.9))
