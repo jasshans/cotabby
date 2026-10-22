@@ -13,7 +13,9 @@ struct MenuBarStatusLabelView: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            Image("MenuBarGhostIcon")
+            // Carved-pumpkin template image: single-colour alpha mask, so macOS tints it for
+            // light and dark menu bars (and wallpaper-tinted bars) automatically.
+            Image("MenuBarPumpkinIcon")
                 .renderingMode(.template)
                 // Match the asset's 18-point canvas so macOS uses its native 1x/2x strokes.
                 .frame(width: 18, height: 18)
