@@ -11,6 +11,9 @@ struct SpeedPaneView: View {
     @AppStorage(SpeedSettings.stablePrefixWindowKey) private var stablePrefixWindow = true
     @AppStorage(SpeedSettings.shortContextKey) private var shortContext = false
     @AppStorage(SpeedSettings.autoTuneKey) private var autoTune = true
+    @AppStorage(SpeedSettings.lightFocusChecksKey) private var lightFocusChecks = true
+    @AppStorage(SpeedSettings.lightScreenReadingKey) private var lightScreenReading = false
+    @AppStorage(AppAcceptanceLearning.enabledKey) private var learnAppAcceptance = true
 
     var body: some View {
         SettingsPaneScaffold {
@@ -62,6 +65,41 @@ struct SpeedPaneView: View {
                         systemImage: "bolt.horizontal.circle"
                     )
                 }
+            }
+
+            Section("Battery") {
+                Toggle(isOn: $lightFocusChecks) {
+                    SettingsRowLabel(
+                        title: "Light focus checks",
+                        description: "Check the field you're typing in quickly only while a suggestion is showing. " +
+                            "Your keystrokes still trigger an instant check, so suggestions arrive just as fast; " +
+                            "clicks into a new field are noticed a little later.",
+                        systemImage: "battery.75percent"
+                    )
+                }
+                .settingsItem(.lightFocusChecks)
+
+                Toggle(isOn: $lightScreenReading) {
+                    SettingsRowLabel(
+                        title: "Lighter screen reading",
+                        description: "Read the text on screen with macOS's fast recognizer instead of the most " +
+                            "accurate one. Uses less CPU per read; the screen context the model sees may have " +
+                            "more misread words.",
+                        systemImage: "text.viewfinder"
+                    )
+                }
+                .settingsItem(.lightScreenReading)
+
+                Toggle(isOn: $learnAppAcceptance) {
+                    SettingsRowLabel(
+                        title: "Learn from your apps",
+                        description: "Ghostype counts where you accept suggestions. In apps where you've seen " +
+                            "\(AppAcceptanceLearning.minimumShown)+ suggestions and accepted almost none, it waits " +
+                            "for a slightly longer pause before suggesting, so it does less work you'd ignore.",
+                        systemImage: "app.badge.checkmark"
+                    )
+                }
+                .settingsItem(.learnAppAcceptance)
             }
         }
     }

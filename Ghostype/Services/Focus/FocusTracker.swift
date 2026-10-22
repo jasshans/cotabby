@@ -51,6 +51,7 @@ final class FocusTracker {
     // even with no focus change and the user's hands off the keyboard. The transitions live in the
     // pure `FocusPollBackoff` so they can be unit-tested without a live timer.
     private var backoff = FocusPollBackoff()
+    private let userDefaults: UserDefaults
 
     // Cached element resolved via cursor hit-testing for Chromium OOPIF editors (e.g. Gmail
     // compose) that the system-wide focused-element query cannot see. Re-validated each tick via
@@ -95,9 +96,11 @@ final class FocusTracker {
         ignoredBundleIdentifier: String?,
         selfCaptureAllowedElementIdentifier: String? = nil,
         isCaptureSuppressedForBundle: @escaping @MainActor (String?) -> Bool = { _ in false },
-        snapshotResolver: FocusSnapshotResolver? = nil
+        snapshotResolver: FocusSnapshotResolver? = nil,
+        userDefaults: UserDefaults = .standard
     ) {
         self.pollInterval = pollInterval
+        self.userDefaults = userDefaults
         self.permissionProvider = permissionProvider
         self.ignoredBundleIdentifier = ignoredBundleIdentifier
         self.selfCaptureAllowedElementIdentifier = selfCaptureAllowedElementIdentifier
@@ -132,7 +135,22 @@ final class FocusTracker {
     /// The interval the poll timer should currently run at: the base interval stretched by idle
     /// backoff. While the user is active the stride is 1, so this is just `pollInterval`.
     private func effectiveInterval() -> TimeInterval {
-        pollInterval * Double(backoff.captureStride)
+        let relaxed = !isSuggestionVisible && SpeedSettings.isLightFocusChecksEnabled(userDefaults)
+        return (relaxed ? max(pollInterval, Self.relaxedPollInterval) : pollInterval) * Double(backoff.captureStride)
+    }
+
+    /// Base interval while no suggestion is on screen and light focus checks are on. Typing and
+    /// acceptance force a read through `refreshNow`, so the timer then only catches clicks and app
+    /// switches, which tolerate ~150ms. While a ghost shows, the fast base keeps it pinned.
+    static let relaxedPollInterval: TimeInterval = 0.15
+
+    /// Set by the overlay; flips the timer between the fast and relaxed base intervals.
+    var isSuggestionVisible = false {
+        didSet {
+            guard isSuggestionVisible != oldValue else { return }
+            if isSuggestionVisible { backoff.reset() }
+            rescheduleTimerIfIntervalChanged()
+        }
     }
 
     /// Creates (or replaces) the poll timer at the current effective interval. Each fire performs

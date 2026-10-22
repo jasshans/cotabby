@@ -6,6 +6,7 @@ import SwiftUI
 /// style rules.
 struct WritingPaneView: View {
     @ObservedObject var suggestionSettings: SuggestionSettingsModel
+    @AppStorage(PersonalDictionary.defaultsKey) private var personalDictionary = ""
 
     var body: some View {
         SettingsPaneScaffold {
@@ -89,6 +90,20 @@ struct WritingPaneView: View {
             Section("Word Dictionaries") {
                 SpellingDictionaryPicker(suggestionSettings: suggestionSettings)
                     .settingsItem(.spellingDictionaries)
+            }
+
+            Section("Personal Dictionary") {
+                VStack(alignment: .leading, spacing: 6) {
+                    TextField("Names, products, jargon — separated by commas or new lines",
+                              text: $personalDictionary, axis: .vertical)
+                        .lineLimit(2...6)
+                    Text("Never flagged as typos, completed from their first letters, and given to the " +
+                         "model so it spells them your way.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
+                .settingsItem(.personalDictionary)
             }
 
             Section("Profile") {

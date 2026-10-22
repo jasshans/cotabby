@@ -219,6 +219,20 @@ enum SpeedSettings {
         defaults.object(forKey: autoTuneKey) as? Bool ?? true
     }
 
+    static let lightFocusChecksKey = "ghostypeSpeedLightFocusChecks"
+    static let lightScreenReadingKey = "ghostypeSpeedLightScreenReading"
+
+    /// Default ON: keystrokes already force a focus read, so the timer only has to catch clicks
+    /// and app switches quickly while a suggestion is on screen.
+    nonisolated static func isLightFocusChecksEnabled(_ defaults: UserDefaults) -> Bool {
+        defaults.object(forKey: lightFocusChecksKey) as? Bool ?? true
+    }
+
+    /// Default OFF: fast OCR costs some accuracy in the screen text the model reads.
+    nonisolated static func isLightScreenReadingEnabled(_ defaults: UserDefaults) -> Bool {
+        defaults.object(forKey: lightScreenReadingKey) as? Bool ?? false
+    }
+
     static func applied(
         to base: SuggestionConfiguration,
         defaults: UserDefaults,

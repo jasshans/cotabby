@@ -53,7 +53,8 @@ extension SuggestionCoordinator {
     func completionReferenceWords(context: FocusedInputContext) -> Set<String> {
         WordCompletionFallback.referenceWords(precedingText: context.precedingText,
                                              trailingText: context.trailingText,
-                                             glossary: settingsSnapshot.extendedContext)
+                                             glossary: PersonalDictionary.terms(userDefaults).joined(separator: " ")
+                                                 + " " + settingsSnapshot.extendedContext)
     }
 
     /// A final unusable model result may fall back to a single exact-prefix word ending. This
