@@ -180,8 +180,9 @@ final class CotabbyAppEnvironment {
         )
         let activationIndicatorController = ActivationIndicatorController()
         // While a suggestion is on screen the icon marks its line, which the overlay knows exactly.
-        overlayController.onPresentedLineChange = { [weak activationIndicatorController] line in
+        overlayController.onPresentedLineChange = { [weak activationIndicatorController, weak focusModel] line in
             activationIndicatorController?.followPresentedLine(line)
+            focusModel?.setSuggestionVisible(line != nil)
         }
         let clipboardContextProvider = ClipboardContextProvider()
         let clipboardRelevanceFilter = ClipboardRelevanceFilter()

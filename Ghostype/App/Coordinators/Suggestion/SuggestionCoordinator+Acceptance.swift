@@ -753,6 +753,7 @@ extension SuggestionCoordinator {
     private func recordSuggestionAcceptedIfFirstChunk(of session: ActiveSuggestionSession) {
         guard session.consumedCharacterCount == 0 else { return }
         qualityMetricsStore.recordAcceptedSuggestion()
+        AppAcceptanceLearning.recordAccepted(bundleIdentifier: focusModel.snapshot.bundleIdentifier, defaults: userDefaults)
     }
 
     /// Updates the global productivity counter from text accepted via Tab.

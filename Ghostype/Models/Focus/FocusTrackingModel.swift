@@ -86,6 +86,11 @@ final class FocusTrackingModel: ObservableObject {
         tracker.invalidateTransientCaretCaches()
     }
 
+    /// Lets the poll timer run fast only while a suggestion is on screen (light focus checks).
+    func setSuggestionVisible(_ visible: Bool) {
+        tracker.isSuggestionVisible = visible
+    }
+
     /// Updates the AX polling interval at runtime. Restarts the timer if already running.
     func updatePollInterval(milliseconds: Int) {
         tracker.updatePollInterval(TimeInterval(milliseconds) / 1000.0)

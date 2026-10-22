@@ -34,6 +34,8 @@ extension SuggestionCoordinator {
                 lastLatencyByEngine[settingsSnapshot.selectedEngine],
             fallback: settingsSnapshot.debounceMilliseconds,
             engine: settingsSnapshot.selectedEngine
+        ) + AppAcceptanceLearning.extraDelayMilliseconds(
+            bundleIdentifier: focusModel.snapshot.bundleIdentifier, defaults: userDefaults
         )
         // The debounce clock starts at the keystroke, not here. The host-publish poll has already
         // consumed real wall time waiting for the host to publish the keystroke to AX, and that
@@ -609,7 +611,9 @@ extension SuggestionCoordinator {
         switch TypoGate.resolve(
             precedingText: rawContext.precedingText,
             settings: TypoGate.Settings(offerTypoCorrections: settingsSnapshot.offerTypoCorrections),
-            isTypo: { spellChecker.isTypo($0) },
+            isTypo: { [personalTerms = PersonalDictionary.terms(userDefaults)] word in
+                !PersonalDictionary.contains(word, in: personalTerms) && spellChecker.isTypo(word)
+            },
             bestCorrection: {
                 bestCorrection(
                     for: $0,
@@ -659,7 +663,8 @@ extension SuggestionCoordinator {
     func completionSpellingAssessment(
         for word: String
     ) -> CompletionSeamGuard.SpellingAssessment {
-        guard spellChecker.isTypo(word) else {
+        guard !PersonalDictionary.contains(word, in: PersonalDictionary.terms(userDefaults)),
+              spellChecker.isTypo(word) else {
             return .known
         }
         return spellChecker.bestCorrection(for: word) == nil
@@ -944,6 +949,7 @@ extension SuggestionCoordinator {
         // One shown event per suggestion: this is the only place a fresh generation becomes
         // visible (re-presentations after partial accepts reuse the same session).
         qualityMetricsStore.recordShown(recoveringSuppression: result.suppressionReason)
+        AppAcceptanceLearning.recordShown(bundleIdentifier: liveContext.bundleIdentifier, defaults: userDefaults)
         let session = startCompletionSession(prediction: prediction, visibleText: visibleText,
             context: liveContext, latency: result.latency, isFinal: true, wordEndingOnly: wordEndingOnly)
         suggestionAnchorCache.record(

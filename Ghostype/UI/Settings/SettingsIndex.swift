@@ -25,6 +25,9 @@ enum SettingsItem: String, CaseIterable, Identifiable {
     case reuseContextBetweenKeystrokes
     case adaptSpeedToMac
     case shorterContext
+    case lightFocusChecks
+    case lightScreenReading
+    case learnAppAcceptance
     case showFollowingWords
     case inlineMacros
     case onboarding
@@ -60,6 +63,7 @@ enum SettingsItem: String, CaseIterable, Identifiable {
     case customRules
     case offerTypoCorrections
     case spellingDictionaries
+    case personalDictionary
     // Context
     case extendedContext
     case typingHistory
@@ -125,6 +129,9 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .reuseContextBetweenKeystrokes: return "Reuse Context Between Keystrokes"
         case .adaptSpeedToMac: return "Adapt Speed to Your Mac"
         case .shorterContext: return "Shorter Context"
+        case .lightFocusChecks: return "Light Focus Checks"
+        case .lightScreenReading: return "Lighter Screen Reading"
+        case .learnAppAcceptance: return "Learn From Your Apps"
         case .suggestWithinWords: return "Suggest while typing a word"
         case .showFollowingWords: return "Show following words"
         case .acceptPunctuation: return "Accept Punctuation With Word"
@@ -158,6 +165,7 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .customRules: return "Custom Rules"
         case .offerTypoCorrections: return "Offer Corrections on Typo"
         case .spellingDictionaries: return "Spelling Dictionaries"
+        case .personalDictionary: return "Personal Dictionary"
         case .extendedContext: return "Extended Context"
         case .typingHistory: return "Typing History"
         case .suggestionMemory: return "Suggestion Memory"
@@ -216,6 +224,9 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .reuseContextBetweenKeystrokes: return "memorychip"
         case .adaptSpeedToMac: return "gauge.with.dots.needle.33percent"
         case .shorterContext: return "text.badge.minus"
+        case .lightFocusChecks: return "battery.75percent"
+        case .lightScreenReading: return "text.viewfinder"
+        case .learnAppAcceptance: return "app.badge.checkmark"
         case .suggestWithinWords: return "text.cursor"
         case .showFollowingWords: return "text.word.spacing"
         case .acceptPunctuation: return "textformat.abc"
@@ -249,6 +260,7 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .customRules: return "list.bullet.rectangle"
         case .offerTypoCorrections: return "checkmark.bubble"
         case .spellingDictionaries: return "character.book.closed"
+        case .personalDictionary: return "person.text.rectangle"
         case .extendedContext: return "doc.text"
         case .typingHistory: return "clock.arrow.circlepath"
         case .suggestionMemory: return "brain"
@@ -300,7 +312,8 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         #if DEBUG
         case .developmentDebugOverlays: return .general
         #endif
-        case .reuseContextBetweenKeystrokes, .adaptSpeedToMac, .shorterContext:
+        case .reuseContextBetweenKeystrokes, .adaptSpeedToMac, .shorterContext, .lightFocusChecks, .lightScreenReading,
+             .learnAppAcceptance:
             return .speed
         case .enableGlobally, .useScreenContext, .openAtLogin, .includeClipboardContext, .includeAppContext,
              .allowMultiLine, .suggestWithinWords, .predictAheadWhileTyping, .showFollowingWords,
@@ -313,7 +326,7 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .emojiPicker, .emojiSkinTone, .emojiPeopleStyle, .emojiHistory:
             return .emoji
         case .length, .acceptPunctuation, .addSpaceAfterAccept, .name, .languages, .customRules,
-             .offerTypoCorrections, .spellingDictionaries:
+             .offerTypoCorrections, .spellingDictionaries, .personalDictionary:
             return .writing
         case .extendedContext, .contextLivePreview, .typingHistory, .suggestionMemory:
             return .context
@@ -352,6 +365,9 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .reuseContextBetweenKeystrokes: return "Keep the text window steady so the model only reads your new letters."
         case .adaptSpeedToMac: return "Switch shorter context on or off automatically from measured suggestion speed."
         case .shorterContext: return "Read less text before the caret for a faster first suggestion."
+        case .lightFocusChecks: return "Check the focused field quickly only while a suggestion shows."
+        case .lightScreenReading: return "Read on-screen text with the faster, lighter recognizer."
+        case .learnAppAcceptance: return "Suggest less eagerly in apps where you rarely accept."
         case .suggestWithinWords: return "Show new suggestions inside a word, or wait for a space or punctuation."
         case .showFollowingWords: return "Preview the following phrase, or reveal one word at a time as you type or accept."
         case .acceptPunctuation: return "Also accept trailing commas and periods with a word."
@@ -387,6 +403,7 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .customRules: return "Your own style rules passed to the model."
         case .offerTypoCorrections: return "Offer a green replacement for the misspelled word."
         case .spellingDictionaries: return "Dictionaries used to detect typos."
+        case .personalDictionary: return "Your own names and terms, never corrected."
         case .extendedContext: return "A glossary or notes sent with every suggestion."
         case .typingHistory: return "Learn from what you type, and import Cotypist history."
         case .suggestionMemory: return "Learn words and phrases from accepted and dismissed suggestions."
@@ -468,6 +485,14 @@ enum SettingsItem: String, CaseIterable, Identifiable {
             return ["speed", "adapt", "auto", "automatic", "tune", "latency", "slow", "fast", "mac"]
         case .shorterContext:
             return ["speed", "fast", "faster", "context", "window", "short", "latency", "prefix"]
+        case .lightFocusChecks:
+            return ["battery", "power", "focus", "poll", "polling", "cpu", "energy", "light"]
+        case .lightScreenReading:
+            return ["screen", "ocr", "vision", "read", "battery", "cpu", "fast", "light", "context"]
+        case .learnAppAcceptance:
+            return ["app", "apps", "learn", "accept", "acceptance", "battery", "quiet", "per app"]
+        case .personalDictionary:
+            return ["dictionary", "names", "terms", "words", "vocabulary", "spelling", "personal", "jargon"]
         case .predictAheadWhileTyping:
             return ["predict", "predictive", "ahead", "background", "typing", "latency", "faster", "pause",
                     "speculative", "reuse", "local", "on device", "power"]

@@ -256,10 +256,11 @@ final class SuggestionCoordinator: ObservableObject {
     /// learned phrases, with the global aggregate as fallback.
     func learnedVocabulary(for context: FocusedInputContext) -> [String] {
         vocabularyPin.resolve(session: promptPinSession(context)) {
-            memoryContext?.vocabularyForPrompt(
+            // Personal dictionary terms lead so the section's character budget never drops them.
+            PersonalDictionary.terms(userDefaults) + (memoryContext?.vocabularyForPrompt(
                 engine: settingsSnapshot.selectedEngine,
                 bundleIdentifier: context.bundleIdentifier
-            ) ?? []
+            ) ?? [])
         }
     }
 

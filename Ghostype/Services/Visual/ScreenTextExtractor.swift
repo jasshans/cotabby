@@ -182,8 +182,11 @@ struct ScreenTextExtractor: ScreenTextExtracting {
                 // correction is on for the same reason: it cuts garbled recognitions at the
                 // source, which matters because this text conditions the prompt and the
                 // downstream hygiene filters can only drop junk, not repair it.
-                request.recognitionLevel = .accurate
-                request.usesLanguageCorrection = true
+                // "Lighter screen reading" (Speed) trades that for the fast recognizer, which runs
+                // several times quicker and wakes the CPU for less time per capture.
+                let light = SpeedSettings.isLightScreenReadingEnabled(.standard)
+                request.recognitionLevel = light ? .fast : .accurate
+                request.usesLanguageCorrection = !light
                 request.minimumTextHeight = 0.008
 
                 do {
