@@ -107,6 +107,10 @@ final class InputMonitor {
 
     private var acceptTap: CFMachPort?
     private var acceptRunLoopSource: CFRunLoopSource?
+    /// Whether `acceptTap` is currently intercepting. Between suggestions the tap is disabled
+    /// rather than destroyed (see `updateAcceptTapState`), so this distinguishes an intentional
+    /// pause from the system disabling it on timeout, which the callback re-enables.
+    private var acceptTapEnabled = false
 
     /// Dedicated consuming tap for the global-toggle hotkey. Lives independently of the accept tap
     /// because it must fire even when no suggestion is visible — and even when Ghostype is globally
@@ -125,7 +129,8 @@ final class InputMonitor {
     /// The two independent reasons to keep the active tap installed. A visible suggestion needs to
     /// consume the accept key; an in-progress emoji capture needs to consume navigation and commit
     /// keys. Tracking them separately means neither feature removes the tap while the other still
-    /// needs it, and the tap is gone entirely when both are idle (the issue #328 invariant).
+    /// needs it. When both are idle the tap stops owning the accept key at once, is disabled after
+    /// `acceptTapIdleDisableSeconds`, and is released after a further idle period (issue #328).
     private var suggestionInterceptionActive = false
     /// Internal (not private) for the same reason as `isAcceptTapOwningAcceptKeys`: tests stage the
     /// "emoji capture open" state directly to exercise observer routing without installing real taps.
@@ -201,16 +206,24 @@ final class InputMonitor {
 
     private static let disabledKeyCode: CGKeyCode = CGKeyCode(UInt16.max)
 
-    /// How long the accept tap lingers (fail-open) after the overlay hides before its mach port is
-    /// invalidated. A final-chunk accept runs *inside* this tap's own callback: it posts the
-    /// synthetic insertion to `.cghidEventTap` and then hides the overlay, which routes back here to
-    /// tear the tap down. Invalidating the mach port in that same run-loop turn pulls the tap out of
-    /// the session tap chain before the just-posted synthetic keystroke drains through it, so the
-    /// last accepted word never reaches the host (non-final words keep the overlay visible and never
-    /// hit this path, which is why only the final word failed to commit). Deferring the invalidation
-    /// one short hop lets the synthetic event finish delivery first. This is the invariant PR #385
-    /// ("Fix last tab issue") protected before the two-tap ownership rewrite dropped it.
-    private static let acceptTapTeardownDelaySeconds: TimeInterval = 0.05
+    /// How long the accept tap stays enabled after the last suggestion hid. Switching an active tap
+    /// off pulls it out of the session tap chain, and an event still on its way through it is lost:
+    /// a final-chunk accept runs *inside* this tap's own callback, posts the synthetic insertion to
+    /// `.cghidEventTap`, then hides the overlay, and tearing the tap down in that same run-loop turn
+    /// once made the last accepted word never reach the host (PR #385, "Fix last tab issue"). The
+    /// user's own keystrokes are exposed the same way: toggling the tap around every keystroke of a
+    /// burst dropped about one typed character in a hundred in upstream's live TextEdit runs, and
+    /// none with the app quit. Two seconds spans a typing burst, so the tap is only switched off
+    /// once input has gone quiet, and it also covers the synthetic-insertion drain.
+    private static let acceptTapIdleDisableSeconds: TimeInterval = 2
+    /// How long a disabled accept tap is kept for its next suggestion before it is released.
+    private static let acceptTapReleaseDelaySeconds: TimeInterval = 10
+    /// Bumped on every accept-tap state change so only the disable scheduled after the last change runs.
+    private var acceptTapStateGeneration: UInt64 = 0
+
+    private var acceptTapWanted: Bool {
+        permissionProvider() && (suggestionInterceptionActive || captureInterceptionActive)
+    }
 
     /// Suggestion-overlay reason for the active tap. The coordinator calls this when a suggestion
     /// becomes visible or hidden, so Ghostype only enters the synchronous event path while there is
@@ -239,19 +252,30 @@ final class InputMonitor {
         // this synchronously (even on teardown) lets the fail-open preflight resume passing keys
         // through immediately.
         isAcceptTapOwningAcceptKeys = wantsTap && suggestionInterceptionActive
+        acceptTapStateGeneration &+= 1
         if wantsTap {
             installAcceptTapIfNeeded()
         } else {
-            // Defer only the mach-port invalidation, so a final-chunk accept's synthetic insertion can
-            // drain before the tap is removed (see `acceptTapTeardownDelaySeconds`). Re-check both
-            // reasons at fire time so a suggestion or an emoji capture that re-armed the tap during the
-            // delay keeps it installed.
-            DispatchQueue.main.asyncAfter(deadline: .now() + Self.acceptTapTeardownDelaySeconds) { [weak self] in
-                guard let self else { return }
-                let stillWanted = self.permissionProvider()
-                    && (self.suggestionInterceptionActive || self.captureInterceptionActive)
-                guard !stillWanted else { return }
-                self.destroyAcceptTap()
+            // Defer the disable, so a final-chunk accept's synthetic insertion can drain before the
+            // tap stops intercepting (see `acceptTapIdleDisableSeconds`). Re-check both reasons at
+            // fire time so a suggestion or an emoji capture that re-armed the tap during the delay
+            // keeps it enabled.
+            //
+            // While typing, a ghost hides and reappears on nearly every keystroke. Destroying the tap
+            // each time made the next appearance re-create it, a synchronous WindowServer round trip
+            // (~20-30 ms measured upstream) on the main thread right before the ghost could be
+            // presented. So the tap is only disabled after a quiet period, never between keystrokes
+            // of a burst, and released after a longer idle. A disabled tap intercepts nothing, and
+            // accept-key ownership above is already released, so a Tab with no visible suggestion
+            // keeps reaching the app while the tap lingers.
+            let generation = acceptTapStateGeneration
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.acceptTapIdleDisableSeconds) { [weak self] in
+                guard let self, generation == self.acceptTapStateGeneration, !self.acceptTapWanted else { return }
+                self.disableAcceptTap()
+                DispatchQueue.main.asyncAfter(deadline: .now() + Self.acceptTapReleaseDelaySeconds) { [weak self] in
+                    guard let self, !self.acceptTapWanted, !self.acceptTapEnabled else { return }
+                    self.destroyAcceptTap()
+                }
             }
         }
     }
@@ -301,8 +325,13 @@ final class InputMonitor {
 
     private func installAcceptTapIfNeeded() {
         // Ownership of the accept key is decided by `updateAcceptTapState`, not here, so this method
-        // only guarantees the tap exists.
-        guard acceptTap == nil else {
+        // only guarantees the tap exists and is intercepting.
+        if let acceptTap {
+            if !acceptTapEnabled {
+                CGEvent.tapEnable(tap: acceptTap, enable: true)
+                acceptTapEnabled = true
+                CotabbyLogger.app.debug("CGEvent accept tap re-enabled")
+            }
             return
         }
 
@@ -343,6 +372,17 @@ final class InputMonitor {
         }
 
         CGEvent.tapEnable(tap: tap, enable: true)
+        acceptTapEnabled = true
+    }
+
+    /// Stops the accept tap from intercepting without releasing it, so the next visible
+    /// suggestion only has to re-enable it.
+    private func disableAcceptTap() {
+        isAcceptTapOwningAcceptKeys = false
+        guard let acceptTap, acceptTapEnabled else { return }
+        CGEvent.tapEnable(tap: acceptTap, enable: false)
+        acceptTapEnabled = false
+        CotabbyLogger.app.debug("CGEvent accept tap disabled")
     }
 
     private func installToggleTapIfNeeded() {
@@ -416,6 +456,7 @@ final class InputMonitor {
             CFMachPortInvalidate(tap)
         }
         acceptTap = nil
+        acceptTapEnabled = false
         CotabbyLogger.app.info("CGEvent accept tap removed")
     }
 
@@ -563,8 +604,9 @@ final class InputMonitor {
     func handleAcceptTap(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         switch type {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
-            CotabbyLogger.app.warning("Accept tap was disabled by system, re-enabling")
-            if let acceptTap {
+            // Only undo a system-initiated disable; a tap Ghostype paused between suggestions stays off.
+            if let acceptTap, acceptTapEnabled {
+                CotabbyLogger.app.warning("Accept tap was disabled by system, re-enabling")
                 CGEvent.tapEnable(tap: acceptTap, enable: true)
             }
             return Unmanaged.passUnretained(event)

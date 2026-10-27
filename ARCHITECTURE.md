@@ -373,7 +373,8 @@ Visual context is one field-scoped session:
 
 ~~~text
 VisualContextCoordinator
-  -> WindowScreenshotService (local: focused window; endpoint: original field crop)
+  -> WindowScreenshotService (local: front-most window under the caret via CaptureWindowSelector;
+                             endpoint: original field crop)
   -> ScreenTextExtractor (Vision OCR + line confidence)
   -> OCRTextHygiene
   -> VisualContextExcerptSelector (local: proximity, deduplication, reading order)
