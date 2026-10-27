@@ -3,34 +3,46 @@ import CoreText
 import SwiftUI
 
 /// File overview:
-/// The small Ghostype affordance shown just outside a supported text field: an uncial "a"
-/// beside an outlined text-cursor (I-beam) glyph on Ghostype's dark rounded chip.
+/// The small Ghostype mark shown just left of the line Ghostype is completing. The style is the
+/// user's choice in Settings > Appearance (`FieldIndicatorStyle`). There is no background chip:
+/// the mark draws in the label colour with a halo of the window background colour, which keeps it
+/// readable on light and dark fields alike.
 struct FieldEdgeIconIndicatorView: View {
-    private let width: CGFloat = 20
-    private let height: CGFloat = 14
-    private let cornerRadius: CGFloat = 3.5
+    var style: FieldIndicatorStyle = .defaultStyle
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(Color(red: 0.18, green: 0.19, blue: 0.21))
+        mark
+            .foregroundStyle(.primary)
+            .shadow(color: Color(nsColor: .windowBackgroundColor), radius: 0.6)
+            .shadow(color: Color(nsColor: .windowBackgroundColor).opacity(0.8), radius: 1.2)
+            .padding(2)
+            .fixedSize()
+            .accessibilityLabel("Ghostype")
+    }
+
+    @ViewBuilder private var mark: some View {
+        switch style {
+        case .letterAndCursor:
             // The "a" sits on the bottom of the I-beam: its baseline aligns with the beam's foot.
             HStack(alignment: .bottom, spacing: 1) {
                 Text("a")
-                    .font(UncialAntiquaFont.font(size: 10))
-                    .foregroundStyle(.white)
+                    .font(UncialAntiquaFont.font(size: 11))
                     .alignmentGuide(.bottom) { dimensions in dimensions[.firstTextBaseline] }
                 IBeamGlyph()
-                    .fill(Color(red: 0.18, green: 0.19, blue: 0.21))
-                    .overlay(IBeamGlyph().stroke(Color.white, lineWidth: 0.9))
-                    .frame(width: 5, height: 10)
+                    .stroke(lineWidth: 1)
+                    .frame(width: 5, height: 11)
             }
+        case .cursor:
+            IBeamGlyph()
+                .stroke(lineWidth: 1)
+                .frame(width: 6, height: 12)
+        case .ghost:
+            GhostGlyph()
+                .fill(style: FillStyle(eoFill: true))
+                .frame(width: 10, height: 12)
+        case .none:
+            EmptyView()
         }
-        .frame(width: width, height: height)
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        .shadow(color: .black.opacity(0.12), radius: 2, y: 1)
-        .fixedSize()
-        .accessibilityLabel("Ghostype")
     }
 }
 

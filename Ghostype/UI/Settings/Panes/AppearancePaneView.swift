@@ -9,6 +9,8 @@ struct AppearancePaneView: View {
     @ObservedObject var suggestionSettings: SuggestionSettingsModel
     @ObservedObject var dailyCompletionStats: DailyCompletionStats
     @AppStorage(GhostTextSizeSettings.matchTextSizeKey) private var matchTextSize = true
+    @AppStorage(FieldIndicatorStyle.defaultsKey) private var fieldIndicatorStyle = FieldIndicatorStyle.defaultStyle.rawValue
+    @AppStorage(MenuBarIconStyle.defaultsKey) private var menuBarIconStyle = MenuBarIconStyle.defaultStyle.rawValue
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -79,12 +81,21 @@ struct AppearancePaneView: View {
                     }
                 }
 
-                Toggle(isOn: showIndicatorBinding) {
-                    SettingsRowLabel(
-                        title: "Show Field Indicator",
-                        description: "Show a small icon at the edge of a field when Ghostype is ready to suggest.",
-                        systemImage: "dot.viewfinder"
-                    )
+                Picker(selection: fieldIndicatorBinding) {
+                    ForEach(FieldIndicatorStyle.allCases) { style in
+                        Text(style.title).tag(style)
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        SettingsRowLabel(
+                            title: "Field Indicator",
+                            description: "The small mark beside the line Ghostype is completing.",
+                            systemImage: "dot.viewfinder"
+                        )
+                        if fieldIndicatorBinding.wrappedValue != .none {
+                            FieldEdgeIconIndicatorView(style: fieldIndicatorBinding.wrappedValue)
+                        }
+                    }
                 }
                 .settingsItem(.showFieldIndicator)
 
@@ -98,10 +109,14 @@ struct AppearancePaneView: View {
                 .disabled(!suggestionSettings.isMenuBarIconVisible)
                 .settingsItem(.showWordCount)
 
-                Toggle(isOn: menuBarIconVisibleBinding) {
+                Picker(selection: menuBarIconBinding) {
+                    ForEach(MenuBarIconStyle.allCases) { style in
+                        Text(style.title).tag(style)
+                    }
+                } label: {
                     SettingsRowLabel(
-                        title: "Show Ghostype in Menu Bar",
-                        description: "Keep Ghostype's icon in the menu bar. If hidden, open Ghostype again to show Settings.",
+                        title: "Menu Bar Icon",
+                        description: "Choose Ghostype's menu bar icon. With None, open Ghostype again to show Settings.",
                         systemImage: "menubar.rectangle"
                     )
                 }
@@ -312,13 +327,6 @@ struct AppearancePaneView: View {
         (SuggestionSettingsModel.minimumFadeInDuration + SuggestionSettingsModel.maximumFadeInDuration) - value
     }
 
-    private var showIndicatorBinding: Binding<Bool> {
-        Binding(
-            get: { suggestionSettings.showIndicator },
-            set: { suggestionSettings.setShowIndicator($0) }
-        )
-    }
-
     private var showAcceptanceHintBinding: Binding<Bool> {
         Binding(
             get: { suggestionSettings.showAcceptanceHint },
@@ -371,10 +379,25 @@ struct AppearancePaneView: View {
         }
     }
 
-    private var menuBarIconVisibleBinding: Binding<Bool> {
+    /// "None" is the existing show-indicator switch; any other choice turns it on and is stored.
+    private var fieldIndicatorBinding: Binding<FieldIndicatorStyle> {
         Binding(
-            get: { suggestionSettings.isMenuBarIconVisible },
-            set: { suggestionSettings.setMenuBarIconVisible($0) }
+            get: { suggestionSettings.showIndicator ? FieldIndicatorStyle.stored(fieldIndicatorStyle) : .none },
+            set: { style in
+                suggestionSettings.setShowIndicator(style != .none)
+                if style != .none { fieldIndicatorStyle = style.rawValue }
+            }
+        )
+    }
+
+    /// "None" is the existing menu-bar-visible switch; any other choice turns it on and is stored.
+    private var menuBarIconBinding: Binding<MenuBarIconStyle> {
+        Binding(
+            get: { suggestionSettings.isMenuBarIconVisible ? MenuBarIconStyle.stored(menuBarIconStyle) : .none },
+            set: { style in
+                suggestionSettings.setMenuBarIconVisible(style != .none)
+                if style != .none { menuBarIconStyle = style.rawValue }
+            }
         )
     }
 
