@@ -79,7 +79,7 @@ extension SuggestionCoordinator {
     func presentationDelay(context: FocusedInputContext) -> TimeInterval {
         // Cotypist-style continuous suggestions: when "Suggest while typing a word" is on,
         // the user wants the ghost to follow every keystroke without hesitation. The
-        // TypingCadence pause (80-220ms mid-word) defeats that — it forces the stop-and-wait
+        // TypingCadence pause (20-50ms mid-word) defeats that — it forces the stop-and-wait
         // rhythm. Bypass it; the 20ms debounce plus generation latency is pause enough.
         if settingsSnapshot.suggestWithinWords { return 0 }
         return typingCadence.remainingDelay(identityKey: context.focusedInputIdentityKey,
