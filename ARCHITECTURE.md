@@ -275,8 +275,11 @@ bounded separately from visible generation. Special tokens and oversized pieces 
 continuation path; no model weights or tokenizer files are modified.
 
 Cache reuse is based on actual native restoration, not a permanent model-family blacklist. Ordinary
-attention can trim its suffix; recurrent/hybrid or sliding-window memory uses one bounded partial
-state checkpoint near the prompt tail, with at most eight tokens replayed. A miss falls back to a
+and sliding-window attention trim their suffix (the context is created with `swa_full`, so Gemma's
+SWA cache keeps every position); recurrent/hybrid memory uses one bounded partial state checkpoint
+near the prompt tail, with at most eight tokens replayed. Reuse is decided from the shared token
+prefix alone: the output budget and caller hints do not gate it, and a sampler change swaps the
+native chain in place (`updateSampling`) instead of discarding the prompt. A miss falls back to a
 cold prompt. Checkpoints live only in memory, are size-capped, and are cleared with the sequence.
 Sampler history is rebuilt from the current prompt so discarded suggestions do not affect the next
 request. Native memory may retain a generated tail between requests; the app tracks only the
@@ -370,7 +373,8 @@ Visual context is one field-scoped session:
 
 ~~~text
 VisualContextCoordinator
-  -> WindowScreenshotService (local: focused window; endpoint: original field crop)
+  -> WindowScreenshotService (local: front-most window under the caret via CaptureWindowSelector;
+                             endpoint: original field crop)
   -> ScreenTextExtractor (Vision OCR + line confidence)
   -> OCRTextHygiene
   -> VisualContextExcerptSelector (local: proximity, deduplication, reading order)
