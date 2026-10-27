@@ -145,9 +145,9 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .suggestionDisplay: return "Suggestion Display"
         case .streamWhileGenerating: return "Stream Suggestions While Generating"
         case .fadeInSuggestions: return "Fade In Suggestions"
-        case .showFieldIndicator: return "Show Field Indicator"
+        case .showFieldIndicator: return "Field Indicator"
         case .showWordCount: return "Show Word Count in Menu Bar"
-        case .showMenuBarIcon: return "Show Ghostype in Menu Bar"
+        case .showMenuBarIcon: return "Menu Bar Icon"
         case .showKeyHint: return "Show Accept-Key Hint"
         case .ghostTextColor: return "Ghost Text Color"
         case .ghostTextOpacity: return "Ghost Text Opacity"
@@ -381,9 +381,9 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .suggestionDisplay: return "Inline ghost text, popup card, or automatic per app."
         case .streamWhileGenerating: return "Reveal ghost text token by token as the model writes."
         case .fadeInSuggestions: return "Fade new suggestions in smoothly instead of all at once."
-        case .showFieldIndicator: return "Show a small icon when a field is ready for suggestions."
+        case .showFieldIndicator: return "Pick the mark beside the line being completed: a + I, I, a ghost, or none."
         case .showWordCount: return "Count accepted words next to the menu bar icon."
-        case .showMenuBarIcon: return "Hide menu bar clutter while Ghostype keeps running."
+        case .showMenuBarIcon: return "Pick a ghost, pumpkin or winter ghost, or hide the icon."
         case .showKeyHint: return "Show the accept-key badge beside the ghost text."
         case .ghostTextColor: return "Pick the color of the inline suggestion."
         case .ghostTextOpacity: return "How faint the suggestion looks before you accept it."
@@ -529,13 +529,13 @@ enum SettingsItem: String, CaseIterable, Identifiable {
                     "quick", "ramp"]
         case .showFieldIndicator:
             return ["indicator", "icon", "field", "ready", "dot", "marker", "badge",
-                    "show", "hide"]
+                    "show", "hide", "ghost", "cursor", "i-beam", "style", "none"]
         case .showWordCount:
             return ["word count", "words", "menu bar", "menubar", "stats", "counter",
                     "statistics", "show count"]
         case .showMenuBarIcon:
             return ["menu bar", "menubar", "status item", "icon", "hide", "hidden",
-                    "clutter", "launch", "reopen", "settings"]
+                    "clutter", "launch", "reopen", "settings", "ghost", "pumpkin", "winter", "style"]
         case .showKeyHint:
             return ["hint", "badge", "keycap", "accept key", "tip", "label", "key hint",
                     "show key"]

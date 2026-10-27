@@ -39,6 +39,8 @@ final class ActivationIndicatorController {
     /// The chip's measured size, cached after the first layout: the view is fixed-size, so
     /// repeat placements can compute the frame (and hit the early-out) without re-measuring.
     private var cachedContentSize: CGSize?
+    /// The style the cached size was measured for; a change in Settings re-renders and re-measures.
+    private var cachedStyle: FieldIndicatorStyle?
 
     /// The latest focus poll's facts, kept so a recheck or a suggestion change decides again.
     private var isEnabled = false
@@ -116,14 +118,17 @@ final class ActivationIndicatorController {
     private func place(at line: FieldIndicatorPlacement.LineAnchor?) {
         // No line known yet (a first poll without geometry): leave the icon where it is.
         guard let line else { return }
+        let style = FieldIndicatorStyle.stored(UserDefaults.standard.string(forKey: FieldIndicatorStyle.defaultsKey) ?? "")
         let size: CGSize
-        if let cachedContentSize {
+        if let cachedContentSize, cachedStyle == style {
             size = cachedContentSize
         } else {
-            contentView.rootView = AnyView(FieldEdgeIconIndicatorView())
+            contentView.rootView = AnyView(FieldEdgeIconIndicatorView(style: style))
             contentView.layoutSubtreeIfNeeded()
             size = contentView.fittingSize
             cachedContentSize = size
+            cachedStyle = style
+            isVisible = false
         }
         let lineStart = CGRect(x: line.left, y: line.midY, width: 0, height: 0)
         let origin = FieldIndicatorPlacement.origin(for: line, size: size, visibleFrame: screen(for: lineStart)?.visibleFrame)

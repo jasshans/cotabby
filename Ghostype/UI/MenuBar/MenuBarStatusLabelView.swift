@@ -10,14 +10,14 @@ import SwiftUI
 struct MenuBarStatusLabelView: View {
     @ObservedObject var dailyCompletionStats: DailyCompletionStats
     @ObservedObject var suggestionSettings: SuggestionSettingsModel
+    @AppStorage(MenuBarIconStyle.defaultsKey) private var iconStyle = MenuBarIconStyle.defaultStyle.rawValue
 
     var body: some View {
         HStack(spacing: 2) {
-            // Carved-pumpkin template image: single-colour alpha mask, so macOS tints it for
+            // Every icon is a template image: a single-colour alpha mask, so macOS tints it for
             // light and dark menu bars (and wallpaper-tinted bars) automatically.
-            Image("MenuBarPumpkinIcon")
-                .renderingMode(.template)
-                // Match the asset's 18-point canvas so macOS uses its native 1x/2x strokes.
+            icon
+                // Match the 18-point canvas so macOS uses the native 1x/2x strokes.
                 .frame(width: 18, height: 18)
                 .accessibilityLabel("Ghostype")
 
@@ -35,6 +35,16 @@ struct MenuBarStatusLabelView: View {
                     .font(.system(size: 10, weight: .medium).monospacedDigit())
                     .accessibilityLabel("\(dailyCompletionStats.todayCount) words completed today")
             }
+        }
+    }
+
+    /// The style chosen in Settings > Appearance. "None" hides the whole item instead (the
+    /// menu-bar-visible switch), so it never reaches this view.
+    private var icon: Image {
+        switch MenuBarIconStyle.stored(iconStyle) {
+        case .ghost: return Image(nsImage: GhostMenuBarImage.ghost)
+        case .winterGhost: return Image(nsImage: GhostMenuBarImage.winterGhost)
+        case .pumpkin, .none: return Image("MenuBarPumpkinIcon").renderingMode(.template)
         }
     }
 
