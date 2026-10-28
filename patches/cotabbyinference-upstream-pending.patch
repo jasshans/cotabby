@@ -147,7 +147,7 @@ index 1b2aca3..eac988c 100644
  ## Requirements
  
 diff --git a/Sources/CotabbyInferenceEngine/CotabbyInferenceEngine.cpp b/Sources/CotabbyInferenceEngine/CotabbyInferenceEngine.cpp
-index 5fc867f..8a0f1cd 100644
+index 5fc867f..e6e8a11 100644
 --- a/Sources/CotabbyInferenceEngine/CotabbyInferenceEngine.cpp
 +++ b/Sources/CotabbyInferenceEngine/CotabbyInferenceEngine.cpp
 @@ -1,4 +1,5 @@
@@ -360,9 +360,9 @@ index 5fc867f..8a0f1cd 100644
      model_params.n_gpu_layers = gpu_layers;
 -    model_params.use_mmap = true;
 -    model_params.use_mlock = false;
-+    // PrismML llama.cpp (b10777) replaced use_mmap/use_mlock bools with a
-+    // load_mode enum. MMAP (mmap on, mlock off) matches the old behavior.
-+    model_params.load_mode = LLAMA_LOAD_MODE_MMAP;
++    // mmap alone left weights as clean file pages, the first thing macOS evicts under pressure, so
++    // suggestions paid 1-2.5 s re-reading them; mlock keeps them in RAM (failure only warns).
++    model_params.load_mode = LLAMA_LOAD_MODE_MMAP_MLOCK;
  
      impl_->model = llama_model_load_from_file(path, model_params);
      if (!impl_->model) {
