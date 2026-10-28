@@ -122,7 +122,7 @@ final class VisualContextCoordinatorTests: XCTestCase {
         try await waitUntil { coordinator.status == .ready }
         generator.suspendNext = true
         try await waitUntil { generator.pending != nil }
-        uptime += 6
+        uptime += 30
         XCTAssertNil(coordinator.excerpt(for: FocusedInputContext(snapshot: snapshot, generation: 1)))
         XCTAssertNil(coordinator.latestExcerpt)
         // The completed OCR is also old: completion time cannot reset the age of captured pixels.

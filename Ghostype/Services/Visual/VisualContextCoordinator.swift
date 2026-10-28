@@ -44,7 +44,10 @@ final class VisualContextCoordinator {
         screenshotContextGenerator: any ScreenshotContextGenerating,
         screenRecordingPermissionProvider: @escaping @MainActor () -> Bool,
         refreshIntervalNanoseconds: UInt64 = 3_000_000_000,
-        excerptLifetimeNanoseconds: UInt64 = 6_000_000_000,
+        // A lapsed excerpt drops out of the prompt and returns with the next capture, and each
+        // change re-decodes ~1,000 tokens (1-2 s). Outliving several failed or slow refreshes keeps
+        // the prompt head stable; a real screen change still swaps it on the next capture.
+        excerptLifetimeNanoseconds: UInt64 = 30_000_000_000,
         now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
     ) {
         self.screenshotContextGenerator = screenshotContextGenerator
