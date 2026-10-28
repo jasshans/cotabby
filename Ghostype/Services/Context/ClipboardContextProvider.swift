@@ -18,12 +18,24 @@ final class ClipboardContextProvider: ClipboardContextProviding {
     var currentChangeCount: Int { pasteboard.changeCount }
 
     func currentContext() -> String? {
+        guard !Self.holdsSecret(pasteboard) else { return nil }
         if let text = normalizedText(pasteboard.string(forType: .string)) {
             return text
         }
 
         return imageContext()
     }
+
+    /// A copied password must never become prompt context. Password managers follow the
+    /// nspasteboard.org convention: they mark the secret concealed, and many also name themselves
+    /// as its source. Either marker is enough.
+    static func holdsSecret(_ pasteboard: NSPasteboard) -> Bool {
+        if pasteboard.types?.contains(concealedType) == true { return true }
+        return SecureFieldDetector.isPasswordManager(pasteboard.string(forType: sourceType))
+    }
+
+    private static let concealedType = NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")
+    private static let sourceType = NSPasteboard.PasteboardType("org.nspasteboard.source")
 
     private func normalizedText(_ text: String?) -> String? {
         guard let text else {

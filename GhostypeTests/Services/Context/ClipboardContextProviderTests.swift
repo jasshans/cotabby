@@ -90,4 +90,15 @@ final class ClipboardContextProviderTests: XCTestCase {
         XCTAssertEqual(provider.currentChangeCount, pasteboard.changeCount)
         XCTAssertGreaterThan(provider.currentChangeCount, before)
     }
+
+    func test_copiedPasswordIsNeverContext() {
+        pasteboard.declareTypes([.string, NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")], owner: nil)
+        pasteboard.setString("hunter2-correct-horse", forType: .string)
+        XCTAssertNil(makeProvider().currentContext())
+
+        pasteboard.clearContents()
+        pasteboard.setString("hunter2-correct-horse", forType: .string)
+        pasteboard.setString("com.1password.1password", forType: NSPasteboard.PasteboardType("org.nspasteboard.source"))
+        XCTAssertNil(makeProvider().currentContext())
+    }
 }

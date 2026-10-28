@@ -214,10 +214,17 @@ final class TypingHistoryStore: ObservableObject, SuggestionHistoryProviding {
             let loaded = try await Task.detached(priority: .utility) { try vault.load() }.value
             // Delete All ran while the archive was decrypting: the loaded records are gone now.
             guard generation == persistenceGeneration else { return }
-            records = loaded
-            recordCount = loaded.count
+            // Text from a password manager is never kept, including entries recorded before those
+            // apps were blocked: they are dropped here and the archive is rewritten without them.
+            let kept = loaded.filter { !SecureFieldDetector.isPasswordManager($0.bundleIdentifier) }
+            records = kept
+            recordCount = kept.count
             savedChangeCount = changeCount
             status = .ready
+            if kept.count != loaded.count {
+                changeCount += 1
+                scheduleSave()
+            }
             rebuildSearchStructures()
         } catch {
             status = .unavailable("Typing history couldn't be opened, so it's paused to avoid overwriting it.")
@@ -544,7 +551,9 @@ final class TypingHistoryStore: ObservableObject, SuggestionHistoryProviding {
                 return
             }
             let knownTexts = Set(records.map(\.text))
-            let fresh = imported.filter { !knownTexts.contains($0.text) }
+            let fresh = imported.filter {
+                !knownTexts.contains($0.text) && !SecureFieldDetector.isPasswordManager($0.bundleIdentifier)
+            }
             lastImportMessage = "Imported \(fresh.count) entries"
                 + (imported.count > fresh.count ? " (\(imported.count - fresh.count) were already in your history)." : ".")
             guard !fresh.isEmpty else { return }

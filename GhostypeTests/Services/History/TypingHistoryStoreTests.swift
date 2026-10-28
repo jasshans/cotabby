@@ -695,4 +695,22 @@ final class TypingHistoryStoreTests: XCTestCase {
         XCTAssertEqual(gateCalls, 1)
     }
 
+    func test_loadDropsEntriesRecordedInPasswordManagers() async throws {
+        let vault = makeVault()
+        let kept = TypingHistoryRecord(
+            id: UUID(), bundleIdentifier: "com.apple.mail", domain: nil, createdAt: Date(), updatedAt: Date(),
+            text: "See you at the offsite next week.", source: .recorded
+        )
+        let secret = TypingHistoryRecord(
+            id: UUID(), bundleIdentifier: "com.apple.Passwords", domain: nil, createdAt: Date(), updatedAt: Date(),
+            text: "correct-horse-battery-staple", source: .recorded
+        )
+        try vault.save([kept, secret])
+
+        let store = makeStore(vault: vault)
+        await store.loadArchive()
+        XCTAssertEqual(store.recordCount, 1)
+        store.flush()
+        XCTAssertEqual(try vault.load(), [kept])
+    }
 }
