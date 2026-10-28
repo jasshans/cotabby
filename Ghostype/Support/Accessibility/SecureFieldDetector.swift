@@ -53,4 +53,29 @@ enum SecureFieldDetector {
         "card number",
         "credit card"
     ]
+
+    /// True for a password manager's bundle identifier. In those apps every field can hold a secret
+    /// in plain view (a revealed password, a username, a recovery code in a note) and few say so in
+    /// their labels, so the whole app is treated as one password field.
+    static func isPasswordManager(_ bundleIdentifier: String?) -> Bool {
+        guard let identifier = bundleIdentifier?.lowercased(), !identifier.isEmpty else { return false }
+        return passwordManagerMarkers.contains { identifier.contains($0) }
+    }
+
+    /// Bundle-identifier substrings of password managers, broad on purpose like the markers above:
+    /// a false positive only turns Ghostype off in one app.
+    static let passwordManagerMarkers: [String] = [
+        "com.apple.passwords",
+        "com.apple.keychainaccess",
+        "1password",
+        "onepassword",
+        "bitwarden",
+        "keepass",
+        "lastpass",
+        "enpass",
+        "dashlane",
+        "nordpass",
+        "proton.pass",
+        "strongbox"
+    ]
 }

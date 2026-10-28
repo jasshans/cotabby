@@ -122,6 +122,11 @@ struct FocusSnapshotResolver {
     ) -> FocusSnapshot {
         let applicationName = application.localizedName ?? "Unknown"
         let bundleIdentifier = application.bundleIdentifier ?? "unknown.bundle"
+        // A password manager blocks like a password field, before its element is touched: nothing
+        // typed or revealed there reaches suggestions, typing history, memory, or screen reading.
+        if SecureFieldDetector.isPasswordManager(bundleIdentifier) {
+            return Self.secureSnapshot(applicationName: applicationName, bundleIdentifier: bundleIdentifier)
+        }
         let focusedRole =
             AXHelper.stringValue(for: kAXRoleAttribute as CFString, on: focusedElement) ?? "Unknown"
         let focusedSubrole = AXHelper.stringValue(

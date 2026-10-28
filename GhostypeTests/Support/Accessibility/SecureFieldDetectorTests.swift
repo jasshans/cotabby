@@ -62,4 +62,14 @@ final class SecureFieldDetectorTests: XCTestCase {
             role: "AXTextField", subrole: nil, roleDescription: "text field",
             title: "Search", descriptionLabel: "Type to search"))
     }
+
+    func test_isPasswordManager_matchesKnownAppsOnly() {
+        for identifier in ["com.apple.Passwords", "com.1password.1password", "com.bitwarden.desktop",
+                           "org.keepassxc.keepassxc", "com.apple.keychainaccess"] {
+            XCTAssertTrue(SecureFieldDetector.isPasswordManager(identifier), identifier)
+        }
+        for identifier in ["com.apple.Notes", "com.brave.Browser", "", nil] as [String?] {
+            XCTAssertFalse(SecureFieldDetector.isPasswordManager(identifier), identifier ?? "nil")
+        }
+    }
 }
