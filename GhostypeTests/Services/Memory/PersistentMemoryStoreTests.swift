@@ -1,4 +1,5 @@
 import CryptoKit
+import SQLite3
 import XCTest
 @testable import Ghostype
 
@@ -73,6 +74,32 @@ final class PersistentMemoryStoreTests: XCTestCase {
         XCTAssertTrue(phrases.contains("kind regards"))
         XCTAssertTrue(phrases.contains("kind"))
         XCTAssertTrue(phrases.contains("regards"))
+    }
+
+    func test_v3DatabaseOpensAndKeepsLearning() throws {
+        // A file written before schema v4: phrase_stats keyed by hash alone, no bundle_id column.
+        var handle: OpaquePointer?
+        XCTAssertEqual(sqlite3_open(tempFile.path, &handle), SQLITE_OK)
+        let v3 = """
+            CREATE TABLE memory_events(id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL,
+                text_enc BLOB NOT NULL, app_bundle_id TEXT NOT NULL DEFAULT '', created_at REAL NOT NULL);
+            CREATE TABLE phrase_stats(phrase_hash TEXT PRIMARY KEY, phrase_enc BLOB NOT NULL,
+                accept_count INTEGER NOT NULL DEFAULT 0, reject_count INTEGER NOT NULL DEFAULT 0,
+                last_used REAL NOT NULL);
+            CREATE INDEX idx_phrase_stats_last_used ON phrase_stats(last_used);
+            INSERT INTO memory_events(kind, text_enc, created_at) VALUES ('accepted', x'00', 0);
+            INSERT INTO phrase_stats(phrase_hash, phrase_enc, last_used) VALUES ('h', x'00', 0);
+            PRAGMA user_version=3;
+            """
+        XCTAssertEqual(sqlite3_exec(handle, v3, nil, nil, nil), SQLITE_OK)
+        sqlite3_close(handle)
+
+        XCTAssertEqual(store.counts().events, 1)
+        XCTAssertEqual(store.counts().phrases, 1)
+        let accepted = MemoryEvent(kind: .accepted, text: "kind regards", bundleIdentifier: "com.apple.mail", date: Date())
+        store.persistAndWait([accepted, accepted])
+        XCTAssertEqual(store.counts().events, 3)
+        XCTAssertTrue(store.topPhrases(limit: 50).map(\.phrase).contains("kind regards"))
     }
 
     func test_nothingIsWrittenBeforeTheFirstEvent() {

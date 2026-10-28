@@ -284,7 +284,8 @@ nonisolated final class PersistentMemoryStore: @unchecked Sendable {
                 PRIMARY KEY(phrase_hash, bundle_id)
             );
             CREATE INDEX IF NOT EXISTS idx_phrase_stats_last_used ON phrase_stats(last_used);
-            CREATE INDEX IF NOT EXISTS idx_phrase_stats_bundle ON phrase_stats(bundle_id);
+            -- No bundle_id index here: on a pre-v4 file phrase_stats has no bundle_id column yet,
+            -- so the index would fail and the database would never open. The v4 migration adds it.
             CREATE TABLE IF NOT EXISTS kv_store(
                 key TEXT PRIMARY KEY,
                 value_enc BLOB NOT NULL
