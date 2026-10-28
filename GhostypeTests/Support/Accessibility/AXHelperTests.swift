@@ -336,6 +336,9 @@ final class AXHelperTests: XCTestCase {
         XCTAssertFalse(AXHelper.rectHasFiniteComponents(CGRect(x: 1, y: CGFloat.infinity, width: 3, height: 4)))
         XCTAssertFalse(AXHelper.rectHasFiniteComponents(CGRect(x: 1, y: 2, width: -CGFloat.infinity, height: 4)))
         XCTAssertFalse(AXHelper.rectHasFiniteComponents(CGRect(x: 1, y: 2, width: 3, height: CGFloat.nan)))
+        // A finite width of 2^63 or more made Int(width.rounded()) trap (0.1.68 crash).
+        XCTAssertFalse(AXHelper.rectHasFiniteComponents(CGRect(x: 1, y: 2, width: 1e19, height: 4)))
+        XCTAssertEqual(AXHelper.cocoaRect(fromAccessibilityRect: CGRect(x: 0, y: 0, width: 1e19, height: 10)), .zero)
     }
 
     func test_cocoaRect_zeroAndNonFiniteRectsNeverReachGeometryMath() {

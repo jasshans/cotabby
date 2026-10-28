@@ -1291,10 +1291,13 @@ enum AXHelper {
     /// True only when every component of `rect` is a finite number. Some host AX implementations
     /// (Chromium/Electron, especially mid-scroll or under load) return NaN/Inf bounds; AppKit raises
     /// on a non-finite window frame and `Int(.nan)` traps, so such rects are rejected here at the AX
-    /// ingest boundary before they can reach geometry math or `NSWindow.setFrame`.
+    /// ingest boundary before they can reach geometry math or `NSWindow.setFrame`. Absurdly large
+    /// finite values are rejected too: a code editor's parent once reported a width of 2^63 or more,
+    /// and `Int(width.rounded())` trapped on it (0.1.68 crash).
     static func rectHasFiniteComponents(_ rect: CGRect) -> Bool {
-        rect.origin.x.isFinite && rect.origin.y.isFinite
-            && rect.size.width.isFinite && rect.size.height.isFinite
+        // ponytail: 1e6 pt is far past any display wall; widen if a real host ever exceeds it.
+        [rect.origin.x, rect.origin.y, rect.size.width, rect.size.height]
+            .allSatisfy { $0.isFinite && abs($0) <= 1_000_000 }
     }
 
     /// Converts a text-range AX rect to Cocoa coordinates, using the element's AXFrame (already
