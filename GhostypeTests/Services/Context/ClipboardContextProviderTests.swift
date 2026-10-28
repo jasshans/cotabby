@@ -71,6 +71,21 @@ final class ClipboardContextProviderTests: XCTestCase {
         XCTAssertEqual(makeProvider().currentContext(), "Image (PNG, 4x3 px)")
     }
 
+    /// The image is decoded once per copy, not on every prediction, and a new copy is re-read.
+    func test_imageSummaryIsReusedUntilTheClipboardChanges() throws {
+        let provider = makeProvider()
+        pasteboard.setData(try pngData(width: 4, height: 3), forType: .png)
+        XCTAssertEqual(provider.currentContext(), "Image (PNG, 4x3 px)")
+
+        // Same change count, different bytes: only a cached summary can still say 4x3.
+        pasteboard.setData(try pngData(width: 8, height: 6), forType: .png)
+        XCTAssertEqual(provider.currentContext(), "Image (PNG, 4x3 px)")
+
+        pasteboard.clearContents()
+        pasteboard.setData(try pngData(width: 8, height: 6), forType: .png)
+        XCTAssertEqual(provider.currentContext(), "Image (PNG, 8x6 px)")
+    }
+
     func test_textTakesPrecedenceOverAnImage() throws {
         pasteboard.declareTypes([.string, .png], owner: nil)
         pasteboard.setString("caption", forType: .string)

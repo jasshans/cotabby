@@ -50,13 +50,22 @@ final class ClipboardContextProvider: ClipboardContextProviding {
         return trimmed
     }
 
+    /// Decoding a copied image fetches and decodes the whole PNG on the main thread, and with an
+    /// image on the clipboard that ran on every prediction, long enough to stall the keyboard taps.
+    /// The summary holds only format and size, never clipboard text, so it is memoized per copy.
     private func imageContext() -> String? {
-        if let image = NSImage(pasteboard: pasteboard) {
-            return imageSummary(for: image, format: preferredImageFormat())
+        let changeCount = pasteboard.changeCount
+        if let cachedImageContext, cachedImageContext.changeCount == changeCount {
+            return cachedImageContext.summary
         }
-
-        return imageFileContext()
+        let summary = NSImage(pasteboard: pasteboard).map {
+            imageSummary(for: $0, format: preferredImageFormat())
+        } ?? imageFileContext()
+        cachedImageContext = (changeCount, summary)
+        return summary
     }
+
+    private var cachedImageContext: (changeCount: Int, summary: String?)?
 
     private func imageFileContext() -> String? {
         guard let urls = pasteboard.readObjects(

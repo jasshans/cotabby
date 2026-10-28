@@ -515,6 +515,12 @@ final class InputMonitor {
         }
     }
 
+    /// A timeout means the main thread stalled for about a second; user input means Secure Input
+    /// (a password field) took the keyboard. Logged apart so stalls are not overcounted.
+    private static func disableReason(_ type: CGEventType) -> String {
+        type == .tapDisabledByTimeout ? "timeout" : "user input"
+    }
+
     /// Listen-only observer: classifies the event and notifies the coordinator. The return value
     /// of `onEvent` is ignored here because a listen-only tap cannot drop or modify events.
     /// Consumption of the accept key is handled by the separate active accept tap.
@@ -524,7 +530,7 @@ final class InputMonitor {
     func handleObserverTap(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         switch type {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
-            CotabbyLogger.app.warning("Observer tap was disabled by system, re-enabling")
+            CotabbyLogger.app.warning("Observer tap was disabled by system (\(Self.disableReason(type))), re-enabling")
             if let observerTap {
                 CGEvent.tapEnable(tap: observerTap, enable: true)
             }
@@ -606,7 +612,7 @@ final class InputMonitor {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
             // Only undo a system-initiated disable; a tap Ghostype paused between suggestions stays off.
             if let acceptTap, acceptTapEnabled {
-                CotabbyLogger.app.warning("Accept tap was disabled by system, re-enabling")
+                CotabbyLogger.app.warning("Accept tap was disabled by system (\(Self.disableReason(type))), re-enabling")
                 CGEvent.tapEnable(tap: acceptTap, enable: true)
             }
             return Unmanaged.passUnretained(event)
