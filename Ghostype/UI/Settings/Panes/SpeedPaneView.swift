@@ -14,6 +14,8 @@ struct SpeedPaneView: View {
     @AppStorage(SpeedSettings.lightFocusChecksKey) private var lightFocusChecks = true
     @AppStorage(SpeedSettings.lightScreenReadingKey) private var lightScreenReading = false
     @AppStorage(AppAcceptanceLearning.enabledKey) private var learnAppAcceptance = true
+    @AppStorage(SpeedSettings.screenCharactersKey) private var screenCharacters = SpeedSettings.defaultScreenCharacters
+    @AppStorage(SpeedSettings.promptTokensKey) private var promptTokens = SpeedSettings.promptTokensRange.upperBound
 
     var body: some View {
         SettingsPaneScaffold {
@@ -53,6 +55,32 @@ struct SpeedPaneView: View {
                 }
                 .settingsItem(.shorterContext)
                 .disabled(autoTune)
+
+                capRow(
+                    label: SettingsRowLabel(
+                        title: "Screen text",
+                        description: "Most characters of on-screen text the model reads (0 turns it off). Less is " +
+                            "faster whenever the screen changes. Open Source models only.",
+                        systemImage: "text.viewfinder"
+                    ),
+                    value: $screenCharacters,
+                    range: SpeedSettings.screenCharactersRange,
+                    unit: "chars",
+                    hint: SpeedSettings.screenCharactersHint(SpeedSettings.screenCharacters(.standard))
+                )
+
+                capRow(
+                    label: SettingsRowLabel(
+                        title: "Prompt size",
+                        description: "Most tokens the whole prompt may use: screen text, history and what you've " +
+                            "typed together. Lower is faster when the prompt is re-read, with less context.",
+                        systemImage: "ruler"
+                    ),
+                    value: $promptTokens,
+                    range: SpeedSettings.promptTokensRange,
+                    unit: "tokens",
+                    hint: SpeedSettings.promptTokensHint(SpeedSettings.promptTokens(.standard))
+                )
 
                 Toggle(isOn: Binding(
                     get: { suggestionSettings.predictAheadWhileTyping },
@@ -100,6 +128,37 @@ struct SpeedPaneView: View {
                     )
                 }
                 .settingsItem(.learnAppAcceptance)
+            }
+        }
+    }
+
+    /// A number box with its unit and a live hint ("High", "Medium", ...) for the value it holds.
+    /// Out-of-range entries are clamped where they are read (`SpeedSettings`), and the hint shows
+    /// the clamped value, so what the hint says is what the model gets.
+    private func capRow(
+        label: SettingsRowLabel,
+        value: Binding<Int>,
+        range: ClosedRange<Int>,
+        unit: String,
+        hint: String
+    ) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            label
+            Spacer()
+            VStack(alignment: .trailing, spacing: 4) {
+                HStack(spacing: 4) {
+                    TextField("", value: value, format: .number.grouping(.never))
+                        .labelsHidden()
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 70)
+                    Text(unit).foregroundStyle(.secondary)
+                }
+                Text(hint)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("\(range.lowerBound)–\(range.upperBound)")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
             }
         }
     }

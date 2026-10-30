@@ -105,7 +105,9 @@ struct SuggestionConfiguration: Equatable, Sendable {
     /// per-sequence context window minus the output budget and a safety margin, so the renderer
     /// truncates against what the model can actually hold instead of a flat character guess that
     /// misjudges code, CJK, and punctuation-heavy text.
-    let llamaPromptTokenBudget: Int
+    var llamaPromptTokenBudget: Int
+    /// Characters of on-screen text the local prompt may carry (Speed pane "Screen text").
+    var maxScreenCharacters = SpeedSettings.defaultScreenCharacters
     /// Shipped first-launch default for the user's saved profile.
     /// `SuggestionSettingsModel` persists the user's real preference; configuration only provides
     /// the app's starting value for a fresh install.
@@ -233,6 +235,42 @@ enum SpeedSettings {
         defaults.object(forKey: lightScreenReadingKey) as? Bool ?? false
     }
 
+    /// Speed pane caps. Screen text is in characters; the prompt cap is in tokens and can only
+    /// lower the derived budget, which is already the most the model's context window holds.
+    static let screenCharactersKey = "ghostypeSpeedScreenCharacters"
+    static let promptTokensKey = "ghostypeSpeedPromptTokens"
+    static let defaultScreenCharacters = 4000
+    static let screenCharactersRange = 0...8000
+    static var promptTokensRange: ClosedRange<Int> { 300...SuggestionConfiguration.derivedLlamaPromptTokenBudget }
+
+    static func screenCharacters(_ defaults: UserDefaults) -> Int {
+        let value = defaults.object(forKey: screenCharactersKey) as? Int ?? defaultScreenCharacters
+        return min(max(value, screenCharactersRange.lowerBound), screenCharactersRange.upperBound)
+    }
+
+    static func promptTokens(_ defaults: UserDefaults) -> Int {
+        let value = defaults.object(forKey: promptTokensKey) as? Int ?? promptTokensRange.upperBound
+        return min(max(value, promptTokensRange.lowerBound), promptTokensRange.upperBound)
+    }
+
+    /// The hint shown next to each box: what the chosen number trades.
+    static func screenCharactersHint(_ value: Int) -> String {
+        switch value {
+        case 3000...: "High: most screen detail, slowest after the screen changes"
+        case 1500..<3000: "Medium: balanced"
+        case 1..<1500: "Low: fastest, little screen detail"
+        default: "Off: no screen text in the prompt"
+        }
+    }
+
+    static func promptTokensHint(_ value: Int) -> String {
+        switch value {
+        case 1500...: "High: full context, slowest when the prompt is re-read"
+        case 900..<1500: "Medium: balanced"
+        default: "Low: fastest, least context"
+        }
+    }
+
     static func applied(
         to base: SuggestionConfiguration,
         defaults: UserDefaults,
@@ -240,6 +278,8 @@ enum SpeedSettings {
     ) -> SuggestionConfiguration {
         var configuration = base
         configuration.stablePrefixWindow = isStablePrefixWindowEnabled(defaults)
+        configuration.maxScreenCharacters = screenCharacters(defaults)
+        configuration.llamaPromptTokenBudget = min(base.llamaPromptTokenBudget, promptTokens(defaults))
         let shortContext: Bool
         if isAutoTuneEnabled(defaults), let autoTuner {
             // Auto-tune overrides the manual toggle: the measured latency decides.
