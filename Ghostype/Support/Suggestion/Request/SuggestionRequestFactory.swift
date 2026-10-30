@@ -136,7 +136,7 @@ enum SuggestionRequestFactory {
             historyExamples: activeHistoryExamples,
             learnedVocabulary: activeLearnedVocabulary,
             contextBudget: settings.selectedEngine == .openAICompatible ? 2400 : BaseCompletionPromptRenderer.defaultContextBudget,
-            maxScreenCharacters: settings.selectedEngine == .openAICompatible ? 500 : 4000,
+            maxScreenCharacters: settings.selectedEngine == .openAICompatible ? 500 : configuration.maxScreenCharacters,
             screenPriority: settings.selectedEngine == .openAICompatible ? 30 : 45,
             // One budget for every engine: the endpoint shares the llama prefix window, and an
             // Apple request's prompt is what its llama fallback decodes. Either way the request's

@@ -151,4 +151,37 @@ final class SuggestionConfigurationTests: XCTestCase {
         let config = SpeedSettings.applied(to: .standard, defaults: defaults, autoTuner: tuner)
         XCTAssertEqual(config.maxPrefixCharacters, SpeedSettings.shortPrefixCharacters)
     }
+
+    func test_speedSettings_capsDefaultToTodayAndClampEntries() {
+        let defaults = UserDefaults(suiteName: "test-speed-caps")!
+        defaults.removePersistentDomain(forName: "test-speed-caps")
+        let budget = SuggestionConfiguration.derivedLlamaPromptTokenBudget
+
+        var config = SpeedSettings.applied(to: .standard, defaults: defaults)
+        XCTAssertEqual(config.maxScreenCharacters, 4000)
+        XCTAssertEqual(config.llamaPromptTokenBudget, budget)
+
+        defaults.set(1000, forKey: SpeedSettings.screenCharactersKey)
+        defaults.set(700, forKey: SpeedSettings.promptTokensKey)
+        config = SpeedSettings.applied(to: .standard, defaults: defaults)
+        XCTAssertEqual(config.maxScreenCharacters, 1000)
+        XCTAssertEqual(config.llamaPromptTokenBudget, 700)
+
+        // Out of range: clamped, and the prompt cap can never exceed what the model holds.
+        defaults.set(-5, forKey: SpeedSettings.screenCharactersKey)
+        defaults.set(99_999, forKey: SpeedSettings.promptTokensKey)
+        config = SpeedSettings.applied(to: .standard, defaults: defaults)
+        XCTAssertEqual(config.maxScreenCharacters, 0)
+        XCTAssertEqual(config.llamaPromptTokenBudget, budget)
+    }
+
+    func test_speedSettings_hintsNameTheTradeoff() {
+        XCTAssertTrue(SpeedSettings.screenCharactersHint(4000).hasPrefix("High"))
+        XCTAssertTrue(SpeedSettings.screenCharactersHint(2000).hasPrefix("Medium"))
+        XCTAssertTrue(SpeedSettings.screenCharactersHint(1000).hasPrefix("Low"))
+        XCTAssertTrue(SpeedSettings.screenCharactersHint(0).hasPrefix("Off"))
+        XCTAssertTrue(SpeedSettings.promptTokensHint(1900).hasPrefix("High"))
+        XCTAssertTrue(SpeedSettings.promptTokensHint(1000).hasPrefix("Medium"))
+        XCTAssertTrue(SpeedSettings.promptTokensHint(700).hasPrefix("Low"))
+    }
 }
