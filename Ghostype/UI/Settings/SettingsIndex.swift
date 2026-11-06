@@ -57,8 +57,6 @@ enum SettingsItem: String, CaseIterable, Identifiable {
     // Writing
     case length
     case acceptPunctuation
-    case fullAcceptPunctuation
-    case synonymsForSelectedWord
     case addSpaceAfterAccept
     case name
     case languages
@@ -100,8 +98,6 @@ enum SettingsItem: String, CaseIterable, Identifiable {
     // Apps
     case disabledApps
     case suggestInIntegratedTerminals
-    case completeInCodingAgents
-    case completeInCodeEditors
     // Permissions
     case accessibility
     case inputMonitoring
@@ -139,8 +135,6 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .suggestWithinWords: return "Suggest while typing a word"
         case .showFollowingWords: return "Show following words"
         case .acceptPunctuation: return "Accept Punctuation With Word"
-        case .fullAcceptPunctuation: return "Include Trailing Punctuation"
-        case .synonymsForSelectedWord: return "Synonyms for Selected Word"
         case .addSpaceAfterAccept: return "Add Space After Accepting"
         case .inlineMacros: return "Inline Macros"
         case .onboarding: return "Onboarding"
@@ -202,8 +196,6 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .toggleTabby: return "Toggle Ghostype"
         case .disabledApps: return "Disabled Apps"
         case .suggestInIntegratedTerminals: return "Suggest in Integrated Terminals"
-        case .completeInCodingAgents: return "Complete in Coding Agents"
-        case .completeInCodeEditors: return "Complete in Code Editors"
         case .accessibility: return "Accessibility"
         case .inputMonitoring: return "Input Monitoring"
         case .screenRecording: return "Screen Recording"
@@ -238,8 +230,6 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .suggestWithinWords: return "text.cursor"
         case .showFollowingWords: return "text.word.spacing"
         case .acceptPunctuation: return "textformat.abc"
-        case .fullAcceptPunctuation: return "text.append"
-        case .synonymsForSelectedWord: return "text.word.spacing"
         case .addSpaceAfterAccept: return "space"
         case .inlineMacros: return "slash.circle"
         case .onboarding: return "graduationcap"
@@ -301,8 +291,6 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .toggleTabby: return "power.circle"
         case .disabledApps: return "nosign"
         case .suggestInIntegratedTerminals: return "terminal"
-        case .completeInCodingAgents: return "apple.terminal"
-        case .completeInCodeEditors: return "chevron.left.forwardslash.chevron.right"
         case .accessibility: return "accessibility"
         case .inputMonitoring: return "keyboard"
         case .screenRecording: return "camera.viewfinder"
@@ -337,8 +325,8 @@ enum SettingsItem: String, CaseIterable, Identifiable {
             return .appearance
         case .emojiPicker, .emojiSkinTone, .emojiPeopleStyle, .emojiHistory:
             return .emoji
-        case .length, .acceptPunctuation, .fullAcceptPunctuation, .addSpaceAfterAccept, .name, .languages, .customRules,
-             .offerTypoCorrections, .synonymsForSelectedWord, .spellingDictionaries, .personalDictionary:
+        case .length, .acceptPunctuation, .addSpaceAfterAccept, .name, .languages, .customRules,
+             .offerTypoCorrections, .spellingDictionaries, .personalDictionary:
             return .writing
         case .extendedContext, .contextLivePreview, .typingHistory, .suggestionMemory:
             return .context
@@ -350,7 +338,7 @@ enum SettingsItem: String, CaseIterable, Identifiable {
             return .engineAndModel
         case .acceptanceMode, .acceptWord, .acceptEntireSuggestion, .toggleTabby:
             return .shortcuts
-        case .disabledApps, .suggestInIntegratedTerminals, .completeInCodingAgents, .completeInCodeEditors:
+        case .disabledApps, .suggestInIntegratedTerminals:
             return .apps
         case .accessibility, .inputMonitoring, .screenRecording:
             return .permissions
@@ -383,8 +371,6 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .suggestWithinWords: return "Show new suggestions inside a word, or wait for a space or punctuation."
         case .showFollowingWords: return "Preview the following phrase, or reveal one word at a time as you type or accept."
         case .acceptPunctuation: return "Also accept trailing commas and periods with a word."
-        case .fullAcceptPunctuation: return "Keep the final punctuation when accepting the entire suggestion."
-        case .synonymsForSelectedWord: return "Select a word to pick a synonym with 1–9."
         case .addSpaceAfterAccept: return "Add a space when an accept finishes a word."
         case .inlineMacros: return "Type / for dates, math, units, currency, and randoms."
         case .onboarding: return "Replay the first-run setup walkthrough."
@@ -448,8 +434,6 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .toggleTabby: return "A global hotkey that turns Ghostype on or off."
         case .disabledApps: return "Apps where Ghostype never autocompletes."
         case .suggestInIntegratedTerminals: return "Ghost text in VS Code and Cursor terminals."
-        case .completeInCodingAgents: return "Ghost text in Claude Code, Codex, and Copilot CLI prompts."
-        case .completeInCodeEditors: return "Turn off ghost text in an app's code editor, keeping its chat."
         case .accessibility: return "Required to read the focused field and caret."
         case .inputMonitoring: return "Required to see keystrokes and the accept key."
         case .screenRecording: return "Optional visual context from the focused window."
@@ -495,10 +479,6 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .acceptPunctuation:
             return ["punctuation", "comma", "period", "accept", "trailing", "auto accept",
                     "auto-accept", "space"]
-        case .fullAcceptPunctuation:
-            return ["punctuation", "period", "full", "entire", "whole", "accept all", "trailing", "final"]
-        case .synonymsForSelectedWord:
-            return ["synonym", "synonyms", "thesaurus", "replace", "word", "selection", "select", "alternative"]
         case .reuseContextBetweenKeystrokes:
             return ["speed", "fast", "faster", "cache", "kv", "reuse", "latency", "prefill", "context"]
         case .adaptSpeedToMac:
@@ -695,12 +675,6 @@ enum SettingsItem: String, CaseIterable, Identifiable {
             return ["terminal", "terminals", "integrated terminal", "vscode", "vs code",
                     "cursor", "shell", "xterm", "command line", "cli", "console",
                     "ghost text in terminal"]
-        case .completeInCodingAgents:
-            return ["coding agent", "agent", "claude code", "codex", "copilot cli", "tmux", "zellij",
-                    "iterm", "terminal", "prompt", "ai agent"]
-        case .completeInCodeEditors:
-            return ["code editor", "editor", "vscode", "vs code", "cursor", "windsurf", "monaco",
-                    "code", "per app", "copilot chat"]
         case .accessibility:
             return ["accessibility", "ax", "permission", "access", "system settings",
                     "privacy", "grant", "allow"]

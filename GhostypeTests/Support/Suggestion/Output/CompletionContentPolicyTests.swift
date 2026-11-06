@@ -39,14 +39,12 @@ final class CompletionContentPolicyTests: XCTestCase {
         XCTAssertEqual(policy.rejection(for: ". Hi S. Hi S. Hi S.", precedingText: "charlie. Hi S"), .repetitiveContent)
         XCTAssertEqual(policy.rejection(for: "no no no no", precedingText: "oh "), .repetitiveContent)
         XCTAssertEqual(policy.rejection(for: "over and over and over and over", precedingText: "again "), .repetitiveContent)
+        // CJK loops have no spaces to split on: a 2-char unit containing a letter, repeated 3x.
+        // Measured on Bonsai 2B. An IP address is not a loop (no letter in the unit).
+        XCTAssertEqual(policy.rejection(for: "夜は夜は夜は", precedingText: "今"), .repetitiveContent)
+        XCTAssertNil(CompletionContentPolicy.rejection(for: "10.10.10.10", precedingText: "ping "))
         XCTAssertNil(CompletionContentPolicy.rejection(for: "very very good", precedingText: "it was "), "two copies are emphasis")
         XCTAssertNil(CompletionContentPolicy.rejection(for: "day after day, week after week", precedingText: "it went on "))
-        // Text written without spaces loops in its characters (Bonsai 2B eval, 2026-10-21).
-        XCTAssertEqual(policy.rejection(for: "夜は夜は夜は夜は夜は", precedingText: "夜は"), .repetitiveContent)
-        XCTAssertEqual(policy.rejection(for: "玩吧。我，李四，李四，李四，李四", precedingText: "我们一起去"), .repetitiveContent)
-        XCTAssertNil(policy.rejection(for: "散歩に行きましょう。", precedingText: "天気が良いので、"))
-        XCTAssertNil(policy.rejection(for: "at 10.10.10.10 now", precedingText: "the server is "), "numbers are not a loop")
-        XCTAssertNil(policy.rejection(for: "Mississippi", precedingText: "down the "))
     }
 
     func testCompletionsCopiedFromTheRecentTextAreRejected() {

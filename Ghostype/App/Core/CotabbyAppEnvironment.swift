@@ -125,12 +125,7 @@ final class CotabbyAppEnvironment {
             ) {
                 return false
             }
-            // Terminals stay unobserved unless the caret is at a coding agent's prompt and the user
-            // opted in; the agent's empty prompt is detected before its first keystroke arrives.
-            if TerminalAppDetector.isTerminal(bundleIdentifier: snapshot.bundleIdentifier),
-               !(suggestionSettings.completeInCodingAgents && snapshot.context?.isCodingAgentPrompt == true) {
-                return false
-            }
+            if TerminalAppDetector.isTerminal(bundleIdentifier: snapshot.bundleIdentifier) { return false }
             if let bundleID = snapshot.bundleIdentifier,
                suggestionSettings.isApplicationDisabled(bundleIdentifier: bundleID) {
                 return false
@@ -383,29 +378,12 @@ final class CotabbyAppEnvironment {
             },
             isWordAcceptKey: { inputMonitor.isWordAcceptKey($0) }
         )
-        // Selected-word synonyms reuse the macro's single-row preview panel (a second instance, so
-        // the two never fight over one window) and the same inserter. They ask `routedEngine`, the
-        // engine the user selected, rather than `suggestionEngine`: the typing-history and debug
-        // wrappers exist for continuations and would answer a synonym prompt with phrase guesses.
-        // The gate is the suggestion coordinator's own availability check, so synonyms are off
-        // wherever suggestions are off.
-        let synonymController = SynonymController(
-            panel: InlinePreviewPanelController(),
-            focusModel: focusModel,
-            inserter: suggestionInserter,
-            engine: routedEngine,
-            disabledReason: { [weak suggestionCoordinator] snapshot in
-                suggestionCoordinator?.synonymDisabledReason(focusSnapshot: snapshot) ?? "Ghostype is not running."
-            }
-        )
-        // One coordinator fans every keystroke out to the inline-command controllers and owns the
-        // input monitor's single capture decider and interception flag, which the `:`, `/` and
-        // synonym features share. It is given first look at every keystroke the suggestion
-        // coordinator receives.
+        // One coordinator fans every keystroke out to both inline-command controllers and owns the
+        // input monitor's single capture decider and interception flag, which the `:` and `/` features
+        // share. It is given first look at every keystroke the suggestion coordinator receives.
         let inlineCommandCoordinator = InlineCommandCoordinator(
             emoji: emojiPickerController,
             macro: macroController,
-            synonyms: synonymController,
             inputMonitor: inputMonitor
         )
         suggestionCoordinator.emojiInputObserver = { [weak inlineCommandCoordinator] event in
@@ -463,8 +441,6 @@ final class CotabbyAppEnvironment {
                         disabledAppBundleIdentifiers: settings.disabledAppBundleIdentifiers,
                         disabledDomains: PerDomainDisableSettings.disabledDomains(),
                         suggestInIntegratedTerminals: settings.suggestInIntegratedTerminals,
-                        completeInCodingAgents: settings.completeInCodingAgents,
-                        codeEditorDisabledBundleIdentifiers: settings.codeEditorDisabledBundleIdentifiers,
                         inputMonitoringGranted: permissionManager.inputMonitoringGranted,
                         focusSnapshot: snapshot,
                         checkCapability: false

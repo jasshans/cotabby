@@ -440,9 +440,9 @@ final class CompletionSeamGuardTests: XCTestCase {
 
     // MARK: - Streamed leading words
 
-    /// Streaming buffers a lowercase prefix because checking it before its boundary is unreliable.
-    /// An unfinished leading word that is not (yet) a known word keeps waiting: a prefix is never
-    /// suppressed as a typo, it is only withheld until its boundary arrives.
+    /// Streaming buffers a lowercase prefix that is not yet a known word, because checking it
+    /// before its boundary is unreliable. A prefix that is already a known dictionary word
+    /// shows now instead of waiting a decode step to prove it ended.
     func testStreamedLeadingWordWaitsUntilItsBoundaryArrives() {
         XCTAssertEqual(
             CompletionSeamGuard.streamedLeadingWordVerdict(
@@ -452,22 +452,13 @@ final class CompletionSeamGuardTests: XCTestCase {
             ),
             .wait
         )
-    }
-
-    /// A streamed leading word that is already a known word of four or more letters shows without
-    /// waiting a decode step for its boundary; short words, which often grow, still wait.
-    func testStreamedKnownLeadingWordShowsBeforeItsBoundary() {
         XCTAssertEqual(
             CompletionSeamGuard.streamedLeadingWordVerdict(
-                precedingText: "Please send the ", completion: "report", spellingAssessment: { _ in .known }
+                precedingText: "Je veux ",
+                completion: "build",
+                spellingAssessment: { $0 == "build" ? .known : .correctableTypo }
             ),
             .allow
-        )
-        XCTAssertEqual(
-            CompletionSeamGuard.streamedLeadingWordVerdict(
-                precedingText: "Please send ", completion: "the", spellingAssessment: { _ in .known }
-            ),
-            .wait
         )
     }
 
@@ -535,6 +526,8 @@ final class CompletionSeamGuardTests: XCTestCase {
     }
 
     func testBadJoinedWordNeverAppearsDuringStreaming() {
+        // A misspelled joined word is not shown early: only a known word is ever shown
+        // before its boundary, and nothing is suppressed on a prefix.
         XCTAssertEqual(CompletionSeamGuard.presentation(precedingText: "so gre", completion: "atf", isFinal: false,
             spellingAssessment: { _ in .correctableTypo }), .wait)
         for isFinal in [false, true] {
@@ -565,25 +558,30 @@ final class CompletionSeamGuardTests: XCTestCase {
         }
     }
 
-    /// Fragments wait for the stream to prove the seam word complete. A joined word that is
-    /// already a known word of four or more letters shows a decode step early; if it then grows
-    /// (`build` -> `building`) the ghost only extends, and nothing is suppressed on a prefix.
-    func testJoinedWordShowsOnceItIsAKnownWord() {
-        let dictionary = knowing(["build", "building"])
-        for fragment in ["u", "uil"] {
+    /// A dictionary entry is not a word boundary: `build` could still grow into `building`.
+    /// Short prefixes and misspelled fragments still wait; a prefix that is already a known
+    /// dictionary word shows now, and its phrase is exposed once the seam word is complete.
+    func testJoinedWordWaitsUntilKnownThenShowsEarly() {
+        for completion in ["u", "uil"] {
             XCTAssertEqual(
                 CompletionSeamGuard.presentation(
-                    precedingText: "I would like to b", completion: fragment, isFinal: false, spellingAssessment: dictionary
+                    precedingText: "I would like to b",
+                    completion: completion,
+                    isFinal: false,
+                    spellingAssessment: knowing(["build", "building"])
                 ),
                 .wait
             )
         }
-        for word in ["uild", "uilding"] {
+        for completion in ["uild", "uilding"] {
             XCTAssertEqual(
                 CompletionSeamGuard.presentation(
-                    precedingText: "I would like to b", completion: word, isFinal: false, spellingAssessment: dictionary
+                    precedingText: "I would like to b",
+                    completion: completion,
+                    isFinal: false,
+                    spellingAssessment: knowing(["build", "building"])
                 ),
-                .show(text: word, wordOnly: false)
+                .show(text: completion, wordOnly: false)
             )
         }
         XCTAssertEqual(
@@ -621,9 +619,9 @@ final class CompletionSeamGuardTests: XCTestCase {
             XCTAssertEqual(
                 CompletionSeamGuard.presentation(
                     precedingText: "Try " + opening + "b",
-                    completion: "uil",
+                    completion: "uild",
                     isFinal: false,
-                    spellingAssessment: knowing(["build"])
+                    spellingAssessment: knowsEverything
                 ),
                 .wait
             )

@@ -41,7 +41,7 @@ enum MenuBarIconStyle: String, CaseIterable, Identifiable {
     case winterGhost
 
     static let defaultsKey = "ghostypeMenuBarIconStyle"
-    static let defaultStyle = MenuBarIconStyle.pumpkin
+    static let defaultStyle = MenuBarIconStyle.ghost
 
     var id: String { rawValue }
 

@@ -6,41 +6,12 @@ import XCTest
 /// a silent UX change. The policy is pure, so these tests do not touch AppKit.
 ///
 /// The rules, in order: a per-app override (when the bundle is known) replaces the global
-/// preference; `.auto` maps caret quality to a mode; and finally an *auto* inline result for a caret
-/// parked mid-line is promoted to the card, because inline ghost text would paint over the
-/// characters after the caret. Explicit inline pins keep their pick, and results already routed to
-/// the card keep their more specific reason.
+/// preference; `.auto` maps caret quality to a mode; and finally an inline result for a caret
+/// parked mid-line is promoted to the card under every preference, because inline ghost text
+/// would paint over the characters after the caret. An explicit inline pin keeps its pick at
+/// end-of-line, where nothing follows the caret. Results already routed to the card keep their
+/// more specific reason.
 final class CompletionRenderModePolicyTests: XCTestCase {
-
-    func testAddressBarEstimatedCaretCannotBeForcedInlineAfterFailedPixelRead() {
-        for quality in [CaretGeometryQuality.estimated, .layoutEstimated] {
-            let geometry = SuggestionOverlayGeometry(
-                caretRect: CGRect(x: 120, y: 20, width: 2, height: 18),
-                inputFrameRect: CGRect(x: 0, y: 0, width: 600, height: 24),
-                caretQuality: quality, observedCharWidth: nil, isRightToLeft: false,
-                isSingleLineField: true
-            )
-            let expected: CompletionRenderMode = quality == .estimated
-                ? .mirror(reason: .caretGeometryEstimated) : .mirror(reason: .caretLayoutEstimated)
-            XCTAssertEqual(CompletionRenderModePolicy(userPreference: .alwaysInline)
-                .mode(for: geometry, bundleIdentifier: "com.google.Chrome"), expected)
-            XCTAssertEqual(CompletionRenderModePolicy(perAppOverrides: ["com.google.Chrome": .alwaysInline])
-                .mode(for: geometry, bundleIdentifier: "com.google.Chrome"), expected)
-        }
-    }
-
-    func testAddressBarMeasuredCaretRemainsInline() {
-        for quality in [CaretGeometryQuality.exact, .derived] {
-            let geometry = SuggestionOverlayGeometry(
-                caretRect: CGRect(x: 120, y: 20, width: 2, height: 18),
-                inputFrameRect: CGRect(x: 0, y: 0, width: 600, height: 24),
-                caretQuality: quality, observedCharWidth: nil, isRightToLeft: false,
-                isSingleLineField: true
-            )
-            XCTAssertEqual(CompletionRenderModePolicy(userPreference: .alwaysInline)
-                .mode(for: geometry, bundleIdentifier: "com.google.Chrome"), .inline)
-        }
-    }
 
     private struct Case {
         let label: String
@@ -133,7 +104,9 @@ final class CompletionRenderModePolicyTests: XCTestCase {
                  expected: .mirror(reason: .caretMidLine)),
             Case(label: "auto derived", preference: .auto, quality: .derived, atEndOfLine: false,
                  expected: .mirror(reason: .caretMidLine)),
-            // An inline pin cannot paint over the host's text either: nothing can draw it there.
+            // An explicit inline pin keeps its pick at end-of-line, but mid-line the ghost
+            // would paint over the host's own text (2026-10-19, Google Chat), so it promotes
+            // to the card like every other preference.
             Case(label: "global inline pin", preference: .alwaysInline, bundle: nil, quality: .exact,
                  atEndOfLine: false, expected: .mirror(reason: .caretMidLine)),
             Case(label: "per-app inline pin", preference: .auto, overrides: [pinned: .alwaysInline],

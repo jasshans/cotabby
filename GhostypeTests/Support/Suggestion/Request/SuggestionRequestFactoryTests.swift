@@ -354,9 +354,9 @@ final class SuggestionRequestFactoryTests: XCTestCase {
 
         XCTAssertEqual(
             result.request.clipboardContext,
-            "jacob@example.com -- stage ready @ home!"
+            "jacob@example.com stage ready @ home"
         )
-        XCTAssertTrue(result.promptPreview.contains("jacob@example.com -- stage ready @ home!"))
+        XCTAssertTrue(result.promptPreview.contains("jacob@example.com stage ready @ home"))
         XCTAssertFalse(result.promptPreview.contains("+++"))
     }
 

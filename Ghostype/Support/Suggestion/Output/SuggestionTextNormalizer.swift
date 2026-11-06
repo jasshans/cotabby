@@ -184,9 +184,7 @@ enum SuggestionTextNormalizer {
         // Hold the suggestion to the user's word-count preset (see `SuggestionLengthPolicy`), in
         // multi-line mode too: line breaks change the shape of a suggestion, not how long it may be.
         if let range = request.wordRange {
-            normalized = range.isCurrentWordOnly
-                ? SuggestionLengthPolicy.currentWordOnly(normalized, precedingText: request.context.precedingText)
-                : SuggestionLengthPolicy.trimmed(normalized, minimum: range.lowWords, maximum: range.highWords)
+            normalized = SuggestionLengthPolicy.trimmed(normalized, minimum: range.lowWords, maximum: range.highWords)
         }
 
         return SuggestionNormalizationResult(text: normalized, suppression: nil)

@@ -98,6 +98,10 @@ final class SuggestionCoordinator: ObservableObject {
     var firstTextRecordedWorkID: UInt64?
 
     func recordFirstTextLatency(_ milliseconds: Int, engine: SuggestionEngineKind) {
+        // Same floor as the full-generation latency signal (Phase 1): sub-5 ms values are
+        // measurement artifacts, not real latencies, and a single one would pin the debounce
+        // at 0 for the next three requests.
+        guard milliseconds >= 5 else { return }
         recentFirstTextLatenciesByEngine[engine] = Array((recentFirstTextLatenciesByEngine[engine, default: []] + [milliseconds]).suffix(3))
     }
 

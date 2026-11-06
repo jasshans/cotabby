@@ -60,16 +60,6 @@ struct WritingPaneView: View {
                 }
                 .settingsItem(.acceptPunctuation)
 
-                Toggle(isOn: fullAcceptPunctuationBinding) {
-                    SettingsRowLabel(
-                        title: "Include Trailing Punctuation",
-                        description: "When you accept the entire suggestion, also insert its final punctuation " +
-                            "(. , ; : ! ?). Turn off to end where the words end.",
-                        systemImage: "text.append"
-                    )
-                }
-                .settingsItem(.fullAcceptPunctuation)
-
                 Toggle(isOn: addSpaceAfterAcceptBinding) {
                     SettingsRowLabel(
                         title: "Add Space After Accepting",
@@ -93,20 +83,6 @@ struct WritingPaneView: View {
                     )
                 }
                 .settingsItem(.offerTypoCorrections)
-            }
-
-            // Synonyms replace a word the user already wrote, so they sit with the other edits to
-            // existing text. Off by default: every word selection asks the selected engine.
-            Section("Synonyms") {
-                Toggle(isOn: synonymsForSelectedWordBinding) {
-                    SettingsRowLabel(
-                        title: "Synonyms for Selected Word",
-                        description: "Double-click a single word to see numbered synonyms from your selected " +
-                            "engine. Press 1–9 to replace the word; any other key dismisses the list.",
-                        systemImage: "text.word.spacing"
-                    )
-                }
-                .settingsItem(.synonymsForSelectedWord)
             }
 
             // These local dictionaries also supply exact-prefix word endings when model output is
@@ -175,20 +151,6 @@ struct WritingPaneView: View {
                 }
             }
         }
-    }
-
-    private var synonymsForSelectedWordBinding: Binding<Bool> {
-        Binding(
-            get: { suggestionSettings.synonymsForSelectedWord },
-            set: { suggestionSettings.setSynonymsForSelectedWord($0) }
-        )
-    }
-
-    private var fullAcceptPunctuationBinding: Binding<Bool> {
-        Binding(
-            get: { suggestionSettings.includeTrailingPunctuationOnFullAccept },
-            set: { suggestionSettings.setIncludeTrailingPunctuationOnFullAccept($0) }
-        )
     }
 
     private var autoAcceptTrailingPunctuationBinding: Binding<Bool> {

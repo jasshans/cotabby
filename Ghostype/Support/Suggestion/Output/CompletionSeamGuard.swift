@@ -37,7 +37,11 @@ nonisolated enum CompletionSeamGuard {
         case abandonedWord(word: String)
     }
 
-    /// Streaming must not expose the first generated word until it is complete enough to assess.
+    /// Streaming must not expose the first generated word until it is complete enough to assess —
+    /// with one exception: a streamed word that is already a known dictionary word shows now
+    /// instead of waiting a decode step (~15-20 ms) to prove it ended. That means the spelling
+    /// lookup now runs per streamed token; it mostly self-limits (a prefix like `ecrir` is not
+    /// `.known`), and only a known word is ever shown early — nothing is suppressed on a prefix.
     /// The coordinator memoizes spelling by the exact assembled word, not a blanket permission
     /// for all later partials. Changed letters must be assessed again.
     enum StreamedLeadingWordVerdict: Equatable {

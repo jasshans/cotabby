@@ -35,10 +35,6 @@ nonisolated final class LlamaRuntimeCore: @unchecked Sendable {
     private var autocompletePromptBytes: [UInt8] = []
     private var autocompletePromptTokens: [Int32] = []
     private var autocompleteSamplingFingerprint: SamplingFingerprint?
-    /// Prompt tokens the most recent generate/prefill kept from native KV instead of decoding
-    /// (0 after a fresh build). Diagnostics and tests read it to prove reuse actually happened;
-    /// equal outputs alone cannot distinguish a reused cache from a silent rebuild.
-    private(set) var lastReusedPromptTokens = 0
     /// Memoized tokenization of the last prompt string (see `tokenize`). Guarded by
     /// `autocompleteLock`: `preparedPrompt`'s callers hold it, and `prepare()` clears it
     /// under the same lock when a new model loads.
@@ -643,7 +639,7 @@ nonisolated final class LlamaRuntimeCore: @unchecked Sendable {
         let fingerprint = preparation.fingerprint
         let healingPrefix = preparation.healingPrefix
         if autocompleteSequenceID >= 0,
-           adoptSamplingIfNeeded(fingerprint, options: options) {
+           adoptSamplingIfNeeded(fingerprint) {
 
             let confirmedCommonBytes = Self.commonPrefixCount(autocompletePromptBytes, promptBytes)
 
@@ -698,7 +694,6 @@ nonisolated final class LlamaRuntimeCore: @unchecked Sendable {
                                 return try buildFreshSequence(promptTokens: promptTokens, healingPrefix: healingPrefix, options: options)
                             }
                         }
-                        lastReusedPromptTokens = reusableTokenCount
                         CotabbyLogger.runtime.debug(
                             "KV prefix reused",
                             metadata: [
@@ -723,16 +718,16 @@ nonisolated final class LlamaRuntimeCore: @unchecked Sendable {
 
     /// Brings the live sequence's sampler in line with this request without touching its KV.
     /// A sampling change (temperature, top-k, single-line mask) only affects how the next tokens
-    /// are drawn, never the cached prompt, so the native sampler chain is rebuilt in place instead
-    /// of destroying the reusable prefix. Returns false when the swap fails; the caller then
-    /// rebuilds the sequence from scratch. Must be called while holding `autocompleteLock`.
-    private func adoptSamplingIfNeeded(_ fingerprint: SamplingFingerprint, options: LlamaGenerationOptions) -> Bool {
+    /// are drawn, never the cached prompt — but the pinned inference engine has no in-place
+    /// sampler swap (`updateSampling` does not exist in CotabbyInference at the pinned
+    /// revision, nor on its main branch), so a sampling change rebuilds the sequence from
+    /// scratch instead. The fingerprint only moves on settings or field-type changes, so the
+    /// rebuild is rare; when the engine gains the API, the swap goes here and the caller
+    /// already falls back to a rebuild on `false`. Must be called while holding
+    /// `autocompleteLock`.
+    private func adoptSamplingIfNeeded(_ fingerprint: SamplingFingerprint) -> Bool {
         guard autocompleteSamplingFingerprint != fingerprint else { return true }
-        guard engine.updateSampling(autocompleteSequenceID, Self.samplingConfig(from: options)) else {
-            return false
-        }
-        autocompleteSamplingFingerprint = fingerprint
-        return true
+        return false
     }
 
     private func buildFreshSequence(
@@ -740,7 +735,6 @@ nonisolated final class LlamaRuntimeCore: @unchecked Sendable {
         healingPrefix: [UInt8],
         options: LlamaGenerationOptions
     ) throws -> Int32 {
-        lastReusedPromptTokens = 0
         let config = Self.samplingConfig(from: options)
         let seqID = engine.createSequence(config)
         guard seqID >= 0 else {

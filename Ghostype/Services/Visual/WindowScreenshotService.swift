@@ -16,9 +16,6 @@ struct CapturedWindowScreenshot {
     let image: CGImage
     let windowTitle: String?
     var focusBounds: CGRect?
-    /// Where the focused field itself sits in `image`, so its text and pixels can be kept out of
-    /// screen context. Nil when the host reports no frame or the field lies outside the capture.
-    var fieldRegion: FocusedFieldScreenRegion?
 }
 
 /// Test seam for screen capture.
@@ -139,20 +136,7 @@ struct WindowScreenshotService: WindowScreenshotCapturing {
             width: field.width / sourceRect.width,
             height: caret.height / sourceRect.height
         )
-        // The element's own frame, not the widened `inputFrameRect`: widening reaches neighbouring
-        // labels and buttons that are screen context, not the user's text.
-        let fieldRegion = context.elementFrameRect.flatMap {
-            FocusedFieldScreenRegion(
-                fieldFrame: convertBetweenAppKitAndCG(rect: $0), caretFrame: caret, captureRect: sourceRect,
-                fieldTextIsComplete: !context.precedingTextMayBeTruncated && !context.trailingTextMayBeTruncated
-            )
-        }
-        return CapturedWindowScreenshot(
-            image: image,
-            windowTitle: matchingWindow.title,
-            focusBounds: focusBounds,
-            fieldRegion: fieldRegion
-        )
+        return CapturedWindowScreenshot(image: image, windowTitle: matchingWindow.title, focusBounds: focusBounds)
     }
 
     /// The process's normal-layer on-screen window numbers, front-most first. ScreenCaptureKit's

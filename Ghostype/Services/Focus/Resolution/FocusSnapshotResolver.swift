@@ -44,9 +44,7 @@ struct FocusSnapshotResolver {
     /// focus-change sequence rather than raw element identity, which CFHash can recycle across
     /// fields (see `FocusSessionScopedCache`).
     private let secureFieldVerdictCache = FocusSessionScopedCache<Bool>()
-    /// What the focused element's DOM classes say about the surface inside a VS Code-style window:
-    /// the integrated terminal, the code editor (which needs a bounded ancestor walk), or neither.
-    private let domSurfaceCache = FocusSessionScopedCache<(isIntegratedTerminal: Bool, isCodeEditor: Bool)>()
+    private let terminalDetectionCache = FocusSessionScopedCache<Bool>()
     /// The label and DOM-id reads behind `CredentialFieldDetector`: up to four AX round trips that
     /// would otherwise repeat on every poll of every single-line field, for values that rarely
     /// change while focus stays in one field. A navigation that reuses the element changes the URL,
@@ -347,31 +345,15 @@ struct FocusSnapshotResolver {
         // extra AXDOMClassList round-trip; native apps don't vend the attribute anyway. Cached per
         // focus session because the class list on one focused element cannot change without a field
         // switch bumping the sequence, which previously cost one round-trip on every poll tick.
-        //
-        // The same class list also says whether the caret is in Monaco's input; only then are the
-        // ancestors walked to tell the code editor from a chat or commit box (see
-        // `CodeEditorSurfaceDetector`), so ordinary fields never pay for the walk.
-        let domSurface = domSurfaceCache.value(
+        let isIntegratedTerminal = terminalDetectionCache.value(
             forKey: focusedElementIdentifier,
             focusChangeSequence: focusChangeSequence
         ) {
-            let classList = AXHelper.stringArrayValue(for: "AXDOMClassList" as CFString, on: focusedElement) ?? []
-            return (
-                isIntegratedTerminal: TerminalAppDetector.isIntegratedTerminal(domClassList: classList),
-                isCodeEditor: CodeEditorSurfaceDetector.isMonacoInput(domClassList: classList)
-                    && CodeEditorSurfaceDetector.isInsideEditorPane(
-                        ancestorClassLists: Self.ancestorDOMClassLists(of: focusedElement)
-                    )
+            TerminalAppDetector.isIntegratedTerminal(
+                domClassList: AXHelper.stringArrayValue(
+                    for: "AXDOMClassList" as CFString, on: focusedElement) ?? []
             )
         }
-        let isIntegratedTerminal = domSurface.isIntegratedTerminal
-        let fieldText = Self.terminalAwareFieldText(
-            precedingText: nsValue.substring(to: safeSelectionLocation),
-            trailingText: nsValue.substring(from: trailingStart),
-            selection: contextWindow.selection,
-            isTerminal: isIntegratedTerminal || TerminalAppDetector.isTerminal(bundleIdentifier: bundleIdentifier),
-            windowTitle: windowTitle
-        )
         let context = FocusedInputSnapshot(
             applicationName: applicationName,
             bundleIdentifier: bundleIdentifier,
@@ -385,19 +367,11 @@ struct FocusSnapshotResolver {
             caretQuality: caretQuality,
             observedCharWidth: observedCharWidth,
             observedContentEdges: observedContentEdges,
-            precedingText: fieldText.precedingText,
-            trailingText: fieldText.trailingText,
-            trailingTextUnavailable: resolvedCandidate.trailingTextUnavailable,
-            selection: fieldText.selection,
-            // The selection's own text, from the same bounded window the preceding/trailing text
-            // came from. Only the selected-word synonym feature reads it.
-            selectedText: nsValue.substring(
-                with: NSRange(location: safeSelectionLocation, length: max(trailingStart - safeSelectionLocation, 0))
-            ),
+            precedingText: nsValue.substring(to: safeSelectionLocation),
+            trailingText: nsValue.substring(from: trailingStart),
+            selection: contextWindow.selection,
             isSecure: resolvedCandidate.isSecure,
             isIntegratedTerminal: isIntegratedTerminal,
-            isCodingAgentPrompt: fieldText.isCodingAgentPrompt,
-            isCodeEditorSurface: domSurface.isCodeEditor,
             isWebContentField: isWebContentField,
             focusChangeSequence: focusChangeSequence,
             focusedURLString: focusedURLString,
@@ -430,48 +404,6 @@ struct FocusSnapshotResolver {
             capability: .supported,
             context: context
         )
-    }
-
-    /// A terminal exposes its whole scrollback as the field. When the caret sits in a coding agent's
-    /// input box, the pipeline gets only the typed request, with the selection moved into its
-    /// coordinates; otherwise the text passes through unchanged (the availability gate blocks a
-    /// terminal that is not at an agent prompt, so the scrollback never reaches a prompt).
-    private static func terminalAwareFieldText(
-        precedingText: String,
-        trailingText: String,
-        selection: NSRange,
-        isTerminal: Bool,
-        windowTitle: String?
-    ) -> TerminalAwareFieldText {
-        guard isTerminal,
-              let agentInput = CodingAgentPromptDetector.agentInput(
-                  precedingText: precedingText, trailingText: trailingText, windowTitle: windowTitle
-              )
-        else {
-            return TerminalAwareFieldText(
-                precedingText: precedingText, trailingText: trailingText, selection: selection, isCodingAgentPrompt: false
-            )
-        }
-        let caret = (agentInput.precedingText as NSString).length
-        return TerminalAwareFieldText(
-            precedingText: agentInput.precedingText,
-            trailingText: agentInput.trailingText,
-            selection: NSRange(location: caret, length: selection.length),
-            isCodingAgentPrompt: true
-        )
-    }
-
-    /// The `AXDOMClassList` of up to `CodeEditorSurfaceDetector.maximumAncestorDepth` ancestors,
-    /// nearest first. Run once per focus session and only for a Monaco input (see the caller).
-    private static func ancestorDOMClassLists(of element: AXUIElement) -> [[String]] {
-        var lists: [[String]] = []
-        var current = element
-        for _ in 0..<CodeEditorSurfaceDetector.maximumAncestorDepth {
-            guard let parent = AXHelper.parentElement(of: current) else { break }
-            lists.append(AXHelper.stringArrayValue(for: "AXDOMClassList" as CFString, on: parent) ?? [])
-            current = parent
-        }
-        return lists
     }
 
     /// Page-URL lookup with a memoized climb depth. Browsers expose AXURL on an ancestor of
@@ -574,7 +506,7 @@ struct FocusSnapshotResolver {
                 ]
             )
         }
-        return FocusCapability.textSelectedReason
+        return "Text is currently selected."
     }
 
     /// Reads the host's font/color at the caret through the style cache: one attributed-string read
@@ -1213,7 +1145,7 @@ struct FocusSnapshotResolver {
         // and `textValue` stay consistent; otherwise use a bounded native text window when the host
         // supports `AXStringForRange`, falling back to the full value for older/native controls.
         let textSelection = (markerSelection.map {
-            AXTextSelection(text: $0.text, selection: $0.selection, trailingTextUnavailable: $0.trailingTextUnavailable)
+            AXTextSelection(text: $0.text, selection: $0.selection)
         } ?? nativeTextSelection).map {
             restoringBlockBreaks(
                 in: $0,
@@ -1352,7 +1284,6 @@ struct FocusSnapshotResolver {
             role: role,
             subrole: subrole,
             textValue: textValue,
-            trailingTextUnavailable: textSelection?.trailingTextUnavailable ?? false,
             selection: selection,
             caretRect: caretRect,
             caretQuality: caretQuality,
@@ -1389,9 +1320,7 @@ struct FocusSnapshotResolver {
             markedRange: windowMarkedRange
         )
         guard stripped != window.text else { return window }
-        return AXTextSelection(
-            text: stripped, selection: window.selection, trailingTextUnavailable: window.trailingTextUnavailable
-        )
+        return AXTextSelection(text: stripped, selection: window.selection)
     }
 
     /// One candidate's already-fetched state that the line-margin lookup needs, bundled so the
@@ -1658,30 +1587,24 @@ struct FocusSnapshotResolver {
             selectedText = ""
         }
 
-        // A failed trailing read keeps the window rather than falling back to `AXValue`. Chromium
-        // fails it in every multi-block contenteditable (the window is sized from the value's length,
-        // past the range text's end), and the value paired with this range-space caret would put the
-        // caret before the wrong character. `restoringBlockBreaks` fills that text in from the value
-        // where the two align; elsewhere the snapshot says the text after the caret is unknown.
-        let trailingText: String?
+        let trailingText: String
         if afterLength > 0 {
             trailingText = AXHelper.parameterizedStringValue(
                 for: kAXStringForRangeParameterizedAttribute as CFString,
                 range: NSRange(location: afterStart, length: afterLength),
                 on: element
-            )
+            ) ?? ""
         } else {
             trailingText = ""
         }
 
-        let text = beforeText + selectedText + (trailingText ?? "")
+        let text = beforeText + selectedText + trailingText
         return AXTextSelection(
             text: text,
             selection: NSRange(
                 location: (beforeText as NSString).length,
                 length: (selectedText as NSString).length
-            ),
-            trailingTextUnavailable: trailingText == nil
+            )
         )
     }
 
@@ -1883,9 +1806,6 @@ private struct FocusedElementReading {
 private struct AXTextSelection {
     let text: String
     let selection: NSRange
-    /// See `FocusedInputSnapshot.trailingTextUnavailable`. A selection rebuilt from the field's
-    /// value (`restoringBlockBreaks`) has its trailing text again and drops the flag.
-    var trailingTextUnavailable = false
 }
 
 /// AX data read from one candidate element near the current focus.
@@ -1896,8 +1816,6 @@ private struct AXFocusCandidate {
     let role: String
     let subrole: String?
     let textValue: String?
-    /// See `FocusedInputSnapshot.trailingTextUnavailable`.
-    let trailingTextUnavailable: Bool
     let selection: NSRange?
     let caretRect: CGRect?
     let caretQuality: CaretGeometryQuality?
@@ -1921,13 +1839,4 @@ private struct AXFocusCandidate {
     let documentCaretLocation: Int?
     let supportedParameterizedAttributes: Set<String>
     let resolverCandidate: FocusCapabilityCandidate
-}
-
-/// The caret-split field text `FocusSnapshotResolver` publishes, after a terminal's scrollback has
-/// been narrowed to a coding agent's typed request (or passed through untouched).
-private struct TerminalAwareFieldText {
-    let precedingText: String
-    let trailingText: String
-    let selection: NSRange
-    let isCodingAgentPrompt: Bool
 }

@@ -225,7 +225,7 @@ final class OverlayController: SuggestionOverlayControlling {
             reduceMotionEnabled: reduceMotionEnabled
         )
 
-        let mode = currentRenderModePolicy.mode(
+        var mode = currentRenderModePolicy.mode(
             for: geometry,
             bundleIdentifier: geometry.bundleIdentifier
         )
@@ -253,14 +253,10 @@ final class OverlayController: SuggestionOverlayControlling {
         switch mode {
         case .inline:
             if let reason = showInline(text: text, geometry: geometry) {
-                hide(reason: "Inline suggestion suppressed: \(reason.rawValue).")
-                return
+                mode = .mirror(reason: reason)
+                showMirror(text: text, geometry: geometry, reason: reason)
             }
         case .mirror(let reason):
-            guard mode.permitsPopup else {
-                hide(reason: "Inline suggestion suppressed: \(reason.rawValue).")
-                return
-            }
             inlineSession = nil
             showMirror(text: text, geometry: geometry, reason: reason)
         }
