@@ -61,6 +61,37 @@ final class TypingHistoryPhraseEngineTests: XCTestCase {
 
         XCTAssertEqual(history.engines, [.openAICompatible])
     }
+
+    func test_ngramAnswerCarriesAlternativeChains() async throws {
+        let (engine, base, _) = makeEngine(phrase: nil)
+        engine.ngramEngine = PersonalNGramEngine.build(from: [
+            "looking forward to hearing from you",
+            "looking forward to hearing from you",
+            "looking forward to seeing you",
+            "looking forward to seeing you",
+        ])
+
+        let result = try await engine.generateSuggestion(
+            for: CotabbyTestFixtures.suggestionRequest(precedingText: "looking forward to "))
+
+        XCTAssertEqual(result.text, " hearing from you")
+        XCTAssertEqual(result.alternatives, [" seeing you"])
+        XCTAssertEqual(base.calls, 0)
+    }
+
+    func test_ngramAnswerWithoutAlternativesHasEmptyList() async throws {
+        let (engine, base, _) = makeEngine(phrase: nil)
+        engine.ngramEngine = PersonalNGramEngine.build(from: [
+            "say hello world", "say hello world",
+        ])
+
+        let result = try await engine.generateSuggestion(
+            for: CotabbyTestFixtures.suggestionRequest(precedingText: "say hello "))
+
+        XCTAssertEqual(result.text, " world")
+        XCTAssertTrue(result.alternatives.isEmpty)
+        XCTAssertEqual(base.calls, 0)
+    }
 }
 
 final class TypingHistoryPromptTests: XCTestCase {

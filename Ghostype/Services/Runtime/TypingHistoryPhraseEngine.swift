@@ -43,21 +43,24 @@ final class TypingHistoryPhraseEngine: SuggestionGenerating {
         // n-gram model. Chains whole familiar phrases ("to hearing from you"), which is
         // what makes the stream feel instant like Cotypist — no inference, no waiting.
         // Falls through to phrase/LLM if the n-gram has no confident prediction.
-        if let ngram = ngramEngine,
-           let prediction = ngram.predictChain(for: request.context.precedingText).flatMap({ Self.bounded($0, for: request) }) {
-            CotabbyLogger.suggestion.debug(
-                "Answered from n-gram",
-                metadata: ["request_id": .string(request.requestID), "engine": .string("ngram")]
-            )
-            return SuggestionResult(
-                generation: request.generation,
-                rawText: prediction,
-                text: prediction,
-                latency: ProcessInfo.processInfo.systemUptime - started,
-                spacingIsExact: true
-            )
+        if let ngram = ngramEngine {
+            let chains = ngram.predictChains(for: request.context.precedingText)
+            if let prediction = chains.first {
+                CotabbyLogger.suggestion.debug(
+                    "Answered from n-gram",
+                    metadata: ["request_id": .string(request.requestID), "engine": .string("ngram")]
+                )
+                return SuggestionResult(
+                    generation: request.generation,
+                    rawText: prediction,
+                    text: prediction,
+                    latency: ProcessInfo.processInfo.systemUptime - started,
+                    spacingIsExact: true,
+                    alternatives: Array(chains.dropFirst())
+                )
+            }
         }
-        if let phrase = history.phraseContinuation(for: request, engine: engineKind()).flatMap({ Self.bounded($0, for: request) }) {
+        if let phrase = history.phraseContinuation(for: request, engine: engineKind()) {
             CotabbyLogger.suggestion.debug(
                 "Answered from typing history",
                 metadata: ["request_id": .string(request.requestID), "engine": .string("history")]
@@ -73,14 +76,6 @@ final class TypingHistoryPhraseEngine: SuggestionGenerating {
             )
         }
         return try await base.generateSuggestion(for: request, onPartial: onPartial)
-    }
-
-    /// These fast paths skip `SuggestionTextNormalizer`, so "Current word only" is applied here too.
-    /// An answer that only starts the next word falls through to the model (which is cut the same way).
-    private static func bounded(_ text: String, for request: SuggestionRequest) -> String? {
-        guard request.wordRange?.isCurrentWordOnly == true else { return text }
-        let word = SuggestionLengthPolicy.currentWordOnly(text, precedingText: request.context.precedingText)
-        return word.isEmpty ? nil : word
     }
 
     func resetCachedGenerationContext() async {

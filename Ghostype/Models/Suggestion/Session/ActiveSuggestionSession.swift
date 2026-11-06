@@ -20,6 +20,10 @@ struct ActiveSuggestionSession: Equatable, Sendable {
     let showFollowingWords: Bool
     let consumedCharacterCount: Int
     let latency: TimeInterval
+    /// Alternative completions for the same caret, strongest first, not counting `fullText`.
+    /// The cycle-alternatives key rotates these into `fullText` so the user can pick a
+    /// different ending without a new generation. Empty for engine results that carry none.
+    let alternatives: [String]
     /// `.continuation` for normal forward suggestions; `.correction(typoWord:)` when the session
     /// represents a typo fix. The acceptance path branches on this so corrections always commit the
     /// whole word and replace the typo rather than appending forward text.
@@ -32,6 +36,7 @@ struct ActiveSuggestionSession: Equatable, Sendable {
         showFollowingWords: Bool = true,
         consumedCharacterCount: Int = 0,
         latency: TimeInterval,
+        alternatives: [String] = [],
         kind: SuggestionKind = .continuation
     ) {
         self.baseContext = baseContext
@@ -40,6 +45,7 @@ struct ActiveSuggestionSession: Equatable, Sendable {
         self.showFollowingWords = showFollowingWords
         self.consumedCharacterCount = min(max(consumedCharacterCount, 0), fullText.count)
         self.latency = latency
+        self.alternatives = alternatives
         self.kind = kind
     }
 

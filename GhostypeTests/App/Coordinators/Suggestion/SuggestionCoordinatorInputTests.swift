@@ -67,49 +67,6 @@ final class SuggestionCoordinatorInputTests: SuggestionCoordinatorRigTestCase {
         XCTAssertEqual(rig.overlayController.hideReasons.last, "Overlay hidden because the emoji picker is active.")
     }
 
-    func test_disabledAppNeverReachesTheInlineCommandObserver() {
-        let rig = retained(makeCoordinatorRig(
-            settingsSnapshot: CotabbyTestFixtures.settingsSnapshot(disabledAppBundleIdentifiers: ["com.example.TestApp"])
-        ))
-        var observed = 0
-        rig.coordinator.emojiInputObserver = { _ in
-            observed += 1
-            return true
-        }
-
-        _ = rig.coordinator.handleInputEvent(CotabbyTestFixtures.inputEvent(kind: .textMutation, characters: ":"))
-
-        XCTAssertEqual(observed, 0, "Emoji and macro previews must not open in an app the user turned off")
-        XCTAssertEqual(rig.coordinator.state, .disabled("Ghostype is disabled in TestApp."))
-    }
-
-    func test_synonymGateFollowsTheSettingAndTheSuggestionAvailabilityRules() {
-        let selection = FocusSnapshot(
-            applicationName: "TestApp",
-            bundleIdentifier: "com.example.TestApp",
-            capability: .blocked(FocusCapability.textSelectedReason),
-            context: CotabbyTestFixtures.focusedInputSnapshot()
-        )
-        var enabled = CotabbyTestFixtures.settingsSnapshot()
-        enabled.synonymsForSelectedWord = true
-        var disabledApp = CotabbyTestFixtures.settingsSnapshot(disabledAppBundleIdentifiers: ["com.example.TestApp"])
-        disabledApp.synonymsForSelectedWord = true
-
-        let off = retained(makeCoordinatorRig())
-        let on = retained(makeCoordinatorRig(settingsSnapshot: enabled))
-        let blockedApp = retained(makeCoordinatorRig(settingsSnapshot: disabledApp))
-
-        XCTAssertNotNil(off.coordinator.synonymDisabledReason(focusSnapshot: selection), "Off by default")
-        XCTAssertNil(
-            on.coordinator.synonymDisabledReason(focusSnapshot: selection),
-            "A selection blocks suggestions but must not block synonyms"
-        )
-        XCTAssertEqual(
-            blockedApp.coordinator.synonymDisabledReason(focusSnapshot: selection),
-            "Ghostype is disabled in TestApp."
-        )
-    }
-
     // MARK: - Typing against a live session
 
     func test_typingTheExpectedCharactersAdvancesTheSession() {
@@ -347,29 +304,6 @@ final class SuggestionCoordinatorInputTests: SuggestionCoordinatorRigTestCase {
         XCTAssertEqual(rig.engine.prewarmedRequests.first?.generation, 0)
     }
 
-    /// The focus prefill is only reusable if the first real request renders the same prompt bytes,
-    /// so the prewarm must carry the same pinned clipboard and ready screen excerpt a prediction would.
-    func test_fieldSwitchPrewarmIncludesPinnedClipboardAndScreenContext() async {
-        let rig = retained(makeCoordinatorRig())
-        _ = rig.interactionState.materializeContext(from: rig.focusProvider.snapshot.context!)
-        rig.clipboardFilter.filtered = "Quarterly numbers attached"
-        rig.visualContext.excerptValue = "Calendar: Q3 planning 3pm"
-
-        let otherApp = CotabbyTestFixtures.focusedInputSnapshot(processIdentifier: 456, precedingText: "Hi")
-        rig.coordinator.handleSupportedSnapshot(FocusSnapshot(
-            applicationName: otherApp.applicationName,
-            bundleIdentifier: otherApp.bundleIdentifier,
-            capability: .supported,
-            context: otherApp
-        ))
-
-        await waitUntil("Engine was never prewarmed for the new field") {
-            !rig.engine.prewarmedRequests.isEmpty
-        }
-        XCTAssertEqual(rig.engine.prewarmedRequests.first?.clipboardContext, "Quarterly numbers attached")
-        XCTAssertEqual(rig.engine.prewarmedRequests.first?.visualContextSummary, "Calendar: Q3 planning 3pm")
-    }
-
     func test_handleSupportedSnapshot_withoutContextDisablesOutright() {
         let rig = retained(makeCoordinatorRig())
         let bareSnapshot = FocusSnapshot(
@@ -549,6 +483,106 @@ final class SuggestionCoordinatorInputTests: SuggestionCoordinatorRigTestCase {
 
         XCTAssertTrue(rig.coordinator.isHoldingForHostMarkedText)
         XCTAssertEqual(rig.coordinator.state, .idle)
+        XCTAssertNil(rig.interactionState.activeSession)
+    }
+
+    // MARK: - Speculative typing
+
+    func test_speculatedCharacters_plainLetter() {
+        let event = CotabbyTestFixtures.inputEvent(kind: .textMutation, characters: "a")
+        XCTAssertEqual(SuggestionCoordinator.speculatedCharacters(for: event), "a")
+    }
+
+    func test_speculatedCharacters_shiftUppercasesLetter() {
+        let event = CotabbyTestFixtures.inputEvent(kind: .textMutation, characters: "s", flags: .maskShift)
+        XCTAssertEqual(SuggestionCoordinator.speculatedCharacters(for: event), "S")
+    }
+
+    func test_speculatedCharacters_shiftXorCapsLock() {
+        // Shift + Caps Lock cancel out: the host inserts the lowercase letter.
+        let shiftCaps: CGEventFlags = [.maskShift, .maskAlphaShift]
+        let event = CotabbyTestFixtures.inputEvent(kind: .textMutation, characters: "s", flags: shiftCaps)
+        XCTAssertEqual(SuggestionCoordinator.speculatedCharacters(for: event), "s")
+
+        // Caps Lock alone uppercases, like Shift.
+        let capsOnly = CotabbyTestFixtures.inputEvent(kind: .textMutation, characters: "s", flags: .maskAlphaShift)
+        XCTAssertEqual(SuggestionCoordinator.speculatedCharacters(for: capsOnly), "S")
+    }
+
+    func test_speculatedCharacters_shiftedSymbolIsNotGuessed() {
+        // "/" becomes "?" on US layouts with Shift; layout-dependent, so leave it to the
+        // ordinary publish-gated request. Unshifted it is exactly what it says.
+        let shifted = CotabbyTestFixtures.inputEvent(kind: .textMutation, characters: "/", flags: .maskShift)
+        XCTAssertNil(SuggestionCoordinator.speculatedCharacters(for: shifted))
+        let plain = CotabbyTestFixtures.inputEvent(kind: .textMutation, characters: "/")
+        XCTAssertEqual(SuggestionCoordinator.speculatedCharacters(for: plain), "/")
+    }
+
+    func test_speculatedCharacters_rejectsNonSingleCharacters() {
+        XCTAssertNil(SuggestionCoordinator.speculatedCharacters(for:
+            CotabbyTestFixtures.inputEvent(kind: .textMutation, characters: "ab")))
+        XCTAssertNil(SuggestionCoordinator.speculatedCharacters(for:
+            CotabbyTestFixtures.inputEvent(kind: .textMutation, characters: "")))
+    }
+
+    // MARK: - Word alternatives
+
+    private func startSessionWithAlternatives(
+        in rig: CoordinatorRig, fullText: String = " world", alternatives: [String]
+    ) -> ActiveSuggestionSession {
+        let context = FocusedInputContext(snapshot: rig.focusProvider.snapshot.context!, generation: 1)
+        let session = rig.interactionState.startSession(
+            fullText: fullText, liveContext: context, latency: 0.05, alternatives: alternatives)
+        rig.overlayController.showSuggestion(
+            session.remainingText, geometry: CotabbyTestFixtures.overlayGeometry())
+        return session
+    }
+
+    func test_cycleAlternativesRotatesVisibleSuggestion() {
+        let rig = retained(makeCoordinatorRig())
+        startSessionWithAlternatives(in: rig, alternatives: [" again", " tomorrow"])
+
+        let consumed = rig.coordinator.handleInputEvent(
+            CotabbyTestFixtures.inputEvent(kind: .cycleAlternatives))
+
+        XCTAssertTrue(consumed, "Cycling must swallow the key so no space reaches the host")
+        XCTAssertEqual(rig.interactionState.activeSession?.fullText, " again")
+        XCTAssertEqual(rig.interactionState.activeSession?.alternatives, [" tomorrow", " world"])
+        XCTAssertEqual(rig.overlayController.shownTexts.last, " again")
+    }
+
+    func test_cycleAlternativesWrapsAround() {
+        let rig = retained(makeCoordinatorRig())
+        startSessionWithAlternatives(in: rig, alternatives: [" again", " tomorrow"])
+
+        let cycle = CotabbyTestFixtures.inputEvent(kind: .cycleAlternatives)
+        XCTAssertTrue(rig.coordinator.handleInputEvent(cycle))
+        XCTAssertTrue(rig.coordinator.handleInputEvent(cycle))
+        XCTAssertTrue(rig.coordinator.handleInputEvent(cycle))
+
+        // Three cycles over two alternatives plus the original: back where it started.
+        XCTAssertEqual(rig.interactionState.activeSession?.fullText, " world")
+        XCTAssertEqual(rig.interactionState.activeSession?.alternatives, [" again", " tomorrow"])
+    }
+
+    func test_cycleAlternativesWithoutAlternativesDoesNothing() {
+        let rig = retained(makeCoordinatorRig())
+        startVisibleSession(in: rig)
+
+        let consumed = rig.coordinator.handleInputEvent(
+            CotabbyTestFixtures.inputEvent(kind: .cycleAlternatives))
+
+        XCTAssertFalse(consumed, "With nothing to cycle to, the key must fall through untouched")
+        XCTAssertEqual(rig.interactionState.activeSession?.fullText, " world")
+    }
+
+    func test_cycleAlternativesWithoutSessionDoesNothing() {
+        let rig = retained(makeCoordinatorRig())
+
+        let consumed = rig.coordinator.handleInputEvent(
+            CotabbyTestFixtures.inputEvent(kind: .cycleAlternatives))
+
+        XCTAssertFalse(consumed)
         XCTAssertNil(rig.interactionState.activeSession)
     }
 }

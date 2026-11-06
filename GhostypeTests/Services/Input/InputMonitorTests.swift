@@ -291,27 +291,44 @@ final class InputMonitorTests: XCTestCase {
         monitor.shouldConsumeAcceptKeyProvider = { true }
         _ = recordKinds(on: monitor, accepts: true)
 
-        XCTAssertEqual(monitor.resolveAcceptKeyDown(InputMonitorKeyEvent(keyCode: Self.tab)), .consume)
-        XCTAssertEqual(monitor.resolveAcceptKeyDown(InputMonitorKeyEvent(keyCode: 125)), .notHandled)
+    func test_observerSuppressesCycleAlternativesKey() {
+        // Like acceptance, cycling must be decided by the consuming tap only: the observer
+        // describing it would cycle once, then the accept tap would cycle again.
+        let monitor = makeMonitor()
+        monitor.isAcceptTapOwningAcceptKeys = true
+        let delivered = recordKinds(on: monitor, accepts: true)
+
+        let cycleFlags: CGEventFlags = [.maskControl, .maskAlternate]
+        XCTAssertNil(monitor.handleObserverKeyDown(InputMonitorKeyEvent(keyCode: 49, flags: cycleFlags)))
+        XCTAssertTrue(delivered().isEmpty)
     }
 
-    /// Regression for `/today` committing as `/18 Oct 2026`: the consuming tap can see Tab before the
-    /// listen-only observer has routed it. The capture must still get to decide (consume) that Tab,
-    /// and the observer's later copy of the same key-down must not be routed a second time.
-    func test_consumingTapRoutesCaptureKeyTheObserverHasNotSeenYet() {
-        let monitor = makeMonitor()
-        monitor.captureInterceptionActive = true
-        var observed = 0
-        monitor.onEvent = { _ in observed += 1; return false }
-        // Like the macro controller: a decision exists only once the observer path has run.
-        monitor.emojiCaptureKeyDecider = { _ in observed > 0 ? .consume : .notHandled }
-        let tab = InputMonitorKeyEvent(keyCode: Self.tab)
+    func test_acceptTapRoutesCycleAlternativesKey() {
+        let cycleFlags: CGEventFlags = [.maskControl, .maskAlternate]
+        for coordinatorAccepts in [true, false] {
+            let monitor = makeMonitor()
+            monitor.shouldConsumeAcceptKeyProvider = { true }
+            let delivered = recordKinds(on: monitor, accepts: coordinatorAccepts)
 
-        XCTAssertEqual(monitor.resolveCaptureAwareKeyDown(tab, timestamp: 42), .consume)
-        XCTAssertEqual(observed, 1)
-        _ = monitor.resolveCaptureAwareKeyDown(tab, timestamp: 42)
-        XCTAssertEqual(observed, 1, "the same key-down is routed once")
-        _ = monitor.resolveCaptureAwareKeyDown(tab, timestamp: 43)
-        XCTAssertEqual(observed, 2)
+            let decision = monitor.handleAcceptKeyDown(InputMonitorKeyEvent(keyCode: 49, flags: cycleFlags))
+
+            XCTAssertEqual(decision, coordinatorAccepts ? .consume : .passThrough)
+            XCTAssertEqual(delivered(), [.cycleAlternatives])
+        }
+    }
+
+    func test_acceptTapLeavesPartialCycleModifiersUnhandled() {
+        let monitor = makeMonitor()
+        monitor.shouldConsumeAcceptKeyProvider = { true }
+        let delivered = recordKinds(on: monitor, accepts: true)
+
+        // Control-only Space and plain Space are not the cycle binding.
+        XCTAssertEqual(monitor.handleAcceptKeyDown(InputMonitorKeyEvent(keyCode: 49, flags: .maskControl)), .notHandled)
+        XCTAssertEqual(monitor.handleAcceptKeyDown(InputMonitorKeyEvent(keyCode: 49, characters: " ")), .notHandled)
+        XCTAssertTrue(delivered().isEmpty)
+    }
+
+        XCTAssertEqual(monitor.resolveAcceptKeyDown(InputMonitorKeyEvent(keyCode: Self.tab)), .consume)
+        XCTAssertEqual(monitor.resolveAcceptKeyDown(InputMonitorKeyEvent(keyCode: 125)), .notHandled)
     }
 }

@@ -175,17 +175,38 @@ nonisolated final class PersonalNGramEngine: Sendable {
     /// history — bigrams need far fewer observations to be trustworthy.
     /// Synchronous, <1ms.
     func predictNextWord(after w1: String, _ w2: String) -> String? {
-        if let hit = predictNext(after: w1, w2) { return hit }
-        return bigrams[normalize(w2)]?.first?.word
+        predictNextWordCandidates(after: w1, w2).first
+    }
+
+    /// All next-word candidates for (w1,w2), strongest first: every trigram candidate,
+    /// then bigram candidates not already listed. Bounded to the stored per-key cap.
+    /// Synchronous, <1ms.
+    func predictNextWordCandidates(after w1: String, _ w2: String) -> [String] {
+        let key = Self.trigramKey(normalize(w1), normalize(w2))
+        var seen = Set<String>()
+        var out: [String] = []
+        for candidate in trigrams[key] ?? [] {
+            if seen.insert(candidate.word).inserted { out.append(candidate.word) }
+        }
+        for candidate in bigrams[normalize(w2)] ?? [] {
+            if seen.insert(candidate.word).inserted { out.append(candidate.word) }
+        }
+        return out
     }
 
     /// Completes a partial word. E.g., "hel" -> "hello". Returns nil if no confident completion.
     /// Synchronous, <1ms.
     func completeWord(prefix: String) -> String? {
+        completeWordCandidates(prefix: prefix).first
+    }
+
+    /// All completions for a partial word, strongest first. Bounded to the stored per-key cap.
+    /// Synchronous, <1ms.
+    func completeWordCandidates(prefix: String) -> [String] {
         let lower = prefix.lowercased()
-        guard lower.count >= 2 else { return nil }
+        guard lower.count >= 2 else { return [] }
         // Don't suggest if the prefix is already a complete frequent word.
-        return prefixIndex[lower]?.first?.word
+        return prefixIndex[lower]?.map(\.word) ?? []
     }
 
     /// The main entry point: given the text before the caret, predict what comes next.
@@ -230,23 +251,63 @@ nonisolated final class PersonalNGramEngine: Sendable {
     /// back into place within a letter or two.
     /// Synchronous.
     func predictChain(for precedingText: String, maxWords: Int = maxChainWords) -> String? {
-        let trimmed = precedingText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
+        predictChains(for: precedingText, maxWords: maxWords, maxAlternatives: 1).first
+    }
 
-        var words = Self.tokenize(precedingText)
-        var parts: [String] = []
+    /// Up to `maxAlternatives` chained completions, strongest first: the first is exactly
+    /// what `predictChain` returns, the rest branch at the first step (the next word, or
+    /// the word completion for a mid-word caret) and chain greedily from there. The
+    /// alternatives ride along so the user can cycle them with a key instead of retyping.
+    /// Synchronous, still <1ms for the stored per-key cap.
+    func predictChains(
+        for precedingText: String, maxWords: Int = maxChainWords, maxAlternatives: Int = maxCandidatesPerKey
+    ) -> [String] {
+        let trimmed = precedingText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, maxAlternatives > 0 else { return [] }
+
         // Mid-word caret: no leading space before the word remainder.
         let leadingSpace = Self.trailingPartialWord(in: precedingText) == nil
+        let baseWords = Self.tokenize(precedingText)
 
+        // First-step candidates: word completions for a partial word, else next-word
+        // candidates for the trailing two words. Each branches its own chain below.
+        let firstSteps: [String]
         if let partial = Self.trailingPartialWord(in: precedingText) {
-            guard let completion = completeWord(prefix: partial),
-                  completion.lowercased().hasPrefix(partial.lowercased()),
-                  completion.count > partial.count
-            else { return nil }
-            parts.append(String(completion.dropFirst(partial.count)))
-            words.append(completion.lowercased())
+            firstSteps = completeWordCandidates(prefix: partial)
+                .filter { $0.lowercased().hasPrefix(partial.lowercased()) && $0.count > partial.count }
+                .map { String($0.dropFirst(partial.count)) }
+        } else {
+            guard baseWords.count >= 2 else { return [] }
+            firstSteps = predictNextWordCandidates(after: baseWords[baseWords.count - 2], baseWords[baseWords.count - 1])
         }
 
+        var chains: [String] = []
+        var seen = Set<String>()
+        for first in firstSteps.prefix(maxAlternatives) {
+            var words = baseWords
+            var parts: [String] = []
+            if let partial = Self.trailingPartialWord(in: precedingText) {
+                // The remainder completes the partial word; the full word anchors the chain.
+                parts.append(first)
+                words.append((partial + first).lowercased())
+            } else {
+                parts.append(first)
+                words.append(first)
+            }
+            chain(from: &words, into: &parts, maxWords: maxWords)
+            guard !parts.isEmpty else { continue }
+            let glued = parts.joined(separator: " ")
+            let chain = leadingSpace ? " " + glued : glued
+            if seen.insert(chain).inserted { chains.append(chain) }
+            if chains.count >= maxAlternatives { break }
+        }
+        return chains
+    }
+
+    /// Greedy chain extension shared by `predictChain` and `predictChains`: each step feeds
+    /// the next ((w2,w3)->w4) until the word budget runs out, a step repeats, or no
+    /// candidate exists. A visited-set stops degenerate loops ("the the the").
+    private func chain(from words: inout [String], into parts: inout [String], maxWords: Int) {
         var visited = Set<String>()
         var chained = 0
         while chained < maxWords, words.count >= 2 {
@@ -262,10 +323,6 @@ nonisolated final class PersonalNGramEngine: Sendable {
             words.append(next)
             chained += 1
         }
-
-        guard !parts.isEmpty else { return nil }
-        let glued = parts.joined(separator: " ")
-        return leadingSpace ? " " + glued : glued
     }
 
     // MARK: - Private

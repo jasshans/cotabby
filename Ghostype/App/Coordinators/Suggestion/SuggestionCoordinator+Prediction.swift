@@ -278,11 +278,46 @@ extension SuggestionCoordinator {
         guard !userDefaults.bool(forKey: Self.speculativePrefetchDisabledDefaultsKey) else { return }
         guard !insertionChunk.isEmpty else { return }
 
-        let optimistic = SpeculativeAcceptanceContext.optimisticSnapshot(
-            after: rawContext,
-            inserting: insertionChunk
+        dispatchSpeculativeGeneration(
+            optimistic: SpeculativeAcceptanceContext.optimisticSnapshot(after: rawContext, inserting: insertionChunk),
+            message: "Started the post-acceptance generation against the expected post-insert text."
         )
+    }
 
+    /// Starts generating for a plain typed character at keystroke time, against the text the host
+    /// is about to publish, instead of after the host-publish poll sees it (10-50 ms in native
+    /// hosts, longer in Chromium). The poll that follows validates exactly as it does for
+    /// post-acceptance speculation: a matching publish keeps this request, anything else (smart
+    /// quotes, dead keys, IME, auto-pairing, a key the host had not yet applied to the snapshot)
+    /// schedules the ordinary request and retires this one. Results and streamed partials are only
+    /// shown once the live text matches, so a wrong bet costs one discarded generation, never a
+    /// ghost at the wrong caret.
+    ///
+    /// Endpoint requests keep their debounced path: speculative traffic must not multiply requests
+    /// to a configured server.
+    ///
+    /// `knownPrecedingText` is the text before the caret as Ghostype already knows it when the
+    /// captured snapshot lags: typing through a visible suggestion advances the session without a
+    /// new AX capture, so the snapshot can still miss those letters. It is used only when it
+    /// extends the snapshot's own text.
+    func dispatchSpeculativeTypingGeneration(
+        rawContext: FocusedInputSnapshot, typed characters: String, knownPrecedingText: String? = nil
+    ) {
+        guard settingsSnapshot.selectedEngine != .openAICompatible,
+              !userDefaults.bool(forKey: Self.speculativePrefetchDisabledDefaultsKey),
+              characters.count == 1, let typed = characters.first, !typed.isNewline,
+              rawContext.selection.length == 0, !rawContext.isSecure else { return }
+        let base = knownPrecedingText.flatMap { $0.hasPrefix(rawContext.precedingText) ? $0 : nil }
+            ?? rawContext.precedingText
+        dispatchSpeculativeGeneration(
+            optimistic: SpeculativeAcceptanceContext.optimisticSnapshot(after: rawContext, precedingText: base + characters),
+            message: "Started generating against the typed character before the host published it."
+        )
+    }
+
+    /// Shared body of the speculative paths: gate, build the request for `optimistic`, and run it
+    /// with no debounce while `pendingSpeculativeContext` lets the publish poll validate it.
+    private func dispatchSpeculativeGeneration(optimistic: FocusedInputSnapshot, message: String) {
         // Same pre-generation gates the ordinary cycle applies, minus their UI side effects: a
         // speculative request must not spend a decode on text the normal path would refuse (too
         // little text) or suppress (typo gate). The post-publish regeneration still runs the full
@@ -333,7 +368,7 @@ extension SuggestionCoordinator {
             "speculative-generating",
             workID: workID,
             generation: context.generation,
-            message: "Started the post-acceptance generation against the expected post-insert text.",
+            message: message,
             prompt: requestBuildResult.promptPreview
         )
     }
@@ -964,7 +999,8 @@ extension SuggestionCoordinator {
         qualityMetricsStore.recordShown(recoveringSuppression: result.suppressionReason)
         AppAcceptanceLearning.recordShown(bundleIdentifier: liveContext.bundleIdentifier, defaults: userDefaults)
         let session = startCompletionSession(prediction: prediction, visibleText: visibleText,
-            context: liveContext, latency: result.latency, isFinal: true, wordEndingOnly: wordEndingOnly)
+            context: liveContext, latency: result.latency, isFinal: true, wordEndingOnly: wordEndingOnly,
+            alternatives: result.alternatives)
         suggestionAnchorCache.record(
             identityKey: liveContext.suggestionSessionIdentityKey,
             precedingText: liveContext.precedingText,
@@ -988,6 +1024,40 @@ extension SuggestionCoordinator {
         // stalling once the previous suggestion ran out. No-op when nothing was queued.
         prepareContinuation(after: session, rawContext: rawContext)
         flushQueuedPostExhaustionAcceptIfNeeded()
+    }
+
+    /// Rotates the visible suggestion to the next alternative for the same caret, and returns
+    /// whether one was shown. The current text goes to the back of the queue so cycling wraps
+    /// around instead of dead-ending. No generation runs: the alternatives rode in with the
+    /// result that produced this session (n-gram candidates today, beam candidates later),
+    /// so this is a pure re-presentation of already-predicted text. Returns false when there
+    /// is no session or no alternative left, in which case the key falls through untouched.
+    func cycleToNextAlternative() -> Bool {
+        guard let session = interactionState.activeSession, !session.alternatives.isEmpty else { return false }
+        let next = session.alternatives[0]
+        let rest = Array(session.alternatives.dropFirst()) + [session.fullText]
+        let liveContext = session.baseContext
+        let newSession = startCompletionSession(prediction: next, visibleText: next,
+            context: liveContext, latency: session.latency, isFinal: true, alternatives: rest)
+        suggestionAnchorCache.record(
+            identityKey: liveContext.suggestionSessionIdentityKey,
+            precedingText: liveContext.precedingText,
+            fullText: newSession.fullText
+        )
+        state = .ready(text: newSession.remainingText, latency: newSession.latency)
+        presentOverlay(
+            text: newSession.remainingText,
+            at: liveContext.caretRect,
+            context: liveContext,
+            isRightToLeft: TextDirectionDetector.isRightToLeft(liveContext.precedingText)
+        )
+        logStage(
+            "alternatives-cycled",
+            workID: currentWorkID,
+            generation: liveContext.generation,
+            message: "Cycled the visible suggestion to the next alternative."
+        )
+        return true
     }
 
     /// Shows a fresh session's ghost. A host prediction that appeared while the model was thinking

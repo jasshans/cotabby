@@ -56,6 +56,7 @@ final class SuggestionInteractionState {
         showFollowingWords: Bool = true,
         liveContext: FocusedInputContext,
         latency: TimeInterval,
+        alternatives: [String] = [],
         kind: SuggestionKind = .continuation
     ) -> ActiveSuggestionSession {
         let session = ActiveSuggestionSession(
@@ -64,6 +65,7 @@ final class SuggestionInteractionState {
             initialVisibleCharacterCount: initialVisibleCharacterCount,
             showFollowingWords: showFollowingWords,
             latency: latency,
+            alternatives: alternatives,
             kind: kind
         )
         activeSession = session
@@ -178,8 +180,7 @@ final class SuggestionInteractionState {
     func prepareFullAcceptance(
         from snapshot: FocusedInputSnapshot,
         overlayState: OverlayState,
-        heldPresentationText: String? = nil,
-        includeTrailingPunctuation: Bool = true
+        heldPresentationText: String? = nil
     ) -> SuggestionAcceptancePreparation {
         let validated = validateSessionForAcceptance(
             from: snapshot, overlayState: overlayState, heldPresentationText: heldPresentationText
@@ -188,9 +189,7 @@ final class SuggestionInteractionState {
             return .invalid(validated.failureReason ?? "Key passed through.")
         }
 
-        let chunk = SuggestionSessionReconciler.fullAcceptanceChunk(
-            from: session.remainingText, includeTrailingPunctuation: includeTrailingPunctuation
-        )
+        let chunk = session.remainingText
         guard !chunk.isEmpty else {
             return .invalid("Key passed through because no remaining suggestion text was available.")
         }
