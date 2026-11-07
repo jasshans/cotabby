@@ -113,10 +113,13 @@ final class SuggestionTextNormalizerTests: XCTestCase {
     /// Leading blank lines do not hide the first content line or erase its word boundary.
     func test_normalize_singleLineKeepsOnlyTheFirstContentLine() {
         assertCases([
-            // Leading formatting newlines are trimmed before the split, so they do not read as an
-            // empty first line that would drop the real continuation.
+            // Leading formatting newlines are remembered, not dropped: in single-line mode they
+            // become one separating space, so "Hello" + "\n\nnext words only" reads as
+            // "Hello next words only", not the glued "Hellonext words only".
             Case(name: "leading newlines", precedingText: "Hello",
                  raw: "\n\nnext words only\nsecond paragraph should be dropped", expected: " next words only"),
+            Case(name: "newline as word separator", precedingText: "Hello",
+                 raw: "\nworld", expected: " world"),
             Case(name: "CRLF line ending", precedingText: "Hello", raw: "next\r\nsecond", expected: "next")
         ])
     }

@@ -35,8 +35,7 @@ final class SuggestionCoordinatorWordCompletionTests: XCTestCase {
                 let prefix = String(word.prefix(count))
                 let rig = makeCoordinatorRig(
                     snapshot: CotabbyTestFixtures.focusedInputSnapshot(precedingText: "Please " + prefix),
-                    settingsSnapshot: CotabbyTestFixtures.settingsSnapshot(debounceMilliseconds: 1,
-                        suppressCompletionsOnTypo: true, offerTypoCorrections: true))
+                    settingsSnapshot: CotabbyTestFixtures.settingsSnapshot(debounceMilliseconds: 1, offerTypoCorrections: true))
                 let suffix = String(word.dropFirst(count))
                 rig.engine.resultProvider = { request in
                     let text = request.prefixText.hasSuffix(" ") ? "" : suffix
@@ -133,7 +132,7 @@ final class SuggestionCoordinatorWordCompletionTests: XCTestCase {
     func testAcceptedCorrectionWaitsForPublishedTextAndQueuesNextTab() async {
         let rig = makeCoordinatorRig(snapshot: CotabbyTestFixtures.focusedInputSnapshot(precedingText: "Please recieve "),
             settingsSnapshot: CotabbyTestFixtures.settingsSnapshot(debounceMilliseconds: 1,
-                suggestWithinWords: false, suppressCompletionsOnTypo: true, offerTypoCorrections: true))
+                suggestWithinWords: false, offerTypoCorrections: true))
         defer { rig.coordinator.stop() }
         let context = rig.interactionState.materializeContext(from: rig.focusProvider.snapshot.context!)
         _ = rig.interactionState.startSession(fullText: "receive", liveContext: context, latency: 0,
@@ -160,8 +159,7 @@ final class SuggestionCoordinatorWordCompletionTests: XCTestCase {
 
     func testTypingAfterAHeldTabKeepsItFromAcceptingTheNextSuggestion() async {
         let rig = makeCoordinatorRig(snapshot: CotabbyTestFixtures.focusedInputSnapshot(precedingText: "Please recieve "),
-            settingsSnapshot: CotabbyTestFixtures.settingsSnapshot(debounceMilliseconds: 1,
-                suppressCompletionsOnTypo: true, offerTypoCorrections: true))
+            settingsSnapshot: CotabbyTestFixtures.settingsSnapshot(debounceMilliseconds: 1, offerTypoCorrections: true))
         defer { rig.coordinator.stop() }
         let context = rig.interactionState.materializeContext(from: rig.focusProvider.snapshot.context!)
         _ = rig.interactionState.startSession(fullText: "receive", liveContext: context, latency: 0,
@@ -219,8 +217,7 @@ final class SuggestionCoordinatorWordCompletionTests: XCTestCase {
         // The stored automatic-fix setting is ignored: both runs offer the correction behind Tab.
         for automatic in [false, true] {
             let rig = makeCoordinatorRig(snapshot: CotabbyTestFixtures.focusedInputSnapshot(precedingText: "Please recieve "),
-                settingsSnapshot: CotabbyTestFixtures.settingsSnapshot(debounceMilliseconds: 1,
-                    suppressCompletionsOnTypo: true, offerTypoCorrections: true, automaticallyFixTypos: automatic))
+                settingsSnapshot: CotabbyTestFixtures.settingsSnapshot(debounceMilliseconds: 1, offerTypoCorrections: true))
             rig.coordinator.schedulePrediction()
             await waitUntil { rig.interactionState.activeSession?.kind.isCorrection == true }
             XCTAssertTrue(rig.inserter.replacements.isEmpty, "nothing changes before the accept key")

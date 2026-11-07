@@ -175,4 +175,67 @@ extension PersonalNGramEngineTests {
         let chain = engine.predictChain(for: "a b ", maxWords: 3)
         XCTAssertEqual(chain, " c d e")
     }
+
+    func test_predictChainsFirstEqualsPredictChain() {
+        let texts = [
+            "looking forward to hearing from you",
+            "looking forward to hearing from you",
+            "looking forward to seeing you",
+            "looking forward to seeing you",
+        ]
+        let engine = PersonalNGramEngine.build(from: texts)
+        let chains = engine.predictChains(for: "looking forward to ")
+        XCTAssertEqual(chains.first, engine.predictChain(for: "looking forward to "))
+    }
+
+    func test_predictChainsBranchesAtFirstStep() {
+        let texts = [
+            "looking forward to hearing from you",
+            "looking forward to hearing from you",
+            "looking forward to hearing from you",
+            "looking forward to seeing you",
+            "looking forward to seeing you",
+        ]
+        let engine = PersonalNGramEngine.build(from: texts)
+        // Both branches clear the minimum-count bar; the stronger (3x vs 2x) chains first.
+        XCTAssertEqual(engine.predictChains(for: "looking forward to "),
+                       [" hearing from you", " seeing you"])
+    }
+
+    func test_predictChainsBranchesMidWordCompletions() {
+        let texts = [
+            "hello world", "hello world", "hello world", "hello world",
+            "help me", "help me", "help me",
+        ]
+        let engine = PersonalNGramEngine.build(from: texts)
+        // "hel" completes to "hello" (4x) before "help" (3x); each remainder chains on.
+        XCTAssertEqual(engine.predictChains(for: "hel"), ["lo world", "p me"])
+    }
+
+    func test_predictNextWordCandidatesOrderedStrongestFirst() {
+        let texts = [
+            "looking forward to hearing from you",
+            "looking forward to hearing from you",
+            "looking forward to seeing you",
+            "looking forward to seeing you",
+            "looking forward to seeing you",
+        ]
+        let engine = PersonalNGramEngine.build(from: texts)
+        XCTAssertEqual(engine.predictNextWordCandidates(after: "forward", "to"), ["seeing", "hearing"])
+    }
+
+    func test_completeWordCandidatesOrderedStrongestFirst() {
+        let texts = [
+            "hello world", "hello world", "hello world",
+            "help me", "help me",
+        ]
+        let engine = PersonalNGramEngine.build(from: texts)
+        XCTAssertEqual(engine.completeWordCandidates(prefix: "hel"), ["hello", "help"])
+    }
+
+    func test_predictChainsEmptyWhenNoCandidate() {
+        let engine = PersonalNGramEngine.build(from: ["hello world", "hello world"])
+        XCTAssertTrue(engine.predictChains(for: "nothing here ").isEmpty)
+        XCTAssertTrue(engine.predictChains(for: "").isEmpty)
+    }
 }

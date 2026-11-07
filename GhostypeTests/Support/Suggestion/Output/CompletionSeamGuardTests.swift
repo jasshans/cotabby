@@ -469,6 +469,14 @@ final class CompletionSeamGuardTests: XCTestCase {
             ),
             .wait
         )
+        XCTAssertEqual(
+            CompletionSeamGuard.streamedLeadingWordVerdict(
+                precedingText: "Je veux ",
+                completion: "build",
+                spellingAssessment: { $0 == "build" ? .known : .correctableTypo }
+            ),
+            .allow
+        )
     }
 
     /// A trailing apostrophe may still join the next letters, so it cannot finalize the word.
@@ -535,6 +543,8 @@ final class CompletionSeamGuardTests: XCTestCase {
     }
 
     func testBadJoinedWordNeverAppearsDuringStreaming() {
+        // A misspelled joined word is not shown early: only a known word is ever shown
+        // before its boundary, and nothing is suppressed on a prefix.
         XCTAssertEqual(CompletionSeamGuard.presentation(precedingText: "so gre", completion: "atf", isFinal: false,
             spellingAssessment: { _ in .correctableTypo }), .wait)
         for isFinal in [false, true] {

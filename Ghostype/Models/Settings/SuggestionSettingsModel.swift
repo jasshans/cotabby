@@ -85,18 +85,13 @@ final class SuggestionSettingsModel: ObservableObject {
     /// typing in. See `SurfaceContextComposer` for what is actually rendered.
     @Published private(set) var isSurfaceContextEnabled: Bool
     @Published private(set) var isFastModeEnabled: Bool
-    /// When on, a misspelled committed word hides the normal continuation (see the typo gate).
-    @Published private(set) var suppressCompletionsOnTypo: Bool
-    /// When on (and `suppressCompletionsOnTypo` is also on), a misspelled committed word is offered a
-    /// green spell-checker correction the user can accept to replace the typo.
+    /// When on, a misspelled committed word is offered a green spell-checker correction
+    /// the user can accept to replace the typo.
     @Published private(set) var offerTypoCorrections: Bool
     /// Bundled SymSpell languages eligible for frequency-ranked corrections. This remains separate
     /// from response languages because model prompting and deterministic autocorrection are distinct
     /// user policies.
     @Published private(set) var enabledSpellingDictionaryCodes: [String]
-    /// When on (and typo suppression is on), pressing Space after a misspelled word applies the best
-    /// local correction immediately. Kept opt-in because this changes text without confirmation.
-    @Published private(set) var automaticallyFixTypos: Bool
     /// Whether the Performance pane is recording per-request latency. Defaults to false so the
     /// default user never pays any extra storage or write cost — recording only kicks in once the
     /// user opts in from Settings.
@@ -268,10 +263,8 @@ final class SuggestionSettingsModel: ObservableObject {
         isClipboardContextEnabled = data.isClipboardContextEnabled
         isSurfaceContextEnabled = data.isSurfaceContextEnabled
         isFastModeEnabled = data.isFastModeEnabled
-        suppressCompletionsOnTypo = data.suppressCompletionsOnTypo
         offerTypoCorrections = data.offerTypoCorrections
         enabledSpellingDictionaryCodes = data.enabledSpellingDictionaryCodes
-        automaticallyFixTypos = data.automaticallyFixTypos
         isPerformanceTrackingEnabled = data.isPerformanceTrackingEnabled
         isLowPowerModeAutoDisableEnabled = data.isLowPowerModeAutoDisableEnabled
         isMenuBarIconVisible = data.isMenuBarIconVisible
@@ -365,10 +358,8 @@ final class SuggestionSettingsModel: ObservableObject {
         isClipboardContextEnabled = data.isClipboardContextEnabled
         isSurfaceContextEnabled = data.isSurfaceContextEnabled
         isFastModeEnabled = data.isFastModeEnabled
-        suppressCompletionsOnTypo = data.suppressCompletionsOnTypo
         offerTypoCorrections = data.offerTypoCorrections
         enabledSpellingDictionaryCodes = data.enabledSpellingDictionaryCodes
-        automaticallyFixTypos = data.automaticallyFixTypos
         isPerformanceTrackingEnabled = data.isPerformanceTrackingEnabled
         isLowPowerModeAutoDisableEnabled = data.isLowPowerModeAutoDisableEnabled
         isMenuBarIconVisible = data.isMenuBarIconVisible
@@ -484,10 +475,8 @@ final class SuggestionSettingsModel: ObservableObject {
                 extendedContext: extendedContext
             ),
             correction: SuggestionCorrectionSettings(
-                suppressCompletionsOnTypo: suppressCompletionsOnTypo,
                 offerTypoCorrections: offerTypoCorrections,
-                enabledSpellingDictionaryCodes: enabledSpellingDictionaryCodes,
-                automaticallyFixTypos: automaticallyFixTypos
+                enabledSpellingDictionaryCodes: enabledSpellingDictionaryCodes
             ),
             presentation: SuggestionPresentationSettings(
                 showIndicator: showIndicator,
@@ -583,10 +572,8 @@ final class SuggestionSettingsModel: ObservableObject {
             isFastModeEnabled: settings.context.isFastModeEnabled,
             mirrorPreference: settings.presentation.mirrorPreference,
             acceptanceGranularity: settings.completion.acceptanceGranularity,
-            suppressCompletionsOnTypo: settings.correction.suppressCompletionsOnTypo,
             offerTypoCorrections: settings.correction.offerTypoCorrections,
             enabledSpellingDictionaryCodes: settings.correction.enabledSpellingDictionaryCodes,
-            automaticallyFixTypos: settings.correction.automaticallyFixTypos,
             doubleTapAcceptsEntireSuggestion: settings.shortcuts.doubleTapAcceptsEntireSuggestion,
             fullAcceptanceOverrideBundleIdentifiers: PerAppShortcutOverride.bundleIdentifiersOverridingFullAcceptance(
                 in: settings.shortcuts.perAppOverrides
@@ -869,15 +856,6 @@ final class SuggestionSettingsModel: ObservableObject {
         store.saveFastModeEnabled(enabled)
     }
 
-    func setSuppressCompletionsOnTypo(_ enabled: Bool) {
-        guard suppressCompletionsOnTypo != enabled else {
-            return
-        }
-
-        suppressCompletionsOnTypo = enabled
-        store.saveSuppressCompletionsOnTypo(enabled)
-    }
-
     func setOfferTypoCorrections(_ enabled: Bool) {
         guard offerTypoCorrections != enabled else {
             return
@@ -906,15 +884,6 @@ final class SuggestionSettingsModel: ObservableObject {
 
     func isSpellingDictionaryEnabled(_ language: SpellingDictionaryLanguage) -> Bool {
         enabledSpellingDictionaryCodes.contains(language.rawValue)
-    }
-
-    func setAutomaticallyFixTypos(_ enabled: Bool) {
-        guard automaticallyFixTypos != enabled else {
-            return
-        }
-
-        automaticallyFixTypos = enabled
-        store.saveAutomaticallyFixTypos(enabled)
     }
 
     func setPerformanceTrackingEnabled(_ enabled: Bool) {
@@ -1836,17 +1805,13 @@ extension SuggestionSettingsModel: SuggestionSettingsProviding {
                 $selectedEngine,
                 $selectedWordCountPreset
             ),
-            // Group the typo settings into one inner publisher so the presentation slot stays at
-            // Combine's four-upstream cap while carrying the full correction policy.
+            // The typo-correction policy is a single toggle now (offer only — see
+            // `TypoGate`); it rides the presentation slot directly.
             Publishers.CombineLatest4(
                 $isClipboardContextEnabled,
                 $isFastModeEnabled,
                 $mirrorPreference,
-                Publishers.CombineLatest3(
-                    $suppressCompletionsOnTypo,
-                    $offerTypoCorrections,
-                    $automaticallyFixTypos
-                )
+                $offerTypoCorrections
             ),
             // Profile and language policy travel together because both affect a request/correction
             // without changing presentation or timing.
@@ -1914,8 +1879,7 @@ extension SuggestionSettingsModel: SuggestionSettingsProviding {
                 let (combinedSettings, presentationToggles, profile, timing) = primaryTuple
                 let (globalState, disabledAppRules, engine, wordCountPreset) = combinedSettings
                 let (globallyEnabled, pauseState) = globalState
-                let (clipboardContextEnabled, fastModeEnabled, mirrorPreference, typoToggles) = presentationToggles
-                let (suppressOnTypo, offerCorrections, automaticallyFixTypos) = typoToggles
+                let (clipboardContextEnabled, fastModeEnabled, mirrorPreference, offerCorrections) = presentationToggles
                 let (userName, customRules, responseLanguages, enabledSpellingDictionaryCodes) = profile
                 let (debounce, focusPoll, generationToggles, acceptToggles) = timing
                 let (multiLine, suggestWithinWords, showFollowingWords) = generationToggles
@@ -1955,10 +1919,8 @@ extension SuggestionSettingsModel: SuggestionSettingsProviding {
                     isFastModeEnabled: fastModeEnabled,
                     mirrorPreference: mirrorPreference,
                     acceptanceGranularity: granularity,
-                    suppressCompletionsOnTypo: suppressOnTypo,
                     offerTypoCorrections: offerCorrections,
                     enabledSpellingDictionaryCodes: enabledSpellingDictionaryCodes,
-                    automaticallyFixTypos: automaticallyFixTypos,
                     doubleTapAcceptsEntireSuggestion: doubleTapAcceptsEntireSuggestion,
                     fullAcceptanceOverrideBundleIdentifiers:
                         PerAppShortcutOverride.bundleIdentifiersOverridingFullAcceptance(in: perAppOverrides),

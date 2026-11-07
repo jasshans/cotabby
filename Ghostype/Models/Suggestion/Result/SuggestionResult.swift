@@ -19,6 +19,11 @@ struct SuggestionResult: Equatable, Sendable {
     /// engines drop leading spaces, so their results leave this false and `GhostSpaceBoundary`
     /// decides from the characters on either side instead.
     let spacingIsExact: Bool
+    /// Alternative completions for the same caret, strongest first, not counting `text`
+    /// itself. The n-gram fast path fills this from its per-key candidates; the llama path
+    /// leaves it empty until beam search lands. The coordinator cycles them with the
+    /// cycle-alternatives key, so the user can pick a different ending without retyping.
+    let alternatives: [String]
 
     // This immutable Sendable value is also constructed by pure candidate-reconciliation rules.
     // Construction needs no UI actor; engine delivery and presentation remain main-actor owned.
@@ -28,7 +33,8 @@ struct SuggestionResult: Equatable, Sendable {
         text: String,
         latency: TimeInterval,
         suppressionReason: String? = nil,
-        spacingIsExact: Bool = false
+        spacingIsExact: Bool = false,
+        alternatives: [String] = []
     ) {
         self.generation = generation
         self.rawText = rawText
@@ -36,5 +42,6 @@ struct SuggestionResult: Equatable, Sendable {
         self.latency = latency
         self.suppressionReason = suppressionReason
         self.spacingIsExact = spacingIsExact
+        self.alternatives = alternatives
     }
 }

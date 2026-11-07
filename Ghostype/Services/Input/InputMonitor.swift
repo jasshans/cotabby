@@ -273,7 +273,8 @@ final class InputMonitor {
                 guard let self, generation == self.acceptTapStateGeneration, !self.acceptTapWanted else { return }
                 self.disableAcceptTap()
                 DispatchQueue.main.asyncAfter(deadline: .now() + Self.acceptTapReleaseDelaySeconds) { [weak self] in
-                    guard let self, !self.acceptTapWanted, !self.acceptTapEnabled else { return }
+                    guard let self, generation == self.acceptTapStateGeneration,
+                          !self.acceptTapWanted, !self.acceptTapEnabled else { return }
                     self.destroyAcceptTap()
                 }
             }
@@ -683,7 +684,16 @@ final class InputMonitor {
             return .passThrough
         }
 
-        guard let kind = acceptanceKind(for: keyEvent) else {
+        // The cycle-alternatives key (Control+Option+Space) rides the same consuming tap as the
+        // accept keys: only this tap can swallow the key when the coordinator cycles, and pass it
+        // through when there is nothing to cycle to. Accept bindings are checked first so a
+        // user-configured binding on the same key still wins.
+        let kind: CapturedInputEvent.Kind
+        if let acceptKind = acceptanceKind(for: keyEvent) {
+            kind = acceptKind
+        } else if keyEvent.keyCode == 49, ShortcutModifierMask(eventFlags: keyEvent.flags) == [.control, .option] {
+            kind = .cycleAlternatives
+        } else {
             return .notHandled
         }
 
@@ -749,10 +759,12 @@ final class InputMonitor {
             }
             CotabbyLogger.app.trace("Observed key", metadata: metadata)
         }
-        guard !capturedEvent.kind.isAcceptance else {
-            // Acceptance is handled by the active default tap, because only that callback can
-            // make insertion and "consume the original key" one atomic decision. If the active
-            // tap is absent, printable accept bindings are classified as ordinary typing.
+        guard !capturedEvent.kind.isConsumedByActiveTap else {
+            // Acceptance (and alternative cycling) is handled by the active default tap, because
+            // only that callback can make insertion and "consume the original key" one atomic
+            // decision. Handling one here would apply it twice: once from the observer, once
+            // from the active tap. If the active tap is absent, printable accept bindings are
+            // classified as ordinary typing.
             return nil
         }
 
@@ -773,6 +785,13 @@ final class InputMonitor {
         // numeric pad, secondary fn, and device flags that must not influence shortcut equality.
         if recognizesAcceptance, let kind = acceptanceKind(for: keyEvent) {
             return CapturedInputEvent(kind: kind, keyCode: keyCode, characters: "", flags: flags)
+        }
+
+        // Control+Option+Space cycles the visible suggestion through its alternatives (n-gram
+        // candidates today, beam candidates later). Space is keyCode 49; the exact modifier
+        // match keeps Shift+Space and plain Space on their ordinary paths.
+        if keyCode == 49, ShortcutModifierMask(eventFlags: flags) == [.control, .option] {
+            return CapturedInputEvent(kind: .cycleAlternatives, keyCode: keyCode, characters: "", flags: flags)
         }
 
         // We classify events by behavior instead of raw key codes alone.
@@ -843,10 +862,11 @@ extension InputMonitor: SuggestionInputMonitoring {}
 extension InputMonitor: EmojiInputIntercepting {}
 
 private extension CapturedInputEvent.Kind {
-    /// Acceptance is the one event family that must be handled by the consuming tap, not the
-    /// listen-only observer. The observer can describe these keys, but it cannot stop them.
-    var isAcceptance: Bool {
-        self == .acceptance || self == .fullAcceptance
+    /// Acceptance and alternative cycling are the event families that must be handled by the
+    /// consuming tap, not the listen-only observer. The observer can describe these keys, but
+    /// it cannot stop them.
+    var isConsumedByActiveTap: Bool {
+        self == .acceptance || self == .fullAcceptance || self == .cycleAlternatives
     }
 }
 

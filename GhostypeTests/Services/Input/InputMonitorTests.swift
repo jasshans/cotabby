@@ -291,6 +291,43 @@ final class InputMonitorTests: XCTestCase {
         monitor.shouldConsumeAcceptKeyProvider = { true }
         _ = recordKinds(on: monitor, accepts: true)
 
+    func test_observerSuppressesCycleAlternativesKey() {
+        // Like acceptance, cycling must be decided by the consuming tap only: the observer
+        // describing it would cycle once, then the accept tap would cycle again.
+        let monitor = makeMonitor()
+        monitor.isAcceptTapOwningAcceptKeys = true
+        let delivered = recordKinds(on: monitor, accepts: true)
+
+        let cycleFlags: CGEventFlags = [.maskControl, .maskAlternate]
+        XCTAssertNil(monitor.handleObserverKeyDown(InputMonitorKeyEvent(keyCode: 49, flags: cycleFlags)))
+        XCTAssertTrue(delivered().isEmpty)
+    }
+
+    func test_acceptTapRoutesCycleAlternativesKey() {
+        let cycleFlags: CGEventFlags = [.maskControl, .maskAlternate]
+        for coordinatorAccepts in [true, false] {
+            let monitor = makeMonitor()
+            monitor.shouldConsumeAcceptKeyProvider = { true }
+            let delivered = recordKinds(on: monitor, accepts: coordinatorAccepts)
+
+            let decision = monitor.handleAcceptKeyDown(InputMonitorKeyEvent(keyCode: 49, flags: cycleFlags))
+
+            XCTAssertEqual(decision, coordinatorAccepts ? .consume : .passThrough)
+            XCTAssertEqual(delivered(), [.cycleAlternatives])
+        }
+    }
+
+    func test_acceptTapLeavesPartialCycleModifiersUnhandled() {
+        let monitor = makeMonitor()
+        monitor.shouldConsumeAcceptKeyProvider = { true }
+        let delivered = recordKinds(on: monitor, accepts: true)
+
+        // Control-only Space and plain Space are not the cycle binding.
+        XCTAssertEqual(monitor.handleAcceptKeyDown(InputMonitorKeyEvent(keyCode: 49, flags: .maskControl)), .notHandled)
+        XCTAssertEqual(monitor.handleAcceptKeyDown(InputMonitorKeyEvent(keyCode: 49, characters: " ")), .notHandled)
+        XCTAssertTrue(delivered().isEmpty)
+    }
+
         XCTAssertEqual(monitor.resolveAcceptKeyDown(InputMonitorKeyEvent(keyCode: Self.tab)), .consume)
         XCTAssertEqual(monitor.resolveAcceptKeyDown(InputMonitorKeyEvent(keyCode: 125)), .notHandled)
     }

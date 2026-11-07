@@ -8,12 +8,13 @@ import XCTest
 final class DecodeStopPolicyTests: XCTestCase {
     private typealias Reason = DecodeStopPolicy.StopReason
 
-    /// A single-line suggestion stops at the model's first line break, even before the word or token
-    /// minimums; a multi-line one does not.
+    /// A single-line suggestion stops at the model's first line break once the minimum-token guard
+    /// has passed (even before the word minimum); a lone first-token line break does not stop it,
+    /// since the normalizer would strip it to an empty suggestion. A multi-line one never stops.
     func test_verdict_singleLineStopsAtTheFirstLineBreak() {
         XCTAssertEqual(DecodeStopPolicy.verdict(accumulated: "invite.\n", tokensGenerated: 3, minimumWords: 4,
                                                 stopsAtLineBreak: true), .lineBreak)
-        XCTAssertEqual(DecodeStopPolicy.verdict(accumulated: "\n", tokensGenerated: 1, stopsAtLineBreak: true), .lineBreak)
+        XCTAssertNil(DecodeStopPolicy.verdict(accumulated: "\n", tokensGenerated: 1, stopsAtLineBreak: true))
         XCTAssertNil(DecodeStopPolicy.verdict(accumulated: "still on this line", tokensGenerated: 4, stopsAtLineBreak: true))
         XCTAssertNil(DecodeStopPolicy.verdict(accumulated: "first line\nsecond", tokensGenerated: 4))
     }
@@ -122,6 +123,27 @@ final class DecodeStopPolicyTests: XCTestCase {
         XCTAssertEqual(
             DecodeStopPolicy.verdict(accumulated: " the report by Friday.", tokensGenerated: 6, minimumWords: 4),
             .sentenceBoundary
+        )
+    }
+
+    func test_lineBreakStopWaitsForTheMinimumTokenGuard() {
+        // A first token of "\n" in a single-line field must not stop decode: the normalizer
+        // strips it to empty and the user gets no suggestion at all. Same guard as the
+        // sentence-boundary stop (a lone first-token period).
+        XCTAssertNil(
+            DecodeStopPolicy.verdict(accumulated: "\n", tokensGenerated: 1, stopsAtLineBreak: true)
+        )
+        XCTAssertEqual(
+            DecodeStopPolicy.verdict(accumulated: "Hello\n", tokensGenerated: 2, stopsAtLineBreak: true),
+            .lineBreak
+        )
+    }
+
+    func test_lineBreakStopDoesNotFireWhenDisabled() {
+        // Multi-line fields keep generating past line breaks; the flag is only set for
+        // single-line suggestions.
+        XCTAssertNil(
+            DecodeStopPolicy.verdict(accumulated: "Hello\n", tokensGenerated: 2, stopsAtLineBreak: false)
         )
     }
 }

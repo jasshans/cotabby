@@ -148,10 +148,8 @@ struct SuggestionSettingsStore {
     private static let clipboardContextEnabledDefaultsKey = "cotabbyClipboardContextEnabled"
     private static let surfaceContextEnabledDefaultsKey = "cotabbySurfaceContextEnabled"
     private static let fastModeEnabledDefaultsKey = "cotabbyFastModeEnabled"
-    private static let suppressCompletionsOnTypoDefaultsKey = "cotabbySuppressCompletionsOnTypo"
     private static let offerTypoCorrectionsDefaultsKey = "cotabbyOfferTypoCorrections"
     private static let spellingDictionaryCodesDefaultsKey = "cotabbyEnabledSpellingDictionaryCodes"
-    private static let automaticallyFixTyposDefaultsKey = "cotabbyAutomaticallyFixTypos"
     private static let performanceTrackingEnabledDefaultsKey = "cotabbyPerformanceTrackingEnabled"
     private static let lowPowerModeAutoDisableDefaultsKey = "cotabbyLowPowerModeAutoDisableEnabled"
     /// Shared with `CotabbyApp` because SwiftUI's scene-level `@AppStorage` is what invalidates the
@@ -240,10 +238,8 @@ struct SuggestionSettingsStore {
         clipboardContextEnabledDefaultsKey,
         surfaceContextEnabledDefaultsKey,
         fastModeEnabledDefaultsKey,
-        suppressCompletionsOnTypoDefaultsKey,
         offerTypoCorrectionsDefaultsKey,
         spellingDictionaryCodesDefaultsKey,
-        automaticallyFixTyposDefaultsKey,
         performanceTrackingEnabledDefaultsKey,
         lowPowerModeAutoDisableDefaultsKey,
         menuBarWordCountVisibleDefaultsKey,
@@ -389,11 +385,6 @@ struct SuggestionSettingsStore {
         // into fast mode turns it off.
         let resolvedFastModeEnabled =
             userDefaults.object(forKey: Self.fastModeEnabledDefaultsKey) as? Bool ?? false
-        // Hiding a completion on a misspelled current word and offering a fix remain the default
-        // behavior. Automatic replacement is deliberately opt-in because it mutates host-app text
-        // without a confirmation key.
-        let resolvedSuppressCompletionsOnTypo =
-            userDefaults.object(forKey: Self.suppressCompletionsOnTypoDefaultsKey) as? Bool ?? true
         let resolvedOfferTypoCorrections =
             userDefaults.object(forKey: Self.offerTypoCorrectionsDefaultsKey) as? Bool ?? true
         let resolvedEnabledSpellingDictionaryCodes: [String] = {
@@ -404,8 +395,6 @@ struct SuggestionSettingsStore {
                 userDefaults.stringArray(forKey: Self.spellingDictionaryCodesDefaultsKey) ?? []
             )
         }()
-        let resolvedAutomaticallyFixTypos =
-            userDefaults.object(forKey: Self.automaticallyFixTyposDefaultsKey) as? Bool ?? false
         // Defaults to false so the metrics ring buffer stays empty until the user explicitly opts
         // in from the Performance pane.
         let resolvedPerformanceTrackingEnabled =
@@ -649,10 +638,8 @@ struct SuggestionSettingsStore {
                 extendedContext: resolvedExtendedContext
             ),
             correction: SuggestionCorrectionSettings(
-                suppressCompletionsOnTypo: resolvedSuppressCompletionsOnTypo,
                 offerTypoCorrections: resolvedOfferTypoCorrections,
-                enabledSpellingDictionaryCodes: resolvedEnabledSpellingDictionaryCodes,
-                automaticallyFixTypos: resolvedAutomaticallyFixTypos
+                enabledSpellingDictionaryCodes: resolvedEnabledSpellingDictionaryCodes
             ),
             presentation: SuggestionPresentationSettings(
                 showIndicator: resolvedShowIndicator,
@@ -723,10 +710,8 @@ struct SuggestionSettingsStore {
         saveClipboardContextEnabled(data.isClipboardContextEnabled)
         saveSurfaceContextEnabled(data.isSurfaceContextEnabled)
         saveFastModeEnabled(data.isFastModeEnabled)
-        saveSuppressCompletionsOnTypo(data.suppressCompletionsOnTypo)
         saveOfferTypoCorrections(data.offerTypoCorrections)
         saveEnabledSpellingDictionaryCodes(data.enabledSpellingDictionaryCodes)
-        saveAutomaticallyFixTypos(data.automaticallyFixTypos)
         savePerformanceTrackingEnabled(data.isPerformanceTrackingEnabled)
         saveLowPowerModeAutoDisableEnabled(data.isLowPowerModeAutoDisableEnabled)
         saveMenuBarIconVisible(data.isMenuBarIconVisible)
@@ -980,10 +965,6 @@ struct SuggestionSettingsStore {
         userDefaults.set(enabled, forKey: Self.fastModeEnabledDefaultsKey)
     }
 
-    func saveSuppressCompletionsOnTypo(_ enabled: Bool) {
-        userDefaults.set(enabled, forKey: Self.suppressCompletionsOnTypoDefaultsKey)
-    }
-
     func saveOfferTypoCorrections(_ enabled: Bool) {
         userDefaults.set(enabled, forKey: Self.offerTypoCorrectionsDefaultsKey)
     }
@@ -993,10 +974,6 @@ struct SuggestionSettingsStore {
             SpellingDictionaryCatalog.normalize(codes),
             forKey: Self.spellingDictionaryCodesDefaultsKey
         )
-    }
-
-    func saveAutomaticallyFixTypos(_ enabled: Bool) {
-        userDefaults.set(enabled, forKey: Self.automaticallyFixTyposDefaultsKey)
     }
 
     func savePerformanceTrackingEnabled(_ enabled: Bool) {

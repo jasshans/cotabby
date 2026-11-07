@@ -26,11 +26,13 @@ extension SuggestionCoordinator {
     }
 
     func startCompletionSession(prediction: String, visibleText: String, context: FocusedInputContext,
-                                latency: TimeInterval, isFinal: Bool, wordEndingOnly: Bool = false) -> ActiveSuggestionSession {
+                                latency: TimeInterval, isFinal: Bool, wordEndingOnly: Bool = false,
+                                alternatives: [String] = []) -> ActiveSuggestionSession {
         let fullText = bufferedCompletionText(prediction, visibleText: visibleText, context: context, isFinal: isFinal)
         return interactionState.startSession(fullText: fullText,
             initialVisibleCharacterCount: wordEndingOnly || fullText != visibleText ? visibleText.count : nil,
-            showFollowingWords: settingsSnapshot.showFollowingWords, liveContext: context, latency: latency)
+            showFollowingWords: settingsSnapshot.showFollowingWords, liveContext: context, latency: latency,
+            alternatives: alternatives)
     }
 
     func completionPresentation(

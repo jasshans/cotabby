@@ -75,10 +75,8 @@ struct SuggestionContextSettings: Equatable {
 
 /// Deterministic spelling and typo-correction policy.
 struct SuggestionCorrectionSettings: Equatable {
-    var suppressCompletionsOnTypo: Bool
     var offerTypoCorrections: Bool
     var enabledSpellingDictionaryCodes: [String]
-    var automaticallyFixTypos: Bool
 }
 
 /// Overlay, indicator, menu-bar, and transition presentation.
@@ -363,11 +361,6 @@ extension SuggestionSettingsData {
         set { context.extendedContext = newValue }
     }
 
-    var suppressCompletionsOnTypo: Bool {
-        get { correction.suppressCompletionsOnTypo }
-        set { correction.suppressCompletionsOnTypo = newValue }
-    }
-
     var offerTypoCorrections: Bool {
         get { correction.offerTypoCorrections }
         set { correction.offerTypoCorrections = newValue }
@@ -376,11 +369,6 @@ extension SuggestionSettingsData {
     var enabledSpellingDictionaryCodes: [String] {
         get { correction.enabledSpellingDictionaryCodes }
         set { correction.enabledSpellingDictionaryCodes = newValue }
-    }
-
-    var automaticallyFixTypos: Bool {
-        get { correction.automaticallyFixTypos }
-        set { correction.automaticallyFixTypos = newValue }
     }
 
     var showIndicator: Bool {
