@@ -116,7 +116,9 @@ nonisolated final class PersonalNGramEngine: Sendable {
         for key in prefixIndex.keys {
             prefixIndex[key] = Array(
                 prefixIndex[key]!
-                    .sorted { $0.count > $1.count }
+                    // Ties break alphabetically: dictionary order is random per launch, and a tie
+                    // must not make the suggestion (and its alternatives) flip between launches.
+                    .sorted { ($0.count, $1.word) > ($1.count, $0.word) }
                     .prefix(maxCandidatesPerKey)
             )
         }
@@ -134,7 +136,7 @@ nonisolated final class PersonalNGramEngine: Sendable {
         for (key, candidates) in trigramCounts {
             let filtered = candidates
                 .filter { $0.value >= minTrigramCount }
-                .sorted { $0.value > $1.value }
+                .sorted { ($0.value, $1.key) > ($1.value, $0.key) } // alphabetical ties, see above
                 .prefix(maxCandidatesPerKey)
                 .map { (word: $0.key, count: $0.value) }
             if !filtered.isEmpty {
@@ -153,7 +155,7 @@ nonisolated final class PersonalNGramEngine: Sendable {
         for (key, candidates) in bigramCounts {
             let filtered = candidates
                 .filter { $0.value >= minBigramCount }
-                .sorted { $0.value > $1.value }
+                .sorted { ($0.value, $1.key) > ($1.value, $0.key) } // alphabetical ties, see above
                 .prefix(maxCandidatesPerKey)
                 .map { (word: $0.key, count: $0.value) }
             if !filtered.isEmpty {
