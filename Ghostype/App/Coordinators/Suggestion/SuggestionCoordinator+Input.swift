@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import Logging
 
@@ -297,6 +298,24 @@ extension SuggestionCoordinator {
         )
     }
 
+    /// Typing cadence learns from text mutations; a dismissal is remembered (and counted as
+    /// rejection evidence) so the same suggestion is not offered again in this field.
+    private func recordTypingAndDismissalEvidence(for event: CapturedInputEvent) {
+        if event.kind == .textMutation, let raw = focusModel.snapshot.context {
+            let context = interactionState.materializeContext(from: raw)
+            typingCadence.record(identityKey: context.focusedInputIdentityKey, characters: event.characters,
+                                 at: ProcessInfo.processInfo.systemUptime)
+        }
+        if event.kind == .dismissal, let session = interactionState.activeSession,
+           let raw = focusModel.snapshot.context {
+            let context = interactionState.materializeContext(from: raw)
+            dismissalMemory.record(identityKey: context.suggestionSessionIdentityKey,
+                                   precedingText: context.precedingText, trailingText: context.trailingText,
+                                   completion: session.remainingText, at: ProcessInfo.processInfo.systemUptime)
+            recordRejectionEvidence(session: session, raw: raw)
+        }
+    }
+
     func handleInputEvent(_ event: CapturedInputEvent) -> Bool {
         recordInputPresentationTiming(event)
         // Give the emoji picker first look at every keystroke so it can drive its trigger state
@@ -330,19 +349,7 @@ extension SuggestionCoordinator {
             releasePostExhaustionAcceptanceWindow()
         }
 
-        if event.kind == .textMutation, let raw = focusModel.snapshot.context {
-            let context = interactionState.materializeContext(from: raw)
-            typingCadence.record(identityKey: context.focusedInputIdentityKey, characters: event.characters,
-                                 at: ProcessInfo.processInfo.systemUptime)
-        }
-        if event.kind == .dismissal, let session = interactionState.activeSession,
-           let raw = focusModel.snapshot.context {
-            let context = interactionState.materializeContext(from: raw)
-            dismissalMemory.record(identityKey: context.suggestionSessionIdentityKey,
-                                   precedingText: context.precedingText, trailingText: context.trailingText,
-                                   completion: session.remainingText, at: ProcessInfo.processInfo.systemUptime)
-            recordRejectionEvidence(session: session, raw: raw)
-        }
+        recordTypingAndDismissalEvidence(for: event)
 
         if event.kind == .acceptance {
             return acceptForWordAcceptKeyPress(isAutorepeat: event.isAutorepeat)
@@ -355,6 +362,10 @@ extension SuggestionCoordinator {
 
         if event.kind == .fullAcceptance {
             return acceptEntireSuggestion()
+        }
+
+        if event.kind == .cycleAlternatives {
+            return cycleToNextAlternative()
         }
 
         if let activeSession = interactionState.activeSession {
@@ -391,9 +402,59 @@ extension SuggestionCoordinator {
             // *before* the host app processes the keystroke, so a synchronous `refreshNow()` here
             // reads pre-keystroke text and feeds it into generation. The result is a suggestion
             // that looks like the typed character was ignored — see
-            // `schedulePredictionAfterHostPublishDelay` for the full rationale.
+            // `schedulePredictionAfterHostPublishDelay` for the full rationale. A plain typed
+            // character can still start generating now, against the text the host is about to
+            // publish; the poll then validates that bet instead of gating the request.
+            speculateOnTypedCharacter(event)
             schedulePredictionAfterHostPublishDelay()
         }
+    }
+
+    /// Starts the keystroke-time speculative generation for a plain typed character. The base is
+    /// the last captured snapshot, extended by the letters a visible suggestion was typed through
+    /// (`session`), which the snapshot may not include yet. When it still misses an unpublished key,
+    /// the speculated text simply misses and the publish poll falls back to the ordinary request.
+    private func speculateOnTypedCharacter(_ event: CapturedInputEvent, after session: ActiveSuggestionSession? = nil) {
+        guard event.kind == .textMutation, let typed = Self.speculatedCharacters(for: event),
+              let raw = focusModel.snapshot.context else { return }
+        let typedThrough = session.flatMap { session -> String? in
+            guard session.baseContext.elementIdentifier == raw.elementIdentifier else { return nil }
+            return session.baseContext.precedingText + String(session.fullText.prefix(session.consumedCharacterCount))
+        }
+        dispatchSpeculativeTypingGeneration(rawContext: raw, typed: typed, knownPrecedingText: typedThrough)
+    }
+
+    /// The character the host will most likely insert for `event`, or nil when it cannot be told
+    /// from the event alone. A key event's Unicode string does not always carry Shift (synthetic
+    /// events report "s" for a shifted S), so a letter follows Shift XOR Caps Lock; uppercasing an
+    /// already-capital letter changes nothing. A shifted symbol depends on the keyboard layout
+    /// ("/" becomes "?" on US layouts), so it is left to the ordinary publish-gated request.
+    static func speculatedCharacters(for event: CapturedInputEvent) -> String? {
+        guard event.characters.count == 1, let character = event.characters.first else { return nil }
+        let shift = event.flags.contains(.maskShift)
+        guard character.isLetter else { return shift ? nil : event.characters }
+        return shift != event.flags.contains(.maskAlphaShift) ? event.characters.uppercased() : event.characters
+    }
+
+    /// Records why a publish did not match the speculated text, without logging either text: the
+    /// lengths, selections, and the first differing UTF-16 offset are enough to tell a lagging base
+    /// snapshot from a host transformation (smart punctuation, auto-pairing, a shifted key).
+    private func logSpeculationMiss(expected: FocusedInputContext, published: FocusedInputSnapshot) {
+        let lhs = Array(expected.precedingText.utf16), rhs = Array(published.precedingText.utf16)
+        let shared = zip(lhs, rhs).prefix { $0 == $1 }.count
+        CotabbyLogger.suggestion.debug(
+            "Speculation missed the published text",
+            metadata: [
+                "stage": .string("speculation-missed"),
+                "same_session": .stringConvertible(expected.sessionIdentity == published.sessionIdentity),
+                "expected_utf16": .stringConvertible(lhs.count),
+                "published_utf16": .stringConvertible(rhs.count),
+                "first_difference": .stringConvertible(shared),
+                "expected_selection": .stringConvertible(expected.selection.location),
+                "published_selection": .stringConvertible(published.selection.location),
+                "trailing_matches": .stringConvertible(expected.trailingText == published.trailingText)
+            ]
+        )
     }
 
     /// Maximum wall time we'll wait for the host app to publish post-keystroke AX before giving
@@ -537,6 +598,9 @@ extension SuggestionCoordinator {
                 )
                 return
             }
+            if let expected = pendingSpeculativeContext, let published = currentContext {
+                logSpeculationMiss(expected: expected, published: published)
+            }
             pendingSpeculativeContext = nil
             schedulePrediction(
                 consumedDelayMilliseconds: Self.elapsedMilliseconds(since: baseline.keystrokeUptimeNanoseconds)
@@ -619,6 +683,7 @@ extension SuggestionCoordinator {
                 clearDiagnostics: false
             )
             if event.shouldSchedulePrediction {
+                speculateOnTypedCharacter(event, after: session)
                 schedulePredictionAfterHostPublishDelay()
             }
             return false
@@ -641,7 +706,7 @@ extension SuggestionCoordinator {
             state = .idle
             return false
 
-        case .other, .acceptance, .fullAcceptance:
+        case .other, .acceptance, .fullAcceptance, .cycleAlternatives:
             return false
         }
     }

@@ -4,9 +4,11 @@ import UniformTypeIdentifiers
 
 /// Reads the current pasteboard only when Ghostype is about to build a prompt.
 ///
-/// Clipboard contents are highly sensitive and change outside Ghostype's control, so this service does
-/// not cache or publish them. The coordinator asks for a fresh, bounded description at generation
-/// time, and `SuggestionRequestFactory` still owns the final prompt clipping policy.
+/// Clipboard contents are highly sensitive and change outside Ghostype's control, so this service
+/// never caches or publishes clipboard *text*. Image summaries (format, size, filename — never
+/// text) are memoized per `changeCount` so a copied image is not re-decoded on every prediction;
+/// a new `changeCount` invalidates them. The coordinator asks for a fresh, bounded description at
+/// generation time, and `SuggestionRequestFactory` still owns the final prompt clipping policy.
 @MainActor
 final class ClipboardContextProvider: ClipboardContextProviding {
     private let pasteboard: NSPasteboard

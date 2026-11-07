@@ -1298,7 +1298,7 @@ enum AXHelper {
     /// finite values are rejected too: a code editor's parent once reported a width of 2^63 or more,
     /// and `Int(width.rounded())` trapped on it (0.1.68 crash).
     static func rectHasFiniteComponents(_ rect: CGRect) -> Bool {
-        // ponytail: 1e6 pt is far past any display wall; widen if a real host ever exceeds it.
+        // 1e6 pt is far past any display wall; widen if a real host ever exceeds it.
         [rect.origin.x, rect.origin.y, rect.size.width, rect.size.height]
             .allSatisfy { $0.isFinite && abs($0) <= 1_000_000 }
     }

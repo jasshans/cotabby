@@ -39,6 +39,10 @@ final class CompletionContentPolicyTests: XCTestCase {
         XCTAssertEqual(policy.rejection(for: ". Hi S. Hi S. Hi S.", precedingText: "charlie. Hi S"), .repetitiveContent)
         XCTAssertEqual(policy.rejection(for: "no no no no", precedingText: "oh "), .repetitiveContent)
         XCTAssertEqual(policy.rejection(for: "over and over and over and over", precedingText: "again "), .repetitiveContent)
+        // CJK loops have no spaces to split on: a 2-char unit containing a letter, repeated 3x.
+        // Measured on Bonsai 2B. An IP address is not a loop (no letter in the unit).
+        XCTAssertEqual(policy.rejection(for: "夜は夜は夜は", precedingText: "今"), .repetitiveContent)
+        XCTAssertNil(CompletionContentPolicy.rejection(for: "10.10.10.10", precedingText: "ping "))
         XCTAssertNil(CompletionContentPolicy.rejection(for: "very very good", precedingText: "it was "), "two copies are emphasis")
         XCTAssertNil(CompletionContentPolicy.rejection(for: "day after day, week after week", precedingText: "it went on "))
         // Text written without spaces loops in its characters (Bonsai 2B eval, 2026-10-21).

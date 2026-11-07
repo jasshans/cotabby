@@ -44,7 +44,10 @@ struct MenuBarStatusLabelView: View {
         switch MenuBarIconStyle.stored(iconStyle) {
         case .ghost: return Image(nsImage: GhostMenuBarImage.ghost)
         case .winterGhost: return Image(nsImage: GhostMenuBarImage.winterGhost)
-        case .pumpkin, .none: return Image("MenuBarPumpkinIcon").renderingMode(.template)
+        case .pumpkin: return Image("MenuBarPumpkinIcon").renderingMode(.template)
+        // Unreachable: `stored()` maps `.none` onto the default style before this switch,
+        // so this only keeps the switch exhaustive — it shows the default ghost.
+        case .none: return Image(nsImage: GhostMenuBarImage.ghost)
         }
     }
 

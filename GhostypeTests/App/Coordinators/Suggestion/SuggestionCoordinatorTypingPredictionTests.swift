@@ -299,7 +299,7 @@ final class SuggestionCoordinatorTypingPredictionTests: XCTestCase {
         let engine = ControlledTypingEngine()
         let rig = makeCoordinatorRig(snapshot: CotabbyTestFixtures.focusedInputSnapshot(precedingText: "I'll send "),
             settingsSnapshot: CotabbyTestFixtures.settingsSnapshot(selectedEngine: .appleIntelligence,
-                debounceMilliseconds: 1, suppressCompletionsOnTypo: true, automaticallyFixTypos: true),
+                debounceMilliseconds: 1),
             generationEngine: engine)
         rig.coordinator.symSpellCorrector.loadForTesting(contents: "receive 100\n")
         defer { rig.coordinator.stop(); engine.finishAll() }

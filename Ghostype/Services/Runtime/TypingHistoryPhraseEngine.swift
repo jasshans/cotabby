@@ -43,19 +43,22 @@ final class TypingHistoryPhraseEngine: SuggestionGenerating {
         // n-gram model. Chains whole familiar phrases ("to hearing from you"), which is
         // what makes the stream feel instant like Cotypist — no inference, no waiting.
         // Falls through to phrase/LLM if the n-gram has no confident prediction.
-        if let ngram = ngramEngine,
-           let prediction = ngram.predictChain(for: request.context.precedingText).flatMap({ Self.bounded($0, for: request) }) {
-            CotabbyLogger.suggestion.debug(
-                "Answered from n-gram",
-                metadata: ["request_id": .string(request.requestID), "engine": .string("ngram")]
-            )
-            return SuggestionResult(
-                generation: request.generation,
-                rawText: prediction,
-                text: prediction,
-                latency: ProcessInfo.processInfo.systemUptime - started,
-                spacingIsExact: true
-            )
+        if let ngram = ngramEngine {
+            let chains = ngram.predictChains(for: request.context.precedingText).compactMap { Self.bounded($0, for: request) }
+            if let prediction = chains.first {
+                CotabbyLogger.suggestion.debug(
+                    "Answered from n-gram",
+                    metadata: ["request_id": .string(request.requestID), "engine": .string("ngram")]
+                )
+                return SuggestionResult(
+                    generation: request.generation,
+                    rawText: prediction,
+                    text: prediction,
+                    latency: ProcessInfo.processInfo.systemUptime - started,
+                    spacingIsExact: true,
+                    alternatives: Array(chains.dropFirst())
+                )
+            }
         }
         if let phrase = history.phraseContinuation(for: request, engine: engineKind()).flatMap({ Self.bounded($0, for: request) }) {
             CotabbyLogger.suggestion.debug(

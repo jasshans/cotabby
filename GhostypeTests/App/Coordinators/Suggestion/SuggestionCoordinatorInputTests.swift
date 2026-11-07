@@ -551,4 +551,104 @@ final class SuggestionCoordinatorInputTests: SuggestionCoordinatorRigTestCase {
         XCTAssertEqual(rig.coordinator.state, .idle)
         XCTAssertNil(rig.interactionState.activeSession)
     }
+
+    // MARK: - Speculative typing
+
+    func test_speculatedCharacters_plainLetter() {
+        let event = CotabbyTestFixtures.inputEvent(kind: .textMutation, characters: "a")
+        XCTAssertEqual(SuggestionCoordinator.speculatedCharacters(for: event), "a")
+    }
+
+    func test_speculatedCharacters_shiftUppercasesLetter() {
+        let event = CotabbyTestFixtures.inputEvent(kind: .textMutation, characters: "s", flags: .maskShift)
+        XCTAssertEqual(SuggestionCoordinator.speculatedCharacters(for: event), "S")
+    }
+
+    func test_speculatedCharacters_shiftXorCapsLock() {
+        // Shift + Caps Lock cancel out: the host inserts the lowercase letter.
+        let shiftCaps: CGEventFlags = [.maskShift, .maskAlphaShift]
+        let event = CotabbyTestFixtures.inputEvent(kind: .textMutation, characters: "s", flags: shiftCaps)
+        XCTAssertEqual(SuggestionCoordinator.speculatedCharacters(for: event), "s")
+
+        // Caps Lock alone uppercases, like Shift.
+        let capsOnly = CotabbyTestFixtures.inputEvent(kind: .textMutation, characters: "s", flags: .maskAlphaShift)
+        XCTAssertEqual(SuggestionCoordinator.speculatedCharacters(for: capsOnly), "S")
+    }
+
+    func test_speculatedCharacters_shiftedSymbolIsNotGuessed() {
+        // "/" becomes "?" on US layouts with Shift; layout-dependent, so leave it to the
+        // ordinary publish-gated request. Unshifted it is exactly what it says.
+        let shifted = CotabbyTestFixtures.inputEvent(kind: .textMutation, characters: "/", flags: .maskShift)
+        XCTAssertNil(SuggestionCoordinator.speculatedCharacters(for: shifted))
+        let plain = CotabbyTestFixtures.inputEvent(kind: .textMutation, characters: "/")
+        XCTAssertEqual(SuggestionCoordinator.speculatedCharacters(for: plain), "/")
+    }
+
+    func test_speculatedCharacters_rejectsNonSingleCharacters() {
+        XCTAssertNil(SuggestionCoordinator.speculatedCharacters(for:
+            CotabbyTestFixtures.inputEvent(kind: .textMutation, characters: "ab")))
+        XCTAssertNil(SuggestionCoordinator.speculatedCharacters(for:
+            CotabbyTestFixtures.inputEvent(kind: .textMutation, characters: "")))
+    }
+
+    // MARK: - Word alternatives
+
+    private func startSessionWithAlternatives(
+        in rig: CoordinatorRig, fullText: String = " world", alternatives: [String]
+    ) -> ActiveSuggestionSession {
+        let context = FocusedInputContext(snapshot: rig.focusProvider.snapshot.context!, generation: 1)
+        let session = rig.interactionState.startSession(
+            fullText: fullText, liveContext: context, latency: 0.05, alternatives: alternatives)
+        rig.overlayController.showSuggestion(
+            session.remainingText, geometry: CotabbyTestFixtures.overlayGeometry())
+        return session
+    }
+
+    func test_cycleAlternativesRotatesVisibleSuggestion() {
+        let rig = retained(makeCoordinatorRig())
+        startSessionWithAlternatives(in: rig, alternatives: [" again", " tomorrow"])
+
+        let consumed = rig.coordinator.handleInputEvent(
+            CotabbyTestFixtures.inputEvent(kind: .cycleAlternatives))
+
+        XCTAssertTrue(consumed, "Cycling must swallow the key so no space reaches the host")
+        XCTAssertEqual(rig.interactionState.activeSession?.fullText, " again")
+        XCTAssertEqual(rig.interactionState.activeSession?.alternatives, [" tomorrow", " world"])
+        XCTAssertEqual(rig.overlayController.shownTexts.last, " again")
+    }
+
+    func test_cycleAlternativesWrapsAround() {
+        let rig = retained(makeCoordinatorRig())
+        startSessionWithAlternatives(in: rig, alternatives: [" again", " tomorrow"])
+
+        let cycle = CotabbyTestFixtures.inputEvent(kind: .cycleAlternatives)
+        XCTAssertTrue(rig.coordinator.handleInputEvent(cycle))
+        XCTAssertTrue(rig.coordinator.handleInputEvent(cycle))
+        XCTAssertTrue(rig.coordinator.handleInputEvent(cycle))
+
+        // Three cycles over two alternatives plus the original: back where it started.
+        XCTAssertEqual(rig.interactionState.activeSession?.fullText, " world")
+        XCTAssertEqual(rig.interactionState.activeSession?.alternatives, [" again", " tomorrow"])
+    }
+
+    func test_cycleAlternativesWithoutAlternativesDoesNothing() {
+        let rig = retained(makeCoordinatorRig())
+        startVisibleSession(in: rig)
+
+        let consumed = rig.coordinator.handleInputEvent(
+            CotabbyTestFixtures.inputEvent(kind: .cycleAlternatives))
+
+        XCTAssertFalse(consumed, "With nothing to cycle to, the key must fall through untouched")
+        XCTAssertEqual(rig.interactionState.activeSession?.fullText, " world")
+    }
+
+    func test_cycleAlternativesWithoutSessionDoesNothing() {
+        let rig = retained(makeCoordinatorRig())
+
+        let consumed = rig.coordinator.handleInputEvent(
+            CotabbyTestFixtures.inputEvent(kind: .cycleAlternatives))
+
+        XCTAssertFalse(consumed)
+        XCTAssertNil(rig.interactionState.activeSession)
+    }
 }

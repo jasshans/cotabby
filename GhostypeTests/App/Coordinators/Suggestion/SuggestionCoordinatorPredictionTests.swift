@@ -39,6 +39,34 @@ final class SuggestionCoordinatorPredictionTests: SuggestionCoordinatorRigTestCa
         XCTAssertEqual(rig.coordinator.lastLatencyByEngine, [.llamaOpenSource: 10])
     }
 
+    func test_subMillisecondFastPathResult_doesNotPolluteLatencySignals() async {
+        // The n-gram / typing-history fast paths answer in under a millisecond without
+        // touching the model. Recording those as backend latency would sink the Speed
+        // auto-tuner's median toward 0 ms (disabling short context) and tell the debounce
+        // the backend is instant. The suggestion still presents; only the latency signals
+        // stay untouched.
+        let rig = retained(makeCoordinatorRig(
+            snapshot: CotabbyTestFixtures.focusedInputSnapshot(precedingText: "Hello ")
+        ))
+        rig.engine.resultProvider = { request in
+            SuggestionResult(generation: request.generation, rawText: " world", text: " world", latency: 0.0004)
+        }
+
+        rig.coordinator.schedulePrediction()
+        await waitUntil("Suggestion never became ready") {
+            rig.coordinator.state == .ready(text: "world", latency: 0.0004)
+        }
+
+        XCTAssertTrue(
+            rig.coordinator.lastLatencyByEngine.isEmpty,
+            "A sub-5 ms fast-path result must not feed the debounce fallback"
+        )
+        XCTAssertEqual(
+            rig.coordinator.latencyAutoTuner.medianLatencyMs, nil,
+            "A sub-5 ms fast-path result must not feed the Speed auto-tuner"
+        )
+    }
+
     // MARK: - Gates before generation
 
     func test_schedulePrediction_disabledAppGoesStraightToDisabledState() async {
@@ -228,7 +256,6 @@ final class SuggestionCoordinatorPredictionTests: SuggestionCoordinatorRigTestCa
             snapshot: CotabbyTestFixtures.focusedInputSnapshot(precedingText: "I typed qzxkvjw "),
             settingsSnapshot: CotabbyTestFixtures.settingsSnapshot(
                 debounceMilliseconds: 1,
-                suppressCompletionsOnTypo: true,
                 offerTypoCorrections: true
             )
         ))
@@ -243,7 +270,6 @@ final class SuggestionCoordinatorPredictionTests: SuggestionCoordinatorRigTestCa
             snapshot: CotabbyTestFixtures.focusedInputSnapshot(precedingText: "I typed recieve "),
             settingsSnapshot: CotabbyTestFixtures.settingsSnapshot(
                 debounceMilliseconds: 1,
-                suppressCompletionsOnTypo: true,
                 offerTypoCorrections: true
             )
         ))
@@ -267,9 +293,7 @@ final class SuggestionCoordinatorPredictionTests: SuggestionCoordinatorRigTestCa
             snapshot: CotabbyTestFixtures.focusedInputSnapshot(precedingText: "I typed recieve "),
             settingsSnapshot: CotabbyTestFixtures.settingsSnapshot(
                 debounceMilliseconds: 1,
-                suppressCompletionsOnTypo: true,
-                offerTypoCorrections: true,
-                automaticallyFixTypos: true
+                offerTypoCorrections: true
             )
         ))
 

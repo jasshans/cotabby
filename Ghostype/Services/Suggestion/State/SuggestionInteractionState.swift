@@ -56,6 +56,7 @@ final class SuggestionInteractionState {
         showFollowingWords: Bool = true,
         liveContext: FocusedInputContext,
         latency: TimeInterval,
+        alternatives: [String] = [],
         kind: SuggestionKind = .continuation
     ) -> ActiveSuggestionSession {
         let session = ActiveSuggestionSession(
@@ -64,6 +65,7 @@ final class SuggestionInteractionState {
             initialVisibleCharacterCount: initialVisibleCharacterCount,
             showFollowingWords: showFollowingWords,
             latency: latency,
+            alternatives: alternatives,
             kind: kind
         )
         activeSession = session

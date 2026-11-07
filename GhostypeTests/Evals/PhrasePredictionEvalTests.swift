@@ -53,7 +53,7 @@ final class PhrasePredictionEvalTests: XCTestCase {
             isClipboardContextEnabled: false, isSurfaceContextEnabled: options.promptVariant != "content-only",
             userName: options.profile == "personalized" && options.promptVariant != "content-only" ? "Alex" : "",
             responseLanguages: options.profile == "personalized" && options.promptVariant != "content-only" ? ["English"] : [],
-            isMultiLineEnabled: false, suppressCompletionsOnTypo: true, offerTypoCorrections: true
+            isMultiLineEnabled: false, offerTypoCorrections: true
         )
         var configurationRecord = Dictionary(uniqueKeysWithValues: Mirror(reflecting: configuration).children.compactMap {
             child -> (String, String)? in

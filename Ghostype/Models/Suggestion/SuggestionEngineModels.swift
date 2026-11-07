@@ -178,20 +178,12 @@ struct SuggestionSettingsSnapshot: Equatable, Sendable {
     /// How much of the buffered suggestion the primary accept key takes per press. Read once per
     /// accept call so a mid-press setting change can't strand a partially-handled press.
     let acceptanceGranularity: AcceptanceGranularity
-    /// When true, Ghostype checks the committed word with `NSSpellChecker` and hides the normal
-    /// continuation when it looks misspelled. Travels in the snapshot so the prediction gate reads
-    /// the live value without subscribing to the settings model directly.
-    let suppressCompletionsOnTypo: Bool
-    /// When true (and `suppressCompletionsOnTypo` is also true), a detected typo is offered a native
-    /// spell-checker correction instead of being silently suppressed. No effect when suppression is off.
+    /// When true, a detected typo is offered a native spell-checker correction as a
+    /// replace-the-word suggestion. Corrections are only ever offered, never applied.
     let offerTypoCorrections: Bool
     /// Normalized ISO codes for the bundled SymSpell dictionaries eligible for correction ranking.
     /// Language routing chooses at most one per typo; an empty array uses only `NSSpellChecker`.
     let enabledSpellingDictionaryCodes: [String]
-    /// When true (and typo suppression is on), a correction is applied automatically after the user
-    /// commits the misspelled word with Space. The word boundary prevents pauses in unfinished words
-    /// from triggering destructive edits.
-    let automaticallyFixTypos: Bool
     /// When true, a second press of the Accept Word key within `DoubleTapAcceptanceState.window`
     /// accepts the rest of the suggestion. Travels in the snapshot so the acceptance path reads the
     /// live value without subscribing to the settings model. Read it per app through

@@ -279,10 +279,8 @@ enum CotabbyTestFixtures {
         isFastModeEnabled: Bool = false,
         mirrorPreference: MirrorPreference = .auto,
         acceptanceGranularity: AcceptanceGranularity = .word,
-        suppressCompletionsOnTypo: Bool = false,
         offerTypoCorrections: Bool = false,
         enabledSpellingDictionaryCodes: [String] = SpellingDictionaryCatalog.defaultEnabledCodes,
-        automaticallyFixTypos: Bool = false,
         doubleTapAcceptsEntireSuggestion: Bool = false,
         fullAcceptanceOverrideBundleIdentifiers: Set<String> = []
     ) -> SuggestionSettingsSnapshot {
@@ -316,10 +314,8 @@ enum CotabbyTestFixtures {
             isFastModeEnabled: isFastModeEnabled,
             mirrorPreference: mirrorPreference,
             acceptanceGranularity: acceptanceGranularity,
-            suppressCompletionsOnTypo: suppressCompletionsOnTypo,
             offerTypoCorrections: offerTypoCorrections,
             enabledSpellingDictionaryCodes: enabledSpellingDictionaryCodes,
-            automaticallyFixTypos: automaticallyFixTypos,
             doubleTapAcceptsEntireSuggestion: doubleTapAcceptsEntireSuggestion,
             fullAcceptanceOverrideBundleIdentifiers: fullAcceptanceOverrideBundleIdentifiers
         )

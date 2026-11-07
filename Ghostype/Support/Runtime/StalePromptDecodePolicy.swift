@@ -12,10 +12,10 @@ import Foundation
 ///
 /// Pure; `LlamaRuntimeManager` asks it when a new request starts while another is still running.
 enum StalePromptDecodePolicy {
-    // ponytail: fixed half-prompt threshold; hybrid models (Bonsai, Gemma SWA) restore only from a
-    // checkpoint near the prompt tail, so for them any early divergence is waste. Tune per model if
-    // a measurement shows the wait paying off below half.
     /// Below this share of the running prompt in common, its decode is not worth waiting for.
+    /// Fixed half-prompt threshold; hybrid models (Bonsai, Gemma SWA) restore only from a
+    /// checkpoint near the prompt tail, so for them any early divergence is waste. Tune per model if
+    /// a measurement shows the wait paying off below half.
     static let minimumSharedFraction = 0.5
 
     static func shouldAbort(running: String, next: String) -> Bool {
