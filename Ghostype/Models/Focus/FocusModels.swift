@@ -520,18 +520,26 @@ nonisolated struct FocusedInputSnapshot: Equatable {
         self.elementFrameRect = elementFrameRect
         self.hostMarkedTextRange = hostMarkedTextRange
         self.contentSignature = Self.makeContentSignature(
-            selection: selection, precedingText: precedingText, trailingText: trailingText, isSecure: isSecure
+            selection: selection, precedingText: precedingText, trailingText: trailingText,
+            trailingTextUnavailable: trailingTextUnavailable, isSecure: isSecure
         )
     }
 
     /// Builds the content signature. A static helper so both the initializer and the doc
     /// comment below share one definition of the format.
-    private static func makeContentSignature(selection: NSRange, precedingText: String, trailingText: String, isSecure: Bool) -> String {
+    private static func makeContentSignature(
+        selection: NSRange,
+        precedingText: String,
+        trailingText: String,
+        trailingTextUnavailable: Bool,
+        isSecure: Bool
+    ) -> String {
         [
             String(selection.location),
             String(selection.length),
             precedingText,
             trailingText,
+            trailingTextUnavailable ? "trailing-unknown" : "trailing-known",
             isSecure ? "secure" : "plain"
         ].joined(separator: "::")
     }

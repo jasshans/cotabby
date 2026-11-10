@@ -28,6 +28,7 @@ struct FocusedInputContext: Equatable, Sendable {
     let observedContentEdges: ObservedContentEdges?
     let precedingText: String
     let trailingText: String
+    let trailingTextUnavailable: Bool
     let selection: NSRange
     let isSecure: Bool
     /// Whether the field's text is rendered by a web engine (see `WebContentFieldDetector`),
@@ -77,6 +78,7 @@ struct FocusedInputContext: Equatable, Sendable {
         observedContentEdges = snapshot.observedContentEdges
         precedingText = snapshot.precedingText
         trailingText = snapshot.trailingText
+        trailingTextUnavailable = snapshot.trailingTextUnavailable
         selection = snapshot.selection
         isSecure = snapshot.isSecure
         isWebContentField = snapshot.isWebContentField
@@ -95,22 +97,21 @@ struct FocusedInputContext: Equatable, Sendable {
             String(snapshot.selection.length),
             snapshot.precedingText,
             snapshot.trailingText,
+            snapshot.trailingTextUnavailable ? "trailing-unknown" : "trailing-known",
             snapshot.isSecure ? "secure" : "plain"
         ].joined(separator: "::")
     }
 
-    /// True when the caret is at the end of its line (only whitespace, if anything, before the next
-    /// line break). Derived from `trailingText` via `CaretLinePosition`; used to decide when a
-    /// mid-line completion strategy like fill-in-middle applies versus a plain forward continuation.
+    /// True when the caret is at the end of its line (only whitespace before the next line break).
+    /// An unread trailing range is unknown, so it cannot authorize inline painting.
     var isCaretAtEndOfLine: Bool {
-        CaretLinePosition.isAtEndOfLine(trailingText: trailingText)
+        !trailingTextUnavailable && CaretLinePosition.isAtEndOfLine(trailingText: trailingText)
     }
 
-    /// True when real (non-whitespace) characters follow the caret anywhere in the captured
-    /// trailing window. A multi-row ghost would paint over that content, so the overlay keeps the
-    /// ghost to one row or promotes it to the card when this is set.
+    /// True when real characters follow the caret, or the trailing range was unread. A multi-row
+    /// ghost could paint over that content, so unknown trailing text stays in the one-row/card path.
     var hasTrailingContent: Bool {
-        trailingText.contains { !$0.isWhitespace }
+        trailingTextUnavailable || trailingText.contains { !$0.isWhitespace }
     }
 
     /// True for a field the host lays out on one line: a text field or combo box by its

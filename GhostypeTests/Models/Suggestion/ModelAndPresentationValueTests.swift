@@ -177,13 +177,20 @@ final class SuggestionModelValueTests: XCTestCase {
             focusChangeSequence: 7
         )
 
-        XCTAssertEqual(context.contentSignature, "5::0::Hello:: tail::plain")
+        XCTAssertEqual(context.contentSignature, "5::0::Hello:: tail::trailing-known::plain")
         // The context's fingerprint must stay interchangeable with the snapshot's so staleness
         // checks can compare across the debounce boundary.
         XCTAssertEqual(context.contentSignature, snapshot.contentSignature)
 
         let secure = CotabbyTestFixtures.focusedInputContext(isSecure: true)
         XCTAssertTrue(secure.contentSignature.hasSuffix("::secure"))
+    }
+
+    func test_unknownTrailingTextCannotAuthorizeInlinePresentation() {
+        let context = CotabbyTestFixtures.focusedInputContext(trailingTextUnavailable: true)
+        XCTAssertFalse(context.isCaretAtEndOfLine)
+        XCTAssertTrue(context.hasTrailingContent)
+        XCTAssertTrue(context.contentSignature.contains("trailing-unknown"))
     }
 
     func test_suggestionKind_isCorrectionOnlyForCorrections() {

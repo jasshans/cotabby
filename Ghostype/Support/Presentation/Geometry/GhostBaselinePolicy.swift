@@ -43,6 +43,18 @@ enum GhostBaselinePolicy {
         }
     }
 
+    /// A web caret box can include the line's leading or accidentally span more than one line.
+    /// Without a measured baseline, keep that fallback near the font's natural line height.
+    /// shortcut: unmeasured web boxes are capped at 1.2× glyph height; measure host pitch/baseline for looser line-height.
+    static func conservativeWebBoxHeight(_ boxHeight: CGFloat, font: NSFont) -> CGFloat {
+        min(boxHeight, (font.ascender - font.descender) * 1.2)
+    }
+
+    /// More than two glyph-content heights is not a credible single-line caret box.
+    static func isPlausibleWebBoxHeight(_ boxHeight: CGFloat, font: NSFont) -> Bool {
+        boxHeight > 0 && boxHeight <= (font.ascender - font.descender) * 2
+    }
+
     /// TextKit line fragment: baseline at the layout manager's default offset. When the host's box
     /// is taller than the default fragment (a paragraph style raised the minimum line height), the
     /// extra space sits above the glyphs in TextKit 1, so the descent portion below the baseline is

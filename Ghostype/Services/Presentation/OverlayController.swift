@@ -396,9 +396,18 @@ final class OverlayController: SuggestionOverlayControlling {
     private func showInline(text: String, geometry: SuggestionOverlayGeometry) -> CompletionRenderMode.MirrorReason? {
         let renderer: GhostBaselinePolicy.HostRenderer = geometry.isWebContentField ? .webEngine : .textKit
         let fontResolution = resolveFont(for: geometry, renderer: renderer)
+        let hostSize = fontResolution.font.pointSize / max(ghostTextSizeMultiplier, 0.01)
+        let hostFont = NSFont.systemFont(ofSize: hostSize)
+        if renderer == .webEngine, geometry.pixelBaselineOffset == nil,
+           !GhostBaselinePolicy.isPlausibleWebBoxHeight(geometry.caretRect.height, font: hostFont) {
+            return .inlineLayoutUnavailable
+        }
+        let baselineBoxHeight = renderer == .webEngine && geometry.pixelBaselineOffset == nil
+            ? GhostBaselinePolicy.conservativeWebBoxHeight(geometry.caretRect.height, font: hostFont)
+            : geometry.caretRect.height
         let policyOffset = GhostBaselinePolicy.baselineOffsetFromTop(
             font: fontResolution.font,
-            boxHeight: geometry.caretRect.height,
+            boxHeight: baselineBoxHeight,
             renderer: renderer
         )
         let calibration = calibrationRequest(for: geometry, resolution: fontResolution, policyOffset: policyOffset)
@@ -1514,7 +1523,9 @@ final class OverlayController: SuggestionOverlayControlling {
 
     private func makeLayout(for session: InlineSession) -> GhostTextLayout? {
         let geometry = session.geometry
-        guard let bounds = Self.visibleWritingBounds(for: geometry), let band = wrapBand(for: geometry) else { return nil }
+        let screenVisibleFrame = targetScreenVisibleFrame(for: geometry.caretRect)
+        guard let bounds = Self.visibleWritingBounds(for: geometry, screenVisibleFrame: screenVisibleFrame),
+              let band = wrapBand(for: geometry, screenVisibleFrame: screenVisibleFrame) else { return nil }
         let left = max(bounds.minX, band.lowerBound)
         let right = min(bounds.maxX, band.upperBound)
         guard right > left else { return nil }
@@ -1545,13 +1556,23 @@ final class OverlayController: SuggestionOverlayControlling {
 
     /// Only an actual field frame can authorize inline painting, never a screen-wide fallback.
     /// Hidden-textarea editors may use their reported editor container instead of the text run.
-    static func visibleWritingBounds(for geometry: SuggestionOverlayGeometry) -> CGRect? {
+    static func visibleWritingBounds(
+        for geometry: SuggestionOverlayGeometry,
+        screenVisibleFrame: CGRect? = nil
+    ) -> CGRect? {
         let candidate = geometry.elementFrameRect
         guard let bounds = candidate?.standardized,
               AXHelper.rectHasFiniteComponents(bounds), bounds.width > 0, bounds.height > 0,
               bounds.contains(CGPoint(x: geometry.caretRect.minX, y: geometry.caretRect.midY))
         else { return nil }
-        return bounds
+        guard let screenVisibleFrame else { return bounds }
+        guard AXHelper.rectHasFiniteComponents(screenVisibleFrame),
+              screenVisibleFrame.width > 0, screenVisibleFrame.height > 0 else { return nil }
+        let visible = bounds.intersection(screenVisibleFrame)
+        guard !visible.isNull, !visible.isEmpty,
+              visible.contains(CGPoint(x: geometry.caretRect.minX, y: geometry.caretRect.midY))
+        else { return nil }
+        return visible
     }
 
     /// Vertical distance between the host's lines: measured when the host let us (line APIs, a
@@ -1591,6 +1612,10 @@ final class OverlayController: SuggestionOverlayControlling {
            HostFaceMemory.isPlausiblePitch(remembered, pointSize: hostSize) {
             return remembered
         }
+        if geometry.isWebContentField {
+            let hostFont = NSFont.systemFont(ofSize: hostSize)
+            return GhostBaselinePolicy.conservativeWebBoxHeight(geometry.caretRect.height, font: hostFont)
+        }
         return geometry.caretRect.height
     }
 
@@ -1614,7 +1639,10 @@ final class OverlayController: SuggestionOverlayControlling {
     /// Code editors built on a hidden textarea (VS Code's Monaco) report an element only as wide
     /// as the current line's text, with the caret on its right edge, while the real text container
     /// is the editor view around it; for those the container frame is used instead.
-    private func wrapBand(for geometry: SuggestionOverlayGeometry) -> ClosedRange<CGFloat>? {
+    private func wrapBand(
+        for geometry: SuggestionOverlayGeometry,
+        screenVisibleFrame: CGRect? = nil
+    ) -> ClosedRange<CGFloat>? {
         let isCodeEditor = AppSurfaceClassifier.classify(
             bundleIdentifier: geometry.bundleIdentifier,
             isIntegratedTerminal: false
@@ -1625,7 +1653,7 @@ final class OverlayController: SuggestionOverlayControlling {
                 elementFrame: isCodeEditor ? nil : geometry.elementFrameRect,
                 inputFrame: geometry.inputFrameRect,
                 lineLeft: geometry.hostTextMetrics?.lineRect?.minX,
-                screenVisibleFrame: targetScreenVisibleFrame(for: geometry.caretRect),
+                screenVisibleFrame: screenVisibleFrame ?? targetScreenVisibleFrame(for: geometry.caretRect),
                 lineRight: geometry.isCaretAtEndOfLine && !isCodeEditor
                     ? geometry.hostTextMetrics?.lineRect?.maxX
                     : nil

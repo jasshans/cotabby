@@ -18,8 +18,8 @@ final class CompletionRenderModePolicyTests: XCTestCase {
             let geometry = SuggestionOverlayGeometry(
                 caretRect: CGRect(x: 120, y: 20, width: 2, height: 18),
                 inputFrameRect: CGRect(x: 0, y: 0, width: 600, height: 24),
-                caretQuality: quality, observedCharWidth: nil, isRightToLeft: false,
-                isSingleLineField: true
+                caretQuality: quality, isCaretAtEndOfLine: true,
+                observedCharWidth: nil, isRightToLeft: false, isSingleLineField: true
             )
             let expected: CompletionRenderMode = quality == .estimated
                 ? .mirror(reason: .caretGeometryEstimated) : .mirror(reason: .caretLayoutEstimated)
@@ -35,12 +35,25 @@ final class CompletionRenderModePolicyTests: XCTestCase {
             let geometry = SuggestionOverlayGeometry(
                 caretRect: CGRect(x: 120, y: 20, width: 2, height: 18),
                 inputFrameRect: CGRect(x: 0, y: 0, width: 600, height: 24),
-                caretQuality: quality, observedCharWidth: nil, isRightToLeft: false,
-                isSingleLineField: true
+                caretQuality: quality, isCaretAtEndOfLine: true,
+                observedCharWidth: nil, isRightToLeft: false, isSingleLineField: true
             )
             XCTAssertEqual(CompletionRenderModePolicy(userPreference: .alwaysInline)
                 .mode(for: geometry, bundleIdentifier: "com.google.Chrome"), .inline)
         }
+    }
+
+    func testMissingEndOfLineEvidenceDefaultsToMirror() {
+        let geometry = SuggestionOverlayGeometry(
+            caretRect: CGRect(x: 120, y: 20, width: 2, height: 18),
+            inputFrameRect: CGRect(x: 0, y: 0, width: 600, height: 24),
+            caretQuality: .exact,
+            observedCharWidth: nil,
+            isRightToLeft: false
+        )
+
+        XCTAssertFalse(geometry.isCaretAtEndOfLine)
+        XCTAssertEqual(CompletionRenderModePolicy().mode(for: geometry, bundleIdentifier: nil), .mirror(reason: .caretMidLine))
     }
 
     private struct Case {

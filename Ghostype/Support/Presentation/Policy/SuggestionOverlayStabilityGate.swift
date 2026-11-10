@@ -29,7 +29,9 @@ enum SuggestionOverlayStabilityGate {
     /// 6pt is chosen to sit above typical post-insertion AX caret noise (~0.5-1pt) and the per-accept
     /// kerning residual, yet below a single character's advance in common body fonts (~7-10pt at 14pt),
     /// so a genuine one-character caret move still re-anchors while noise and residual are absorbed.
-    private static let caretDriftTolerance: CGFloat = 6
+    private static let horizontalCaretDriftTolerance: CGFloat = 6
+    private static let verticalCaretDriftTolerance: CGFloat = 2
+    private static let predictedCaretDriftTolerance: CGFloat = GhostCaretRefinement.maximumAdjustment
 
     /// Returns `true` when the coordinator should call `presentOverlay` for this reconcile tick.
     /// Returns `false` to hold the existing overlay geometry exactly as it was last drawn.
@@ -73,18 +75,20 @@ enum SuggestionOverlayStabilityGate {
     private static func caretDriftDemandsReAnchor(
         currentGeometry: SuggestionOverlayGeometry,
         newCaretRect: CGRect,
-        millisecondsSinceLastAcceptance: Int?
+        millisecondsSinceLastAcceptance: Int?,
+        hasPredictedCaret: Bool
     ) -> Bool {
-        if abs(currentGeometry.caretRect.origin.y - newCaretRect.origin.y) > caretDriftTolerance {
+        if abs(currentGeometry.caretRect.origin.y - newCaretRect.origin.y) > verticalCaretDriftTolerance {
             return true
         }
         let deltaX = newCaretRect.origin.x - currentGeometry.caretRect.origin.x
-        guard abs(deltaX) > caretDriftTolerance else {
+        let horizontalTolerance = hasPredictedCaret ? predictedCaretDriftTolerance : horizontalCaretDriftTolerance
+        guard abs(deltaX) > horizontalTolerance else {
             return false
         }
         let isBackward = currentGeometry.isRightToLeft
-            ? deltaX > caretDriftTolerance
-            : deltaX < -caretDriftTolerance
+            ? deltaX > horizontalTolerance
+            : deltaX < -horizontalTolerance
         let insideHoldWindow = millisecondsSinceLastAcceptance
             .map { $0 <= backwardDriftHoldWindowMilliseconds } ?? false
         return !(isBackward && insideHoldWindow)
@@ -97,6 +101,7 @@ enum SuggestionOverlayStabilityGate {
         newInputFrameRect: CGRect?,
         newFocusChangeSequence: UInt64,
         isAwaitingPostInsertionSync: Bool = false,
+        hasPredictedCaret: Bool = false,
         millisecondsSinceLastAcceptance: Int? = nil
     ) -> Bool {
         // Render mode is the third associated value; it is not part of the stability decision, so
@@ -126,7 +131,8 @@ enum SuggestionOverlayStabilityGate {
            caretDriftDemandsReAnchor(
                currentGeometry: currentGeometry,
                newCaretRect: newCaretRect,
-               millisecondsSinceLastAcceptance: millisecondsSinceLastAcceptance
+               millisecondsSinceLastAcceptance: millisecondsSinceLastAcceptance,
+               hasPredictedCaret: hasPredictedCaret
            ) {
             return true
         }

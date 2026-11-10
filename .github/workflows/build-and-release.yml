@@ -122,7 +122,16 @@ jobs:
           fi
           swiftlint --strict --reporter github-actions-logging
           python3 -m unittest discover -s scripts/tests
-          xcodebuild test             -workspace "${WORKSPACE}"             -scheme Ghostype             -destination 'platform=macOS'             -derivedDataPath build/TestDerivedData             -skip-testing:GhostypeTests/FoundationModelDriftEvalTests             CODE_SIGNING_ALLOWED=NO
+          # First-run Vision OCR can exceed XCTest's default 30s allowance on a busy runner.
+          xcodebuild test \
+            -workspace "${WORKSPACE}" \
+            -scheme Ghostype \
+            -destination 'platform=macOS' \
+            -default-test-execution-time-allowance 120 \
+            -maximum-test-execution-time-allowance 180 \
+            -derivedDataPath build/TestDerivedData \
+            -skip-testing:GhostypeTests/FoundationModelDriftEvalTests \
+            CODE_SIGNING_ALLOWED=NO
           rm -rf build/TestDerivedData
 
       # Every release build bumps the patch version (0.1.0 -> 0.1.1 -> ...), so

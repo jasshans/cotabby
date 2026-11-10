@@ -32,7 +32,7 @@ struct SuggestionOverlayGeometry: Equatable, Sendable {
     /// next line break. When false, real characters follow the caret on this line, so the
     /// render-mode policy promotes the suggestion to the card: inline ghost text would otherwise
     /// paint over those trailing characters. Carried from `FocusedInputContext.isCaretAtEndOfLine`.
-    /// Defaults to `true` so call sites that predate the mid-line rule keep the prior inline path.
+    /// Defaults to `false`: missing trailing-text evidence cannot safely authorize inline paint.
     let isCaretAtEndOfLine: Bool
     /// Average character width from AX child-frame sampling when available. Layout uses this as a
     /// cheap approximation for host-editor text width before falling back to local font metrics.
@@ -101,7 +101,7 @@ struct SuggestionOverlayGeometry: Equatable, Sendable {
         caretQuality: CaretGeometryQuality,
         bundleIdentifier: String? = nil,
         focusedURLString: String? = nil,
-        isCaretAtEndOfLine: Bool = true,
+        isCaretAtEndOfLine: Bool = false,
         observedCharWidth: CGFloat?,
         isRightToLeft: Bool,
         focusChangeSequence: UInt64 = 0,

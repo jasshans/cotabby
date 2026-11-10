@@ -81,6 +81,8 @@ jobs:
             -workspace build/cotabby-dependencies/Ghostype.xcworkspace \
             -scheme Ghostype \
             -destination 'platform=macOS' \
+            -default-test-execution-time-allowance 120 \
+            -maximum-test-execution-time-allowance 180 \
             -derivedDataPath build/DerivedData \
             -skip-testing:GhostypeTests/FoundationModelDriftEvalTests \
             CODE_SIGNING_ALLOWED=NO

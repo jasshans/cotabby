@@ -61,4 +61,19 @@ final class GhostBaselinePolicyTests: XCTestCase {
         // A loose CSS line-height: Georgia 18px in a 29px line box.
         XCTAssertEqual(GhostBaselinePolicy.baselineOffsetFromTop(font: font("Georgia", 18), boxHeight: 29, renderer: .webEngine), 21)
     }
+
+    func testWebCaretFallbackBoundsOversizedBoxesAndRejectsMultiLineBoxes() {
+        let hostFont = font("system", 14)
+        let contentHeight = hostFont.ascender - hostFont.descender
+
+        XCTAssertEqual(
+            GhostBaselinePolicy.conservativeWebBoxHeight(contentHeight * 2, font: hostFont),
+            contentHeight * 1.2,
+            accuracy: 0.001
+        )
+        XCTAssertFalse(GhostBaselinePolicy.isPlausibleWebBoxHeight(0, font: hostFont))
+        XCTAssertFalse(GhostBaselinePolicy.isPlausibleWebBoxHeight(-1, font: hostFont))
+        XCTAssertTrue(GhostBaselinePolicy.isPlausibleWebBoxHeight(contentHeight * 2, font: hostFont))
+        XCTAssertFalse(GhostBaselinePolicy.isPlausibleWebBoxHeight(contentHeight * 2.01, font: hostFont))
+    }
 }

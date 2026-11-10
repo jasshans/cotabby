@@ -80,19 +80,18 @@ final class SuggestionOverlayStabilityGateTests: XCTestCase {
 
     // MARK: - Caret drift
 
-    /// Drift within the 6pt tolerance (post-insertion AX noise, an exact-advance residual) is held;
-    /// beyond it on either axis (a genuine caret jump, a line change, accumulated advance drift)
-    /// the overlay re-anchors. The comparison is strict, so exactly 6pt is still absorbed.
+    /// Ordinary horizontal jitter keeps the 6pt tolerance; vertical scroll/line drift re-anchors
+    /// above 2pt, and predicted caret positions use the tighter ghost-advance tolerance.
     func test_caretDrift_holdsWithinToleranceAndReAnchorsBeyondIt() {
         let cases: [(dx: CGFloat, dy: CGFloat, reAnchors: Bool)] = [
             (0.4, -0.3, false),
             (3, 0, false),
             (6, 0, false),
-            (0, 6, false),
-            (-6, -6, false),
+            (0, 2, false),
+            (-6, -2, false),
             (10, 0, true),
             (-10, 0, true),
-            (0, 10, true),
+            (0, 2.1, true),
             (0, -10, true)
         ]
 
@@ -103,6 +102,25 @@ final class SuggestionOverlayStabilityGateTests: XCTestCase {
                 "dx: \(dx), dy: \(dy)"
             )
         }
+    }
+
+    func test_predictedCaretReanchorsWhenFreshCaretDisagreesBeyondGhostAdvanceTolerance() {
+        XCTAssertFalse(SuggestionOverlayStabilityGate.shouldRePresent(
+            currentOverlay: Self.visible(),
+            newText: " again",
+            newCaretRect: Self.caretRect.offsetBy(dx: 1, dy: 0),
+            newInputFrameRect: Self.inputFrame,
+            newFocusChangeSequence: 7,
+            hasPredictedCaret: true
+        ))
+        XCTAssertTrue(SuggestionOverlayStabilityGate.shouldRePresent(
+            currentOverlay: Self.visible(),
+            newText: " again",
+            newCaretRect: Self.caretRect.offsetBy(dx: 2, dy: 0),
+            newInputFrameRect: Self.inputFrame,
+            newFocusChangeSequence: 7,
+            hasPredictedCaret: true
+        ))
     }
 
     // MARK: - Input frame movement

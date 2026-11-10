@@ -111,6 +111,7 @@ final class InputMonitor {
     /// rather than destroyed (see `updateAcceptTapState`), so this distinguishes an intentional
     /// pause from the system disabling it on timeout, which the callback re-enables.
     private var acceptTapEnabled = false
+    private var acceptTapRetryScheduled = false
 
     /// Dedicated consuming tap for the global-toggle hotkey. Lives independently of the accept tap
     /// because it must fire even when no suggestion is visible — and even when Ghostype is globally
@@ -328,11 +329,12 @@ final class InputMonitor {
         // Ownership of the accept key is decided by `updateAcceptTapState`, not here, so this method
         // only guarantees the tap exists and is intercepting.
         if let acceptTap {
+            CGEvent.tapEnable(tap: acceptTap, enable: true)
             if !acceptTapEnabled {
-                CGEvent.tapEnable(tap: acceptTap, enable: true)
-                acceptTapEnabled = true
                 CotabbyLogger.app.debug("CGEvent accept tap re-enabled")
             }
+            // Secure Input can disable the system tap while this local flag remains true.
+            acceptTapEnabled = true
             return
         }
 
@@ -360,6 +362,7 @@ final class InputMonitor {
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {
             CotabbyLogger.app.warning("Failed to create CGEvent accept tap")
+            scheduleAcceptTapRetry()
             return
         }
         CotabbyLogger.app.info("CGEvent accept tap installed (active, accept-key only)")
@@ -384,6 +387,18 @@ final class InputMonitor {
         CGEvent.tapEnable(tap: acceptTap, enable: false)
         acceptTapEnabled = false
         CotabbyLogger.app.debug("CGEvent accept tap disabled")
+    }
+
+    /// Retry a transient tap-creation failure while a visible suggestion still needs Tab.
+    private func scheduleAcceptTapRetry() {
+        guard !acceptTapRetryScheduled else { return }
+        acceptTapRetryScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self else { return }
+            self.acceptTapRetryScheduled = false
+            guard self.acceptTapWanted else { return }
+            self.installAcceptTapIfNeeded()
+        }
     }
 
     private func installToggleTapIfNeeded() {
@@ -611,10 +626,12 @@ final class InputMonitor {
     func handleAcceptTap(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         switch type {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
-            // Only undo a system-initiated disable; a tap Ghostype paused between suggestions stays off.
-            if let acceptTap, acceptTapEnabled {
+            if let acceptTap {
                 CotabbyLogger.app.warning("Accept tap was disabled by system (\(Self.disableReason(type))), re-enabling")
+                acceptTapEnabled = false
                 CGEvent.tapEnable(tap: acceptTap, enable: true)
+                acceptTapEnabled = true
+                if acceptTapWanted { scheduleAcceptTapRetry() }
             }
             return Unmanaged.passUnretained(event)
 
@@ -628,6 +645,11 @@ final class InputMonitor {
             }
 
             guard shouldProcessEventsProvider() else {
+                if keyCode(from: event) == 48 {
+                    CotabbyLogger.app.debug(
+                        "Tab passed: processing disabled (mods=\(ShortcutModifierMask(eventFlags: event.flags).rawValue))"
+                    )
+                }
                 return Unmanaged.passUnretained(event)
             }
 
@@ -681,6 +703,11 @@ final class InputMonitor {
     /// to test: a successful coordinator accept is the only path that consumes the original key.
     func handleAcceptKeyDown(_ keyEvent: InputMonitorKeyEvent) -> InputMonitorAcceptTapDecision {
         guard shouldProcessEventsProvider() else {
+            if keyEvent.keyCode == 48 {
+                CotabbyLogger.app.debug(
+                    "Tab passed: processing disabled (mods=\(ShortcutModifierMask(eventFlags: keyEvent.flags).rawValue))"
+                )
+            }
             return .passThrough
         }
 
@@ -694,6 +721,13 @@ final class InputMonitor {
         } else if keyEvent.keyCode == 49, ShortcutModifierMask(eventFlags: keyEvent.flags) == [.control, .option] {
             kind = .cycleAlternatives
         } else {
+            if keyEvent.keyCode == 48 {
+                let binding = acceptanceBindingProvider()
+                let modifiers = ShortcutModifierMask(eventFlags: keyEvent.flags)
+                CotabbyLogger.app.debug(
+                    "Tab binding miss: event=\(modifiers.rawValue), accept=\(binding.keyCode)/\(binding.modifiers.rawValue)"
+                )
+            }
             return .notHandled
         }
 

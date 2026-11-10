@@ -42,7 +42,7 @@ final class AXTextGeometryResolverTests: XCTestCase {
         field.currentEditor()?.selectedRange = NSRange(location: 5, length: 0)
 
         // Get the AXUIElement for the focused field editor.
-        guard let focusedElement = AXHelper.focusedElement() else {
+        guard let focusedElement = AXHelper.focusedElement(forApplicationPID: ProcessInfo.processInfo.processIdentifier) else {
             // AX permissions may not be available in CI — skip rather than fail.
             throw XCTSkip("Accessibility permissions not available in this environment")
         }
@@ -65,7 +65,8 @@ final class AXTextGeometryResolverTests: XCTestCase {
             result.quality == .exact || result.quality == .derived,
             "Native NSTextField should yield BoundsForRange geometry, got \(result.quality.label)"
         )
-        XCTAssertFalse(result.rect.isEmpty, "Caret rect should not be empty")
+        XCTAssertTrue(AXHelper.rectHasFiniteComponents(result.rect), "Caret rect should contain finite coordinates")
+        XCTAssertGreaterThanOrEqual(result.rect.width, 0, "Caret rect may be zero-width but cannot be inverted")
         XCTAssertGreaterThan(result.rect.height, 0, "Caret rect should have positive height")
     }
 
@@ -77,7 +78,7 @@ final class AXTextGeometryResolverTests: XCTestCase {
 
         field.currentEditor()?.selectedRange = NSRange(location: 0, length: 0)
 
-        guard let focusedElement = AXHelper.focusedElement() else {
+        guard let focusedElement = AXHelper.focusedElement(forApplicationPID: ProcessInfo.processInfo.processIdentifier) else {
             throw XCTSkip("Accessibility permissions not available in this environment")
         }
 
