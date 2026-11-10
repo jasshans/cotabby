@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// File overview:
@@ -8,6 +9,8 @@ struct PermissionsPaneView: View {
     @ObservedObject var permissionManager: PermissionManager
     let permissionGuidanceController: PermissionGuidanceController
     @Environment(\.scenePhase) private var scenePhase
+    @State private var showingPermissionResetConfirmation = false
+    @State private var permissionResetError: String?
 
     var body: some View {
         SettingsPaneScaffold(callout: callout) {
@@ -43,6 +46,25 @@ struct PermissionsPaneView: View {
                     permissionGuidanceController: permissionGuidanceController
                 )
                 .settingsItem(.screenRecording)
+
+                HStack {
+                    Text("If permission access seems stuck, reset Ghostype’s macOS grants.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 12)
+                    Button("Reset Permissions", systemImage: "arrow.counterclockwise") {
+                        permissionResetError = nil
+                        showingPermissionResetConfirmation = true
+                    }
+                    .controlSize(.small)
+                }
+
+                if let permissionResetError {
+                    Label(permissionResetError, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
         .onAppear { permissionManager.refresh() }
@@ -52,6 +74,13 @@ struct PermissionsPaneView: View {
             if newPhase == .active {
                 permissionManager.refresh()
             }
+        }
+        .alert("Reset Ghostype’s permissions?", isPresented: $showingPermissionResetConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Reset Permissions", role: .destructive, action: resetPermissions)
+        } message: {
+            Text("This clears Ghostype’s Accessibility, Input Monitoring, and Screen Recording grants only. " +
+                "Ghostype will quit after the reset. Reopen it and grant access again in System Settings.")
         }
     }
 
@@ -66,6 +95,15 @@ struct PermissionsPaneView: View {
             tone: .warning,
             message: "Ghostype needs more access to run. Grant the permissions below to enable autocomplete."
         )
+    }
+
+    private func resetPermissions() {
+        do {
+            try permissionManager.resetPermissions()
+            NSApplication.shared.terminate(nil)
+        } catch {
+            permissionResetError = error.localizedDescription
+        }
     }
 
 }

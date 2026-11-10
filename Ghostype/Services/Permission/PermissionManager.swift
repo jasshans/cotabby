@@ -12,6 +12,20 @@ import Logging
 /// `@MainActor` guarantees permission state is mutated on the UI thread.
 @MainActor
 final class PermissionManager: ObservableObject {
+    private enum ResetError: LocalizedError {
+        case bundleIdentifierUnavailable
+        case commandFailed(service: String)
+
+        var errorDescription: String? {
+            switch self {
+            case .bundleIdentifierUnavailable:
+                "Ghostype’s bundle identifier is unavailable."
+            case let .commandFailed(service):
+                "macOS could not reset the \(service) permission."
+            }
+        }
+    }
+
     @Published private(set) var accessibilityGranted = false
     @Published private(set) var inputMonitoringGranted = false
     @Published private(set) var screenRecordingGranted = false
@@ -180,6 +194,24 @@ final class PermissionManager: ObservableObject {
 
         refresh()
         return granted
+    }
+
+    /// Clears only Ghostype's own macOS privacy grants so the system can ask again on relaunch.
+    func resetPermissions() throws {
+        guard let bundleIdentifier = Bundle.main.bundleIdentifier else {
+            throw ResetError.bundleIdentifierUnavailable
+        }
+
+        for service in ["Accessibility", "ListenEvent", "ScreenCapture"] {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+            process.arguments = ["reset", service, bundleIdentifier]
+            try process.run()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else {
+                throw ResetError.commandFailed(service: service)
+            }
+        }
     }
 
     /// Returns the latest cached grant state for a specific permission kind.
