@@ -199,6 +199,15 @@ final class SuggestionSettingsStoreTests: XCTestCase {
 
     // MARK: - Save / load round-trips
 
+    func test_userSnippets_roundTripAndReset() async {
+        let store = SuggestionSettingsStore(userDefaults: makeIsolatedDefaults())
+        let snippets = [UserSnippet(trigger: "email", expansion: "name@example.com")]
+
+        store.saveUserSnippets(snippets)
+        XCTAssertEqual(store.load(configuration: .standard).inlineFeatures.userSnippets, snippets)
+        XCTAssertTrue(store.resetToDefaults(configuration: .standard).inlineFeatures.userSnippets.isEmpty)
+    }
+
     func test_load_automaticTypoFixingDefaultsOff() async {
         let defaults = makeIsolatedDefaults()
 

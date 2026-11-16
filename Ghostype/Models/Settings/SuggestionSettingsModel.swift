@@ -128,6 +128,7 @@ final class SuggestionSettingsModel: ObservableObject {
     /// Whether the inline `/macro` preview is active. Read live by `MacroController` at event time,
     /// so toggling it takes effect on the next keystroke without restarting capture.
     @Published private(set) var isMacroExpansionEnabled: Bool
+    @Published private(set) var userSnippets: [UserSnippet]
     /// Whether selecting a single word offers numbered synonyms. Travels in the snapshot, so the
     /// synonym gate reads it through the coordinator's settings like every other availability rule.
     @Published private(set) var synonymsForSelectedWord: Bool
@@ -281,6 +282,7 @@ final class SuggestionSettingsModel: ObservableObject {
         showFollowingWords = data.showFollowingWords
         isEmojiPickerEnabled = data.isEmojiPickerEnabled
         isMacroExpansionEnabled = data.isMacroExpansionEnabled
+        userSnippets = data.userSnippets
         synonymsForSelectedWord = data.synonymsForSelectedWord
         preferredEmojiSkinTone = data.preferredEmojiSkinTone
         preferredEmojiGender = data.preferredEmojiGender
@@ -376,6 +378,7 @@ final class SuggestionSettingsModel: ObservableObject {
         showFollowingWords = data.showFollowingWords
         isEmojiPickerEnabled = data.isEmojiPickerEnabled
         isMacroExpansionEnabled = data.isMacroExpansionEnabled
+        userSnippets = data.userSnippets
         synonymsForSelectedWord = data.synonymsForSelectedWord
         preferredEmojiSkinTone = data.preferredEmojiSkinTone
         preferredEmojiGender = data.preferredEmojiGender
@@ -496,6 +499,7 @@ final class SuggestionSettingsModel: ObservableObject {
             inlineFeatures: SuggestionInlineFeatureSettings(
                 isEmojiPickerEnabled: isEmojiPickerEnabled,
                 isMacroExpansionEnabled: isMacroExpansionEnabled,
+                userSnippets: userSnippets,
                 synonymsForSelectedWord: synonymsForSelectedWord,
                 preferredEmojiSkinTone: preferredEmojiSkinTone,
                 preferredEmojiGender: preferredEmojiGender
@@ -965,6 +969,25 @@ final class SuggestionSettingsModel: ObservableObject {
         }
         isMacroExpansionEnabled = enabled
         store.saveMacroExpansionEnabled(enabled)
+    }
+
+    func setUserSnippets(_ snippets: [UserSnippet]) {
+        let normalized = UserSnippetCatalog.normalize(snippets)
+        guard userSnippets != normalized else { return }
+        userSnippets = normalized
+        store.saveUserSnippets(normalized)
+    }
+
+    func addSnippet(trigger: String, expansion: String) {
+        guard let trigger = UserSnippetCatalog.normalizedTrigger(trigger) else { return }
+        setUserSnippets(userSnippets.filter { $0.trigger != trigger } + [
+            UserSnippet(trigger: trigger, expansion: expansion)
+        ])
+    }
+
+    func removeSnippet(trigger: String) {
+        guard let trigger = UserSnippetCatalog.normalizedTrigger(trigger) else { return }
+        setUserSnippets(userSnippets.filter { $0.trigger != trigger })
     }
 
     func setSynonymsForSelectedWord(_ enabled: Bool) {

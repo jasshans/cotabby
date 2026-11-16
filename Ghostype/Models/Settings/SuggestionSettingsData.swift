@@ -102,6 +102,7 @@ struct SuggestionPresentationSettings: Equatable {
 struct SuggestionInlineFeatureSettings: Equatable {
     var isEmojiPickerEnabled: Bool
     var isMacroExpansionEnabled: Bool
+    var userSnippets: [UserSnippet]
     /// Opt-in: selecting a single word offers numbered synonyms (see `SynonymController`).
     var synonymsForSelectedWord: Bool
     var preferredEmojiSkinTone: EmojiSkinTone
@@ -439,6 +440,11 @@ extension SuggestionSettingsData {
     var isMacroExpansionEnabled: Bool {
         get { inlineFeatures.isMacroExpansionEnabled }
         set { inlineFeatures.isMacroExpansionEnabled = newValue }
+    }
+
+    var userSnippets: [UserSnippet] {
+        get { inlineFeatures.userSnippets }
+        set { inlineFeatures.userSnippets = newValue }
     }
 
     var synonymsForSelectedWord: Bool {

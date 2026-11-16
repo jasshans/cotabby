@@ -371,7 +371,7 @@ final class CotabbyAppEnvironment {
         // input monitor, focus model, and inserter as the emoji picker, and renders a single-row
         // preview near the caret.
         let macroController = MacroController(
-            engine: MacroEngine.standard(),
+            engine: MacroEngine.standard(snippets: { suggestionSettings.userSnippets }),
             panel: InlinePreviewPanelController(),
             focusModel: focusModel,
             inserter: suggestionInserter,

@@ -125,6 +125,9 @@ struct GeneralPaneView: View {
                     )
                 }
                 .settingsItem(.inlineMacros)
+
+                SnippetMacroEditor(suggestionSettings: suggestionSettings)
+                    .padding(.vertical, 6)
             }
 
             #if DEBUG

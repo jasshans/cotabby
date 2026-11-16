@@ -170,6 +170,7 @@ struct SuggestionSettingsStore {
     private static let showFollowingWordsDefaultsKey = "cotabbyShowFollowingWords"
     private static let emojiPickerEnabledDefaultsKey = "cotabbyEmojiPickerEnabled"
     private static let macroExpansionEnabledDefaultsKey = "cotabbyMacroExpansionEnabled"
+    private static let userSnippetsDefaultsKey = "cotabbyUserSnippets"
     private static let synonymsForSelectedWordDefaultsKey = "cotabbySynonymsForSelectedWord"
     private static let preferredEmojiSkinToneDefaultsKey = "cotabbyPreferredEmojiSkinTone"
     private static let preferredEmojiGenderDefaultsKey = "cotabbyPreferredEmojiGender"
@@ -256,6 +257,7 @@ struct SuggestionSettingsStore {
         showFollowingWordsDefaultsKey,
         emojiPickerEnabledDefaultsKey,
         macroExpansionEnabledDefaultsKey,
+        userSnippetsDefaultsKey,
         synonymsForSelectedWordDefaultsKey,
         preferredEmojiSkinToneDefaultsKey,
         preferredEmojiGenderDefaultsKey,
@@ -478,6 +480,7 @@ struct SuggestionSettingsStore {
         let resolvedShowFollowingWords = userDefaults.object(forKey: Self.showFollowingWordsDefaultsKey) as? Bool ?? true
         let resolvedEmojiPickerEnabled = userDefaults.object(forKey: Self.emojiPickerEnabledDefaultsKey) as? Bool ?? true
         let resolvedMacroExpansionEnabled = userDefaults.object(forKey: Self.macroExpansionEnabledDefaultsKey) as? Bool ?? true
+        let resolvedUserSnippets = loadUserSnippets()
         // Defaults to false: synonyms ask the selected engine for a short generation on every word
         // selection, which an existing install never opted into.
         let resolvedSynonymsForSelectedWord =
@@ -659,6 +662,7 @@ struct SuggestionSettingsStore {
             inlineFeatures: SuggestionInlineFeatureSettings(
                 isEmojiPickerEnabled: resolvedEmojiPickerEnabled,
                 isMacroExpansionEnabled: resolvedMacroExpansionEnabled,
+                userSnippets: resolvedUserSnippets,
                 synonymsForSelectedWord: resolvedSynonymsForSelectedWord,
                 preferredEmojiSkinTone: resolvedPreferredEmojiSkinTone,
                 preferredEmojiGender: resolvedPreferredEmojiGender
@@ -728,6 +732,7 @@ struct SuggestionSettingsStore {
         saveShowFollowingWords(data.showFollowingWords)
         saveEmojiPickerEnabled(data.isEmojiPickerEnabled)
         saveMacroExpansionEnabled(data.isMacroExpansionEnabled)
+        saveUserSnippets(data.userSnippets)
         saveSynonymsForSelectedWord(data.synonymsForSelectedWord)
         savePreferredEmojiSkinTone(data.preferredEmojiSkinTone)
         savePreferredEmojiGender(data.preferredEmojiGender)
@@ -1042,6 +1047,24 @@ struct SuggestionSettingsStore {
 
     func saveMacroExpansionEnabled(_ enabled: Bool) {
         userDefaults.set(enabled, forKey: Self.macroExpansionEnabledDefaultsKey)
+    }
+
+    func saveUserSnippets(_ snippets: [UserSnippet]) {
+        let normalized = UserSnippetCatalog.normalize(snippets)
+        guard !normalized.isEmpty else {
+            userDefaults.removeObject(forKey: Self.userSnippetsDefaultsKey)
+            return
+        }
+        if let data = try? JSONEncoder().encode(normalized) {
+            userDefaults.set(data, forKey: Self.userSnippetsDefaultsKey)
+        }
+    }
+
+    private func loadUserSnippets() -> [UserSnippet] {
+        guard let data = userDefaults.data(forKey: Self.userSnippetsDefaultsKey),
+              let snippets = try? JSONDecoder().decode([UserSnippet].self, from: data)
+        else { return [] }
+        return UserSnippetCatalog.normalize(snippets)
     }
 
     func saveSynonymsForSelectedWord(_ enabled: Bool) {

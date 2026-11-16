@@ -19,9 +19,11 @@ struct MacroEngine {
         now: @escaping () -> Date = Date.init,
         calendar: Calendar = .current,
         locale: Locale = .current,
-        randomSource: @escaping (ClosedRange<Int>) -> Int = { Int.random(in: $0) }
+        randomSource: @escaping (ClosedRange<Int>) -> Int = { Int.random(in: $0) },
+        snippets: @escaping () -> [UserSnippet] = { [] }
     ) -> MacroEngine {
         MacroEngine(evaluators: [
+            SnippetMacroEvaluator(snippets: snippets),
             DateMacroEvaluator(now: now, calendar: calendar, locale: locale),
             RandomMacroEvaluator(randomSource: randomSource),
             UnitConversionEvaluator(locale: locale),
