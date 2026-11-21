@@ -80,6 +80,11 @@ struct FocusSnapshotResolver {
         "AXRangeForLine",
         kAXBoundsForRangeParameterizedAttribute as String
     ]
+    /// Collection children can be a whole message list or outline; fetching them from Accessibility
+    /// can block the main thread without helping resolve the active editor.
+    private static let collectionContainerRoles: Set<String> = [
+        "AXTable", "AXOutline", "AXList", "AXBrowser"
+    ]
 
     /// Caches the resolved field font/color per focused element so the attributed-string AX read
     /// happens once per field rather than on every poll. Reference type for the same reason as
@@ -733,12 +738,9 @@ struct FocusSnapshotResolver {
     /// input target had already been discovered. This preserves the resolver's "first full
     /// capability wins" policy while avoiding unnecessary synchronous AX IPC.
     ///
-    /// Candidate enumeration is staged the same way: the bounded descendant BFS used for Chromium
-    /// wrappers costs hundreds of additional AX round trips per pass, and a shallow candidate
-    /// (focused node, ancestors, their children) wins in the common case — including Chromium
-    /// hosts that focus the editable directly — so the BFS runs only when no shallow candidate
-    /// resolves with full capabilities. Evaluation order is unchanged: shallow candidates always
-    /// preceded BFS appends, so any shallow winner made the BFS results unreachable anyway.
+    /// Candidate enumeration is staged the same way: the focused node and ancestors are checked
+    /// before any child reads, and the bounded Chromium descendant BFS runs only when these nearby
+    /// candidates and their useful children fail to resolve.
     private func resolveCandidate(
         around focusedReading: FocusedElementReading,
         bundleIdentifier: String,
@@ -799,6 +801,25 @@ struct FocusSnapshotResolver {
             return resolved
         }
 
+        // First check the focused node and its ancestors. In the common case one of these is the
+        // editable field, so asking a table or window for every child would only add synchronous AX
+        // IPC to the user's typing path. Siblings are a fallback for hosts that focus a wrapper.
+        var nearbyChildren: [(element: AXUIElement, knownParent: AXUIElement?)] = []
+        for node in [focusedReading.element] + shallow.ancestors {
+            let role = CFEqual(node, focusedReading.element)
+                ? focusedReading.role
+                : AXHelper.stringValue(for: kAXRoleAttribute as CFString, on: node) ?? "Unknown"
+            guard !Self.collectionContainerRoles.contains(role) else { continue }
+            for child in AXHelper.childElements(of: node) {
+                let identity = AXHelper.elementIdentity(for: child)
+                guard seen.insert(identity).inserted else { continue }
+                nearbyChildren.append((child, node))
+            }
+        }
+        if let resolved = winner(in: nearbyChildren) {
+            return resolved
+        }
+
         if deepDescendants {
             var deepCandidates: [AXUIElement] = []
             appendEditableDescendants(of: [focusedReading.element] + shallow.ancestors) { element in
@@ -854,11 +875,9 @@ struct FocusSnapshotResolver {
         )
     }
 
-    /// Enumerates the cheap nearby candidates: the focused node, up to two ancestors, and their
-    /// children. The Chromium descendant BFS is intentionally not part of this list — see
-    /// `resolveCandidate` for the staging rationale (Chromium reports focus on a wrapper above the
-    /// editable, AXWebArea → AXGroup → … → AXTextField, so the BFS exists as the fallback for the
-    /// cases where this shallow neighborhood misses the real target).
+    /// Enumerates the focused node and up to two ancestors. Their children are deferred until those
+    /// candidates fail — see `resolveCandidate` for the staging rationale. The Chromium descendant
+    /// BFS handles cases where focus lands on a wrapper above the editable field.
     ///
     /// Each candidate carries its already-known parent, so `candidateSnapshot` can skip a
     /// `parentElement` round-trip in the width optimization. Deep-BFS candidates have no known
@@ -898,18 +917,8 @@ struct FocusSnapshotResolver {
             append(ancestor, parent: ancestors.dropFirst(index + 1).first)
         }
 
-        // The heuristic search order is:
-        // 1. focused node
-        // 2. a couple of ancestors
-        // 3. children of those nodes
-        //
-        // This is a pragmatic compromise for apps that focus a wrapper element instead of the real
-        // editable text node. We do not try to walk the entire AX tree.
-        for node in [focusedElement] + ancestors {
-            for child in AXHelper.childElements(of: node) {
-                append(child, parent: node)
-            }
-        }
+        // Sibling/child reads are deliberately deferred until the focused node and ancestors have
+        // failed to resolve; see `resolveCandidate` for the typing-latency rationale.
 
         return (ordered, ancestors)
     }
