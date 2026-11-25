@@ -13,6 +13,8 @@ struct SpeedPaneView: View {
     @AppStorage(SpeedSettings.autoTuneKey) private var autoTune = true
     @AppStorage(SpeedSettings.lightFocusChecksKey) private var lightFocusChecks = true
     @AppStorage(SpeedSettings.lightScreenReadingKey) private var lightScreenReading = false
+    @AppStorage(SpeedSettings.hostTextCheckIntervalKey)
+    private var hostTextCheckInterval = SpeedSettings.defaultHostTextCheckIntervalMilliseconds
     @AppStorage(AppAcceptanceLearning.enabledKey) private var learnAppAcceptance = true
     @AppStorage(SpeedSettings.screenCharactersKey) private var screenCharacters = SpeedSettings.defaultScreenCharacters
     @AppStorage(SpeedSettings.promptTokensKey) private var promptTokens = SpeedSettings.promptTokensRange.upperBound
@@ -106,6 +108,22 @@ struct SpeedPaneView: View {
                     )
                 }
                 .settingsItem(.lightFocusChecks)
+
+                capRow(
+                    label: SettingsRowLabel(
+                        title: "Typing check interval",
+                        description: "How often Ghostype checks that your latest keystroke appeared in the app. " +
+                            "Higher values reduce checks and system load; lower values can confirm text sooner.",
+                        systemImage: "keyboard"
+                    ),
+                    value: $hostTextCheckInterval,
+                    range: SpeedSettings.hostTextCheckIntervalRange,
+                    unit: "ms",
+                    hint: SpeedSettings.hostTextCheckIntervalHint(
+                        SpeedSettings.hostTextCheckIntervalMilliseconds(.standard)
+                    )
+                )
+                .settingsItem(.hostTextCheckInterval)
 
                 Toggle(isOn: $lightScreenReading) {
                     SettingsRowLabel(

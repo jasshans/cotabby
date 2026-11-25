@@ -233,6 +233,7 @@ enum SpeedSettings {
 
     static let lightFocusChecksKey = "ghostypeSpeedLightFocusChecks"
     static let lightScreenReadingKey = "ghostypeSpeedLightScreenReading"
+    static let hostTextCheckIntervalKey = "ghostypeSpeedHostTextCheckIntervalMs"
 
     /// Default ON: keystrokes already force a focus read, so the timer only has to catch clicks
     /// and app switches quickly while a suggestion is on screen.
@@ -243,6 +244,23 @@ enum SpeedSettings {
     /// Default OFF: fast OCR costs some accuracy in the screen text the model reads.
     nonisolated static func isLightScreenReadingEnabled(_ defaults: UserDefaults) -> Bool {
         defaults.object(forKey: lightScreenReadingKey) as? Bool ?? false
+    }
+
+    static let hostTextCheckIntervalRange = 4...40
+    static let defaultHostTextCheckIntervalMilliseconds = 16
+
+    static func hostTextCheckIntervalMilliseconds(_ defaults: UserDefaults) -> Int {
+        let value = defaults.object(forKey: hostTextCheckIntervalKey) as? Int
+            ?? defaultHostTextCheckIntervalMilliseconds
+        return min(max(value, hostTextCheckIntervalRange.lowerBound), hostTextCheckIntervalRange.upperBound)
+    }
+
+    static func hostTextCheckIntervalHint(_ value: Int) -> String {
+        switch value {
+        case ...8: "Fast checks, more system work"
+        case 30...: "Fewer checks, slower confirmation"
+        default: "Balanced"
+        }
     }
 
     /// Speed pane caps. Screen text is in characters; the prompt cap is in tokens and can only

@@ -26,6 +26,7 @@ enum SettingsItem: String, CaseIterable, Identifiable {
     case adaptSpeedToMac
     case shorterContext
     case lightFocusChecks
+    case hostTextCheckInterval
     case lightScreenReading
     case learnAppAcceptance
     case showFollowingWords
@@ -134,6 +135,7 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .adaptSpeedToMac: return "Adapt Speed to Your Mac"
         case .shorterContext: return "Shorter Context"
         case .lightFocusChecks: return "Light Focus Checks"
+        case .hostTextCheckInterval: return "Typing Check Interval"
         case .lightScreenReading: return "Lighter Screen Reading"
         case .learnAppAcceptance: return "Learn From Your Apps"
         case .suggestWithinWords: return "Suggest while typing a word"
@@ -233,6 +235,7 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .adaptSpeedToMac: return "gauge.with.dots.needle.33percent"
         case .shorterContext: return "text.badge.minus"
         case .lightFocusChecks: return "battery.75percent"
+        case .hostTextCheckInterval: return "keyboard"
         case .lightScreenReading: return "text.viewfinder"
         case .learnAppAcceptance: return "app.badge.checkmark"
         case .suggestWithinWords: return "text.cursor"
@@ -324,7 +327,7 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         #if DEBUG
         case .developmentDebugOverlays: return .general
         #endif
-        case .reuseContextBetweenKeystrokes, .adaptSpeedToMac, .shorterContext, .lightFocusChecks, .lightScreenReading,
+        case .reuseContextBetweenKeystrokes, .adaptSpeedToMac, .shorterContext, .lightFocusChecks, .hostTextCheckInterval, .lightScreenReading,
              .learnAppAcceptance:
             return .speed
         case .enableGlobally, .useScreenContext, .openAtLogin, .includeClipboardContext, .includeAppContext,
@@ -378,6 +381,7 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         case .adaptSpeedToMac: return "Switch shorter context on or off automatically from measured suggestion speed."
         case .shorterContext: return "Read less text before the caret for a faster first suggestion."
         case .lightFocusChecks: return "Check the focused field quickly only while a suggestion shows."
+        case .hostTextCheckInterval: return "Adjust how often Ghostype checks that your latest keystroke reached the app."
         case .lightScreenReading: return "Read on-screen text with the faster, lighter recognizer."
         case .learnAppAcceptance: return "Suggest less eagerly in apps where you rarely accept."
         case .suggestWithinWords: return "Show new suggestions inside a word, or wait for a space or punctuation."
@@ -507,6 +511,8 @@ enum SettingsItem: String, CaseIterable, Identifiable {
             return ["speed", "fast", "faster", "context", "window", "short", "latency", "prefix"]
         case .lightFocusChecks:
             return ["battery", "power", "focus", "poll", "polling", "cpu", "energy", "light"]
+        case .hostTextCheckInterval:
+            return ["typing", "keystroke", "milliseconds", "ms", "lag", "delay", "check", "polling", "cpu"]
         case .lightScreenReading:
             return ["screen", "ocr", "vision", "read", "battery", "cpu", "fast", "light", "context"]
         case .learnAppAcceptance:

@@ -474,13 +474,13 @@ extension SuggestionCoordinator {
     /// full steady interval; slow Chromium hosts fall through to `hostPublishPollIntervalMs` below.
     private static let hostPublishFirstPollIntervalMs = 6
 
-    /// Native hosts publish a keystroke to AX within roughly 10-40 ms, so the wait polls densely
-    /// during that window and only then backs off to `hostPublishPollIntervalMs` for slow Chromium
-    /// hosts. With a 30 ms step from the start, a publish that landed just after the first retry
-    /// waited a further ~30 ms (upstream live TextEdit trace: key-to-request 50 ms instead of
-    /// ~20 ms), the largest remaining wait before generation. The dense phase costs a handful of
-    /// ~2-3 ms AX reads per keystroke and ends after `hostPublishFastPhaseMs`.
-    private static let hostPublishFastPollIntervalMs = 8
+    /// Native hosts publish a keystroke to AX within roughly 10-40 ms, so the wait checks densely
+    /// during that window and then backs off to `hostPublishPollIntervalMs` for slow Chromium
+    /// hosts. The fast interval is user-adjustable in Speed settings; it trades fewer synchronous
+    /// Accessibility reads for a slightly later confirmation that the host published the key.
+    private var hostPublishFastPollIntervalMs: Int {
+        SpeedSettings.hostTextCheckIntervalMilliseconds(.standard)
+    }
     private static let hostPublishFastPhaseMs = 60
 
     /// Schedules a fresh prediction once the host app has actually published the new
@@ -615,7 +615,7 @@ extension SuggestionCoordinator {
         // stay dense while native hosts usually publish, then use the steady cadence until the
         // ceiling.
         let interval = elapsedMs < Self.hostPublishFastPhaseMs
-            ? Self.hostPublishFastPollIntervalMs
+            ? hostPublishFastPollIntervalMs
             : Self.hostPublishPollIntervalMs
         let nextElapsed = elapsedMs + interval
         guard nextElapsed < Self.hostPublishWaitCeilingMs else {
