@@ -327,7 +327,8 @@ enum SettingsItem: String, CaseIterable, Identifiable {
         #if DEBUG
         case .developmentDebugOverlays: return .general
         #endif
-        case .reuseContextBetweenKeystrokes, .adaptSpeedToMac, .shorterContext, .lightFocusChecks, .hostTextCheckInterval, .lightScreenReading,
+        case .reuseContextBetweenKeystrokes, .adaptSpeedToMac, .shorterContext,
+             .lightFocusChecks, .hostTextCheckInterval, .lightScreenReading,
              .learnAppAcceptance:
             return .speed
         case .enableGlobally, .useScreenContext, .openAtLogin, .includeClipboardContext, .includeAppContext,
