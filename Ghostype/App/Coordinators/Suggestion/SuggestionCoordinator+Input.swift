@@ -553,7 +553,13 @@ extension SuggestionCoordinator {
             return
         }
 
-        focusModel.refreshNow()
+        // The regular focus timer may have just completed the same expensive Accessibility walk.
+        // Reuse that recent snapshot instead of making Chrome service a second synchronous AX read;
+        // the next scheduled check will refresh it if the host has not published the key yet.
+        focusModel.refreshIfStale(maxAgeMilliseconds: min(
+            Self.freshSnapshotReuseWindowMilliseconds,
+            hostPublishFastPollIntervalMs
+        ))
         guard pollGeneration == hostPublishPollGeneration else {
             return
         }
